@@ -66,7 +66,7 @@ class CustomUserAdmin(UserAdmin):
         dias = instance.perfilusuario.get_dias_restantes()
         
         if dias is None:
-            return format_html('<span style="color:blue; font-weight:bold;">♾️ Vitalício</span>')
+            return format_html('<span style="color:blue; font-weight:bold;">{}</span>', '♾️ Vitalício')
         
         if dias < 0:
             return format_html('<span style="color:red; font-weight:bold;">⛔ VENCIDO (há {} dias)</span>', abs(dias))
