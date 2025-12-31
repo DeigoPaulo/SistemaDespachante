@@ -15,7 +15,29 @@ from django.contrib import messages # Importante para avisar o erro na tela
 from .models import TipoServico, Cliente, Atendimento
 from .models import Orcamento, ItemOrcamento
 
+# --- SINAL PARA DERRUBAR SESSÕES ANTIGAS ---
+from django.contrib.auth.signals import user_logged_in
+from django.dispatch import receiver
+from django.contrib.sessions.models import Session
 
+@receiver(user_logged_in)
+def logout_other_sessions(sender, request, user, **kwargs):
+    # Pega a chave da sessão atual (que acabou de logar)
+    current_session_key = request.session.session_key
+
+    # Percorre todas as sessões ativas no banco
+    # (Nota: Em sistemas com milhões de usuários, isso deve ser otimizado)
+    for session in Session.objects.all():
+        try:
+            data = session.get_decoded()
+        except:
+            continue
+            
+        # Se a sessão for do usuário que acabou de logar...
+        if data.get('_auth_user_id') == str(user.id):
+            # ...e não for a sessão atual
+            if session.session_key != current_session_key:
+                session.delete()
 
 # ==============================================================================
 # DASHBOARD E FLUXO PRINCIPAL
