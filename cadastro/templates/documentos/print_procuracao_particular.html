@@ -1,0 +1,143 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Procuração Particular - {{ cliente.nome }}</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        
+        body { 
+            font-family: Arial, Helvetica, sans-serif; 
+            font-size: 10pt; 
+            line-height: 1.3; 
+            color: #000; 
+            background: #fff; 
+        }
+
+        .titulo { 
+            text-align: center; 
+            font-weight: bold; 
+            font-size: 14pt; 
+            text-decoration: underline;
+            margin-bottom: 20px;
+        }
+
+        .secao-titulo {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 2px;
+        }
+
+        .texto { text-align: justify; margin-bottom: 10px; }
+        .destaque { font-weight: bold; }
+        
+        /* Dados do Veículo em destaque */
+        .box-veiculo {
+            border: 1px solid #000;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #f9f9f9;
+        }
+
+        /* Área de Assinatura */
+        .assinatura-box { margin-top: 1.5cm; text-align: center; }
+        .linha-assinatura { border-top: 1px solid #000; width: 70%; margin: 0 auto; margin-top: 1cm; padding-top: 5px; }
+
+        /* Rodapé com instruções */
+        .instrucoes {
+            margin-top: 1.5cm;
+            font-size: 9pt;
+            border-top: 2px solid #000;
+            padding-top: 10px;
+        }
+        .instrucoes h4 { margin: 0 0 10px 0; text-transform: uppercase; font-size: 10pt; }
+        .instrucoes ul { padding-left: 20px; margin: 0; }
+        .instrucoes li { margin-bottom: 5px; }
+
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="position: fixed; top: 10px; right: 10px; background: #eee; padding: 10px; border-radius: 5px;">
+        <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">🖨️ Imprimir</button>
+    </div>
+
+    <div class="titulo">PROCURAÇÃO PARTICULAR</div>
+
+    <div class="secao-titulo">OUTORGANTE</div>
+    <div class="texto">
+        Nome: <span class="destaque">{{ cliente.nome|upper }}</span>, 
+        CPF/CNPJ: <span class="destaque">{{ cliente.cpf_cnpj }}</span>, 
+        RG: <span class="destaque">{{ cliente.rg|default:"____________" }}</span> - <span class="destaque">{{ cliente.uf_rg|default:cliente.uf }}</span>, 
+        Órgão Expedidor: <span class="destaque">{{ cliente.orgao_expedidor|default:"____" }}</span>, 
+        Endereço: {{ cliente.rua }}, Nº {{ cliente.numero }}, 
+        {% if cliente.quadra %}Qd.: {{ cliente.quadra }}, Lt.: {{ cliente.lote }},{% endif %}
+        {% if cliente.complemento %}Compl.: {{ cliente.complemento }},{% endif %}
+        Bairro: {{ cliente.bairro }}, Cidade: {{ cliente.cidade }}, UF: {{ cliente.uf }}, 
+        CEP: {{ cliente.cep }}, Telefone: {{ cliente.telefone }}.
+    </div>
+
+    <div class="secao-titulo">OUTORGADO</div>
+    <div class="texto">
+        Nome: <span class="destaque">{{ outorgado.nome }}</span>, 
+        <span class="destaque">{{ outorgado.doc }}</span>
+        {% if outorgado.rg %}, {{ outorgado.rg }}{% endif %}.
+        <br>
+        Endereço: {{ outorgado.endereco }} - {{ outorgado.cidade }} {% if outorgado.cep %} - CEP: {{ outorgado.cep }}{% endif %}.
+        <br>
+        Telefone: {{ outorgado.telefone }}
+    </div>
+
+    <div class="secao-titulo">DADOS DO VEÍCULO</div>
+    <div class="box-veiculo">
+        {% if veiculo %}
+            Placa: <span class="destaque">{{ veiculo.placa }}</span> &nbsp;|&nbsp; 
+            Marca/Modelo: <span class="destaque">{{ veiculo.marca }} / {{ veiculo.modelo }}</span> &nbsp;|&nbsp;
+            Chassi: <span class="destaque">{{ veiculo.chassi|default:"___________________________" }}</span> &nbsp;|&nbsp; 
+            Ano Fab/Mod: <span class="destaque">{{ veiculo.ano_fabricacao }}/{{ veiculo.ano_modelo }}</span>
+        {% else %}
+            <span class="destaque">VEÍCULO NÃO INFORMADO NO CADASTRO.</span><br>
+            Placa: ______________ | Chassi: ______________________________ | Modelo: ________________________
+        {% endif %}
+    </div>
+
+    <div class="secao-titulo">PODERES</div>
+    <div class="texto">
+        Com poderes de representação junto ao Detran/GO, outorgando-lhe(s) amplos e gerais poderes para que possam assim realizar todos os atos que forem necessários ao bom e fiel cumprimento deste mandato, inclusive: 
+        <strong>comprar; vender; ceder; realizar transferência de propriedade; vistoria; transferência de município e/ou UF; primeiro registro; inclusão de veículo; 2ª (segunda) via CRV; 2ª (segunda) via de CRLV; cópia de CRLV; licenciamento anual; alteração de endereço; alteração de características; remarcação de chassi; gravação de motor; alteração de restrição; inclusão de gravame; impedimento de licenciamento; cancelamento do impedimento de licenciamento; mudança de categoria; correção de erros; requerer serviços de comunicado de venda veicular; requerer parcelamento de multas;</strong> 
+        podendo, para tanto, assinar, requerer, desistir e receber documentos.
+    </div>
+
+    <div class="assinatura-box">
+        Goiânia, {{ hoje|date:"d" }} de {{ hoje|date:"F" }} de {{ hoje|date:"Y" }}
+        
+        <div class="linha-assinatura">
+            {{ cliente.nome|upper }}<br>
+            <span style="font-size: 9pt;">CPF/CNPJ: {{ cliente.cpf_cnpj }}</span><br>
+            <small>(Assinatura do Outorgante com Firma Reconhecida)</small>
+        </div>
+    </div>
+
+    <div class="instrucoes">
+        <h4>Documentação Exigida</h4>
+        <p>Toda vez que utilizar procuração:</p>
+        <ul>
+            <li>1. Apresentar original e cópia da procuração;</li>
+            <li>2. Apresentar cópia autenticada em cartório dos documentos pessoais (RG, CPF e comprovante de endereço) do proprietário (outorgante);</li>
+            <li>3. Apresentar original e cópia dos documentos pessoais (RG e CPF) do procurador (outorgado);</li>
+            <li>4. Reconhecer a firma do(s) outorgante(s) em cartório, na modalidade "por verdadeira", "autêntica" ou "aposta na presença do tabelião";</li>
+            <li>5. Se o reconhecimento de firma for de outro município, fazer SINAL PÚBLICO em cartório da cidade onde será realizado o serviço.</li>
+        </ul>
+        <p style="margin-top: 10px; font-style: italic; font-size: 6pt;">
+            OBS: O Outorgado/Procurador deverá ainda atender a todos os requisitos específicos de cada serviço a ser realizado, que encontram-se descritos no site www.detran.go.gov.br.
+        </p>
+    </div>
+
+    <script>window.onload = function() { /* window.print(); */ }</script>
+</body>
+</html>

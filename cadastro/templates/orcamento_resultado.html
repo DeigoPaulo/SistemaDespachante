@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+
+{% block title %}Orçamento Gerado{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        
+        <div class="d-flex justify-content-between mb-4 no-print">
+            <a href="{% url 'novo_orcamento' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Voltar
+            </a>
+            <button onclick="window.print()" class="btn btn-primary shadow-sm">
+                <i class="fas fa-print me-2"></i> Imprimir / Salvar PDF
+            </button>
+        </div>
+
+        <div class="card border-0 shadow-lg p-5" id="folha-orcamento">
+            
+            <div class="text-center border-bottom pb-4 mb-4">
+                <h3 class="fw-bold text-uppercase mb-1">{{ user.perfilusuario.despachante.nome_fantasia }}</h3>
+                <p class="text-muted mb-0 small">
+                    {{ user.perfilusuario.despachante.endereco_completo }} <br>
+                    Tel: {{ user.perfilusuario.despachante.telefone }} | Email: {{ user.perfilusuario.despachante.email }}
+                </p>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-end mb-5">
+                <div>
+                    <small class="text-muted text-uppercase fw-bold">Orçamento para:</small>
+                    
+                    {% if cliente %}
+                        <h5 class="fw-bold mt-1 mb-0">{{ cliente.nome }}</h5>
+                        <p class="mb-0 small text-muted">
+                            CPF/CNPJ: {{ cliente.cpf_cnpj }} <br>
+                            Tel: {{ cliente.telefone }}
+                        </p>
+                    {% else %}
+                        <h5 class="fw-bold mt-1 text-danger">Cliente não identificado</h5>
+                    {% endif %}
+                    
+                    <p class="mt-2 mb-0 small text-muted">Data de Emissão: {% now "d/m/Y" %}</p>
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-warning text-dark border px-3 py-2">ORÇAMENTO</span>
+                </div>
+            </div>
+
+            <table class="table table-bordered mb-4">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-3">Descrição do Serviço</th>
+                        <th class="text-end pe-3" width="150px">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in itens %}
+                    <tr>
+                        <td class="ps-3">{{ item.nome }}</td>
+                        <td class="text-end pe-3">R$ {{ item.valor }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="2" class="text-center py-4 text-muted fst-italic">
+                            Nenhum serviço selecionado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <div class="row justify-content-end">
+                <div class="col-md-5">
+                    <table class="table table-sm border-0">
+                        {% if post_data.desconto and post_data.desconto != "0.00" %}
+                            <tr>
+                                <td class="text-muted text-end border-0">Subtotal:</td>
+                                <td class="text-end fw-bold border-0">
+                                    (Ver detalhes)
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-danger text-end border-0">Desconto:</td>
+                                <td class="text-end text-danger border-0">- R$ {{ post_data.desconto }}</td>
+                            </tr>
+                        {% endif %}
+                        
+                        <tr class="bg-light border-top border-dark">
+                            <td class="text-end fw-bold fs-5 pt-2">TOTAL A PAGAR:</td>
+                            <td class="text-end fw-bold fs-5 pt-2 text-success">R$ {{ post_data.valor_total_hidden }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            {% if post_data.observacoes %}
+            <div class="mt-4 p-3 bg-light rounded border border-light">
+                <small class="fw-bold text-muted text-uppercase">Observações / Condições:</small>
+                <p class="mb-0 small text-dark mt-1">{{ post_data.observacoes|linebreaksbr }}</p>
+            </div>
+            {% endif %}
+
+            <div class="mt-5 pt-5 text-center text-muted small border-top">
+                <p class="mb-1">Este orçamento é válido por 5 dias.</p>
+                <p>Obrigado pela preferência!</p>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        .no-print, nav, .btn { display: none !important; }
+        body { background-color: white !important; }
+        .card { box-shadow: none !important; border: 1px solid #ddd !important; }
+    }
+</style>
+{% endblock %}

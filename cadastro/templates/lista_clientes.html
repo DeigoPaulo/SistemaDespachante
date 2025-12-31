@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}Meus Clientes{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-0">Carteira de Clientes</h2>
+        <p class="text-muted mb-0">Gerencie todos os seus cadastros</p>
+    </div>
+    <a href="{% url 'novo_cliente' %}" class="btn btn-success shadow-sm">
+        <i class="fas fa-plus me-2"></i> Novo Cliente
+    </a>
+</div>
+
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-2">
+        <div class="input-group">
+            <span class="input-group-text bg-white border-0"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" id="filtroClientes" class="form-control border-0 shadow-none" placeholder="Digite o nome, CPF ou telefone para filtrar...">
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0" id="tabelaClientes">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4 text-uppercase text-muted small fw-bold">Nome / Razão Social</th>
+                    <th class="text-uppercase text-muted small fw-bold">CPF / CNPJ</th>
+                    <th class="text-uppercase text-muted small fw-bold">Contato</th>
+                    <th class="text-uppercase text-muted small fw-bold">Localização</th>
+                    <th class="text-end pe-4 text-uppercase text-muted small fw-bold">Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cliente in clientes %}
+                <tr>
+                    <td class="ps-4 position-relative">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-light rounded-circle d-flex align-items-center justify-content-center me-3" style="width: 40px; height: 40px;">
+                                <i class="fas fa-user text-primary"></i>
+                            </div>
+                            <div>
+                                <a href="{% url 'detalhe_cliente' cliente.id %}" class="fw-bold text-dark text-decoration-none stretched-link">
+                                    {{ cliente.nome }}
+                                </a>
+                            </div>
+                        </div>
+                    </td>
+                    <td>
+                        <span class="badge bg-light text-dark border">{{ cliente.cpf_cnpj }}</span>
+                    </td>
+                    <td>
+                        <div class="small"><i class="fas fa-phone me-1 text-muted"></i> {{ cliente.telefone }}</div>
+                        {% if cliente.email %}
+                            <div class="small text-muted"><i class="fas fa-envelope me-1"></i> {{ cliente.email }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <span class="text-muted small">{{ cliente.cidade }}/{{ cliente.uf }}</span>
+                    </td>
+                    <td class="text-end pe-4" style="position: relative; z-index: 2;">
+                        <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                            <i class="fas fa-pen"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-5">
+                        <div class="opacity-25 mb-3"><i class="fas fa-users-slash fa-3x"></i></div>
+                        <h5 class="text-muted">Nenhum cliente encontrado</h5>
+                        <p class="mb-0 text-muted small">Comece cadastrando seu primeiro cliente.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Filtro Rápido via JS (Sem recarregar a página)
+    document.getElementById('filtroClientes').addEventListener('keyup', function() {
+        let valor = this.value.toLowerCase();
+        let linhas = document.querySelectorAll('#tabelaClientes tbody tr');
+        
+        linhas.forEach(linha => {
+            let texto = linha.textContent.toLowerCase();
+            linha.style.display = texto.includes(valor) ? '' : 'none';
+        });
+    });
+</script>
+{% endblock %}

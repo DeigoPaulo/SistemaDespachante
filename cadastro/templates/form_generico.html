@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8">
+        
+        <div class="card shadow border-0 mt-4 mb-5">
+            <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-pen-square me-2"></i> {{ titulo }}
+                </h5>
+                
+                {% if form.instance.pk %}
+                    <button type="button" class="btn btn-danger btn-sm text-white border border-light" data-bs-toggle="modal" data-bs-target="#modalExcluir">
+                        <i class="fas fa-trash-alt me-1"></i> Excluir
+                    </button>
+                {% endif %}
+            </div>
+
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% for field in form %}
+                        <div class="mb-3">
+                            <label for="{{ field.id_for_label }}" class="form-label fw-bold small text-uppercase text-muted">
+                                {{ field.label }}
+                                {% if field.field.required %} <span class="text-danger">*</span> {% endif %}
+                            </label>
+                            
+                            {{ field }}
+
+                            {% if field.help_text %}
+                                <div class="form-text text-muted">{{ field.help_text }}</div>
+                            {% endif %}
+                            
+                            {% if field.errors %}
+                                <div class="text-danger small mt-1">
+                                    <i class="fas fa-exclamation-circle me-1"></i> {{ field.errors.0 }}
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4 border-top pt-3">
+                        <a href="{% url 'lista_clientes' %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-arrow-left me-1"></i> Voltar
+                        </a>
+                        <button type="submit" class="btn btn-success px-4 shadow">
+                            <i class="fas fa-save me-1"></i> Salvar Alterações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% if form.instance.pk %}
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i> Confirmar Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir <strong>{{ form.instance.nome|default:"este registro" }}</strong>?</p>
+                <div class="alert alert-warning small mb-0">
+                    <i class="fas fa-info-circle me-1"></i> <strong>Atenção:</strong> Ao excluir este cliente, todos os veículos e históricos de atendimento vinculados a ele também serão apagados permanentemente.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                
+                <form action="{% url 'excluir_cliente' form.instance.pk %}" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Sim, Excluir Definitivamente</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

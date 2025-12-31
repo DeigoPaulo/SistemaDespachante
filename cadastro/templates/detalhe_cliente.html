@@ -1,0 +1,113 @@
+{% extends 'base.html' %}
+
+{% block title %}Perfil do Cliente{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="fw-bold mb-0"><i class="fas fa-id-card text-primary me-2"></i> Ficha do Cliente</h2>
+    
+    <div>
+        <a href="{% url 'selecao_documento' %}?cliente_id={{ cliente.id }}" class="btn btn-outline-dark shadow-sm me-2">
+            <i class="fas fa-file-signature me-1"></i> Documentos
+        </a>
+
+        <a href="{% url 'dashboard' %}" class="btn btn-secondary shadow-sm">
+            <i class="fas fa-arrow-left me-1"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-4 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-3">
+                <h6 class="mb-0 fw-bold">Informações Pessoais</h6>
+                <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-sm btn-light py-0 px-2" title="Editar Cliente">
+                    <i class="fas fa-edit text-primary"></i>
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase fw-bold d-block">Nome Completo</label>
+                    <span class="fs-5 fw-bold text-dark">{{ cliente.nome }}</span>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase fw-bold d-block">CPF / CNPJ</label>
+                    <span class="text-dark">{{ cliente.cpf_cnpj }}</span>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase fw-bold d-block">Telefone / WhatsApp</label>
+                    <span class="text-dark">{{ cliente.telefone }}</span>
+                </div>
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase fw-bold d-block">E-mail</label>
+                    <span class="text-dark">{{ cliente.email|default:"Não informado" }}</span>
+                </div>
+                
+                <hr class="opacity-25">
+                
+                <h6 class="fw-bold small text-muted text-uppercase mb-3">Endereço</h6>
+                <p class="mb-1 text-dark">
+                    {{ cliente.rua }}, {{ cliente.numero }}<br>
+                    {{ cliente.bairro }} - {{ cliente.cidade }}/{{ cliente.uf }}<br>
+                    <small class="text-muted">CEP: {{ cliente.cep }}</small>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8 mb-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center py-3">
+                <h6 class="mb-0 fw-bold"><i class="fas fa-car me-2"></i> Frota Vinculada</h6>
+                <a href="{% url 'novo_veiculo' %}" class="btn btn-sm btn-success py-1">
+                    <i class="fas fa-plus me-1"></i> Novo Veículo
+                </a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light small text-uppercase">
+                            <tr>
+                                <th class="ps-4">Placa</th>
+                                <th>Marca / Modelo</th>
+                                <th>Cor / Ano</th>
+                                <th class="text-end pe-4">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for veiculo in veiculos %}
+                            <tr>
+                                <td class="ps-4">
+                                    <span class="badge bg-dark font-monospace px-2 py-2 fs-6">{{ veiculo.placa }}</span>
+                                </td>
+                                <td>
+                                    <div class="fw-bold">{{ veiculo.marca }}</div>
+                                    <div class="small text-muted">{{ veiculo.modelo }}</div>
+                                </td>
+                                <td>
+                                    <div>{{ veiculo.cor }}</div>
+                                    <div class="small text-muted">{{ veiculo.ano_fabricacao }}/{{ veiculo.ano_modelo }}</div>
+                                </td>
+                                <td class="text-end pe-4">
+                                    <a href="{% url 'editar_veiculo' veiculo.id %}" class="btn btn-sm btn-outline-primary" title="Editar Veículo">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">
+                                    <i class="fas fa-car-crash fa-3x mb-3 opacity-25"></i>
+                                    <p>Nenhum veículo cadastrado para este cliente.</p>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

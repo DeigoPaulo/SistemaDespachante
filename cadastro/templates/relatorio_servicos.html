@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+
+{% block title %}Relatório de Serviços{% endblock %}
+
+{% block content %}
+<div class="d-print-none mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0 fw-bold text-dark"><i class="fas fa-file-invoice-dollar text-success me-2"></i> Relatório Financeiro</h4>
+        <button onclick="window.print()" class="btn btn-dark btn-sm shadow-sm">
+            <i class="fas fa-print me-2"></i> Imprimir Documento
+        </button>
+    </div>
+
+    <div class="card shadow-sm border-0 bg-light">
+        <div class="card-body py-3">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted">Início</label>
+                    <input type="date" name="data_inicio" class="form-control form-control-sm" value="{{ filtros.data_inicio }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted">Fim</label>
+                    <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ filtros.data_fim }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted">Cliente/Placa</label>
+                    <input type="text" name="cliente_placa" class="form-control form-control-sm" placeholder="Buscar..." value="{{ filtros.cliente_placa }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted">Status</label>
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        <option value="SOLICITADO" {% if filtros.status == 'SOLICITADO' %}selected{% endif %}>Solicitado</option>
+                        <option value="APROVADO" {% if filtros.status == 'APROVADO' %}selected{% endif %}>Aprovado</option>
+                        <option value="CONCLUIDO" {% if filtros.status == 'CONCLUIDO' %}selected{% endif %}>Concluído</option>
+                    </select>
+                </div>
+                <div class="col-md-1 d-grid">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="print-header text-center mb-4" style="display: none;">
+    <h2 class="fw-bold text-uppercase mb-1">Extrato de Serviços</h2>
+    <h5 class="text-muted">{{ user.perfilusuario.despachante.nome_fantasia }}</h5>
+    <div class="row mt-3 border-top border-bottom py-2">
+        <div class="col-6 text-start">
+            <small><strong>Período:</strong> 
+                {% if filtros.data_inicio %}{{ filtros.data_inicio|date:"d/m/Y" }}{% else %}Início{% endif %} 
+                até 
+                {% if filtros.data_fim %}{{ filtros.data_fim|date:"d/m/Y" }}{% else %}Hoje{% endif %}
+            </small>
+        </div>
+        <div class="col-6 text-end">
+            <small><strong>Emissão:</strong> {% now "d/m/Y H:i" %}</small>
+        </div>
+    </div>
+</div>
+
+<div id="area-relatorio">
+    {% if relatorio_agrupado %}
+        
+        {% for cliente_id, dados in relatorio_agrupado.items %}
+        <div class="cliente-container mb-4 pb-3 border-bottom">
+            
+            <div class="d-flex justify-content-between align-items-end mb-2">
+                <div>
+                    <h5 class="fw-bold mb-0 text-uppercase">{{ dados.dados_cliente.nome }}</h5>
+                    <small class="text-muted">
+                        CPF/CNPJ: {{ dados.dados_cliente.cpf_cnpj|default:"--" }} 
+                        {% if dados.dados_cliente.telefone %} • Tel: {{ dados.dados_cliente.telefone }} {% endif %}
+                    </small>
+                </div>
+            </div>
+
+            <table class="table table-sm table-borderless mb-0 custom-print-table">
+                <thead style="border-bottom: 2px solid #000;">
+                    <tr class="text-uppercase small fw-bold">
+                        <td width="12%">Data</td>
+                        <td width="15%">Veículo</td>
+                        <td width="40%">Descrição</td>
+                        <td width="10%" class="text-center">Status</td>
+                        <td width="11%" class="text-end">Honorários</td>
+                        <td width="12%" class="text-end">Total</td>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in dados.itens %}
+                    <tr style="border-bottom: 1px solid #eee;">
+                        <td>{{ item.data|date:"d/m/Y" }}</td>
+                        <td>
+                            <strong>{{ item.placa }}</strong><br>
+                            <span class="small text-muted">{{ item.modelo|truncatechars:15 }}</span>
+                        </td>
+                        <td>{{ item.servico_nome }}</td>
+                        <td class="text-center">
+                            <span class="status-print">{{ item.status }}</span>
+                        </td>
+                        <td class="text-end">
+                            {{ item.honorario|floatformat:2 }}
+                        </td>
+                        <td class="text-end fw-bold">
+                            {{ item.valor_total|floatformat:2 }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="4" class="text-end pe-3 small text-uppercase pt-2">Subtotal Cliente:</td>
+                        <td class="text-end fw-bold border-top border-dark pt-2">{{ dados.subtotal_honorarios|floatformat:2 }}</td>
+                        <td class="text-end fw-bold border-top border-dark pt-2">{{ dados.subtotal_valor|floatformat:2 }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% endfor %}
+
+        <div class="resumo-geral mt-5 p-3 border border-dark rounded break-inside-avoid">
+            <h6 class="fw-bold text-uppercase border-bottom pb-2 mb-3">Resumo Geral do Período</h6>
+            <div class="row">
+                <div class="col-6">
+                    <span class="d-block text-muted small text-uppercase">Total Honorários</span>
+                    <h3 class="fw-bold">R$ {{ total_geral_honorarios|floatformat:2 }}</h3>
+                </div>
+                <div class="col-6 text-end">
+                    <span class="d-block text-muted small text-uppercase">Faturamento Total</span>
+                    <h3 class="fw-bold">R$ {{ total_geral_valor|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+
+    {% else %}
+        <div class="text-center py-5 text-muted border rounded mt-4 d-print-none">
+            <i class="fas fa-search fa-3x mb-3 opacity-25"></i>
+            <h5>Nenhum serviço encontrado</h5>
+            <p>Ajuste os filtros acima.</p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* --- CSS ESPECÍFICO PARA IMPRESSÃO (A4) --- */
+    @media print {
+        @page {
+            size: A4;
+            margin: 10mm 15mm; /* Margens seguras */
+        }
+        
+        body {
+            background-color: #fff !important;
+            font-family: Arial, sans-serif; /* Fonte padrão de documentos */
+            font-size: 11pt; /* Tamanho legível */
+            color: #000 !important;
+        }
+
+        /* Esconde elementos da interface web */
+        .d-print-none, header, nav, footer, .btn, .card-header, form {
+            display: none !important;
+        }
+
+        /* Mostra o cabeçalho de impressão */
+        .print-header {
+            display: block !important;
+        }
+
+        /* Ajustes de Layout */
+        .container, .container-fluid {
+            width: 100% !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: none !important;
+        }
+
+        /* Tabelas */
+        .table-responsive {
+            overflow: visible !important; /* Evita cortes */
+            display: block !important;
+        }
+        
+        .custom-print-table {
+            width: 100% !important;
+        }
+        
+        .custom-print-table th, .custom-print-table td {
+            padding: 4px 2px !important; /* Compacta as linhas */
+        }
+
+        /* Remove cores de fundo para economizar tinta */
+        .badge, .bg-light, .bg-dark, .bg-success, .bg-primary {
+            background: none !important;
+            border: none !important;
+            color: #000 !important;
+            padding: 0 !important;
+        }
+
+        /* Evita quebras de página ruins */
+        .cliente-container {
+            page-break-inside: avoid; /* Tenta manter o cliente na mesma página */
+            break-inside: avoid;
+        }
+        
+        .resumo-geral {
+            page-break-inside: avoid;
+            border: 2px solid #000 !important; /* Borda forte no resumo */
+        }
+
+        /* Links não devem ser sublinhados ou azuis */
+        a { text-decoration: none !important; color: #000 !important; }
+    }
+</style>
+{% endblock %}

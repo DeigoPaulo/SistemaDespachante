@@ -1,0 +1,106 @@
+{% extends 'base.html' %}
+{% block title %}Orçamento #{{ orcamento.id }}{% endblock %}
+
+{% block content %}
+<div class="d-print-none mb-4 d-flex justify-content-between align-items-center">
+    <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left me-2"></i> Voltar
+    </a>
+    <div class="d-flex gap-2">
+        {% if orcamento.status == 'PENDENTE' %}
+            <a href="{% url 'aprovar_orcamento' orcamento.id %}" 
+               class="btn btn-success shadow-sm"
+               onclick="return confirm('Tem certeza que deseja aprovar este orçamento e iniciar o processo?');">
+                <i class="fas fa-check me-2"></i> Aprovar e Gerar Processo
+            </a>
+        {% endif %}
+        
+        <button onclick="window.print()" class="btn btn-dark shadow-sm">
+            <i class="fas fa-print me-2"></i> Imprimir
+        </button>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" id="folha-orcamento">
+    <div class="card-body p-5">
+        <div class="row border-bottom pb-4 mb-4">
+            <div class="col-8">
+                <h2 class="fw-bold text-uppercase text-primary">Orçamento #{{ orcamento.id }}</h2>
+                <h5 class="text-muted">{{ user.perfilusuario.despachante.nome_fantasia }}</h5>
+            </div>
+            <div class="col-4 text-end">
+                <div class="text-muted small">Data de Emissão</div>
+                <div class="fw-bold fs-5">{{ orcamento.data_criacao|date:"d/m/Y" }}</div>
+                
+                <div class="badge mt-2 
+                    {% if orcamento.status == 'PENDENTE' %}bg-warning text-dark
+                    {% elif orcamento.status == 'APROVADO' %}bg-success
+                    {% else %}bg-danger{% endif %}">
+                    {{ orcamento.get_status_display }}
+                </div>
+            </div>
+        </div>
+
+        <div class="mb-5">
+            <h6 class="text-uppercase text-muted fw-bold small border-bottom pb-1">Destinatário</h6>
+            {% if orcamento.cliente %}
+                <h4 class="mb-0">{{ orcamento.cliente.nome }}</h4>
+                <p class="text-muted mb-0">CPF: {{ orcamento.cliente.cpf_cnpj }}</p>
+            {% else %}
+                <h4 class="mb-0">{{ orcamento.nome_cliente_avulso }}</h4>
+                <p class="text-muted fst-italic mb-0">(Cliente não cadastrado)</p>
+            {% endif %}
+        </div>
+
+        <table class="table mb-5">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-3">Descrição do Serviço</th>
+                    <th class="text-end pe-3">Valor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in orcamento.itens.all %}
+                <tr>
+                    <td class="ps-3">{{ item.servico_nome }}</td>
+                    <td class="text-end pe-3">R$ {{ item.valor }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="row justify-content-end">
+            <div class="col-md-5">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Desconto:</span>
+                    <span class="text-danger">- R$ {{ orcamento.desconto }}</span>
+                </div>
+                <div class="d-flex justify-content-between border-top pt-2">
+                    <span class="fs-4 fw-bold">Total:</span>
+                    <span class="fs-4 fw-bold text-primary">R$ {{ orcamento.valor_total }}</span>
+                </div>
+            </div>
+        </div>
+
+        {% if orcamento.observacoes %}
+            <div class="mt-5 p-3 bg-light rounded border">
+                <small class="fw-bold text-muted d-block mb-1">Observações:</small>
+                {{ orcamento.observacoes|linebreaks }}
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    @media print {
+        body { background: white; }
+        .d-print-none { display: none !important; }
+        #folha-orcamento { border: none !important; shadow: none !important; }
+        .card { box-shadow: none !important; }
+        /* Força as cores de fundo na impressão (opcional, depende da config da impressora) */
+        .bg-light { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; }
+    }
+</style>
+{% endblock %}

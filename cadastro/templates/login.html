@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - DespachaPro</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <style>
+        body { 
+            background: linear-gradient(135deg, #f8f9fc 0%, #e2e6ea 100%); 
+            height: 100vh; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center;
+        }
+        .card-login { 
+            max-width: 400px; 
+            width: 100%; 
+            border: none; 
+            border-radius: 15px; 
+        }
+        .form-control:focus {
+            box-shadow: none;
+            border-color: #0d6efd;
+        }
+        .input-group-text {
+            background-color: #f8f9fa;
+            border-right: none;
+        }
+        .form-control {
+            border-left: none;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card card-login shadow-lg animate__animated animate__fadeIn">
+        <div class="card-body p-5">
+            <div class="text-center mb-4">
+                <div class="bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <i class="fas fa-car-side fa-2x"></i>
+                </div>
+                <h3 class="text-primary fw-bold mb-0">DespachaPro</h3>
+                <p class="text-muted small">Gestão Inteligente de Veículos</p>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Usuário</label>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-user text-muted"></i></span>
+                        <input type="text" name="username" class="form-control" placeholder="Seu usuário" required>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between">
+                        <label class="form-label fw-bold small text-muted text-uppercase">Senha</label>
+                    </div>
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-lock text-muted"></i></span>
+                        <input type="password" name="password" class="form-control" placeholder="Sua senha" required>
+                    </div>
+                </div>
+
+                <div class="mb-4 text-end">
+                    <a href="{% url 'password_reset' %}" class="text-decoration-none small text-primary">
+                        Esqueceu a senha?
+                    </a>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+                    <i class="fas fa-sign-in-alt me-2"></i> Entrar no Sistema
+                </button>
+            </form>
+
+            {% if form.errors %}
+            <div class="alert alert-danger mt-4 text-center py-2 small shadow-sm border-0 bg-danger-subtle text-danger">
+                <i class="fas fa-exclamation-circle me-1"></i> Usuário ou senha incorretos.
+            </div>
+            {% endif %}
+            
+        </div>
+        <div class="card-footer bg-light text-center py-3 border-0 rounded-bottom-4">
+            <small class="text-muted">Não tem acesso? <a href="#" class="text-decoration-none fw-bold">Contate o suporte</a></small>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

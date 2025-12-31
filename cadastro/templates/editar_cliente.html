@@ -1,0 +1,127 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Cliente{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        
+        <div class="card shadow border-0 mt-4 mb-5">
+            <div class="card-header bg-primary text-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-edit me-2"></i> Editando: {{ form.instance.nome }}
+                </h5>
+                
+                {% if user.is_superuser %}
+                <a href="{% url 'excluir_cliente' form.instance.id %}" class="btn btn-danger btn-sm border-white" onclick="return confirm('ATENÇÃO: Excluir este cliente apagará também todos os veículos e processos dele. Tem certeza?');">
+                    <i class="fas fa-trash-alt me-1"></i> Excluir
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">Nome Completo</label>
+                            {{ form.nome }}
+                            <div class="text-danger small">{{ form.nome.errors.0 }}</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">CPF / CNPJ</label>
+                            {{ form.cpf_cnpj }}
+                            <div class="text-danger small">{{ form.cpf_cnpj.errors.0 }}</div>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">RG</label>
+                            {{ form.rg }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Órgão Expedidor</label>
+                            {{ form.orgao_expedidor }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">UF RG</label>
+                            {{ form.uf_rg }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Profissão</label>
+                            {{ form.profissao }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label fw-bold">Filiação (Mãe/Pai)</label>
+                            {{ form.filiacao }}
+                        </div>
+                    </div>
+
+                    <h6 class="text-muted mt-4 border-bottom pb-2 text-uppercase small fw-bold">Endereço</h6>
+
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">CEP</label>
+                            {{ form.cep }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold">Rua</label>
+                            {{ form.rua }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold">Número</label>
+                            {{ form.numero }}
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Bairro</label>
+                            {{ form.bairro }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Cidade</label>
+                            {{ form.cidade }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">UF</label>
+                            {{ form.uf }}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-bold">Comp.</label>
+                            {{ form.complemento }}
+                        </div>
+                    </div>
+
+                    <h6 class="text-muted mt-4 border-bottom pb-2 text-uppercase small fw-bold">Contato</h6>
+
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold">Telefone</label>
+                            {{ form.telefone }}
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-bold">E-mail</label>
+                            {{ form.email }}
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4 border-top pt-3">
+                        <a href="{% url 'dashboard' %}" class="btn btn-secondary me-md-2">
+                            <i class="fas fa-arrow-left me-1"></i> Cancelar
+                        </a>
+                        <button type="submit" class="btn btn-success px-4 shadow">
+                            <i class="fas fa-save me-1"></i> Salvar Alterações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

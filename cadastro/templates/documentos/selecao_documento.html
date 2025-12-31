@@ -1,0 +1,253 @@
+{% extends 'base.html' %}
+
+{% block title %}Gerador de Documentos{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-file-signature me-2"></i> Gerador de Documentos</h5>
+            </div>
+            <div class="card-body p-4">
+                <form action="{% url 'imprimir_documento' %}" method="POST" target="_blank">
+                    {% csrf_token %}
+                    
+                    <div class="mb-4">
+                        <label class="form-label fw-bold">Selecione o Documento:</label>
+                        <select name="tipo_documento" id="tipo_documento" class="form-select form-select-lg" onchange="toggleCamposExtras()">
+                            <option value="procuracao">📄 Procuração Despachante</option>
+                            <option value="procuracao_particular">⚖️ Procuração Particular (Compra/Venda)</option>
+                            <option value="declaracao">🏠 Declaração de Residência</option>
+                            <option value="requerimento_2via">🚗 Requerimento 2ª Via CRV/CRLV</option>
+                            <option value="alteracao_caracteristica">🛠️ Alteração de Características</option>
+                            <option value="recibo">💰 Recibo de Pagamento</option>
+                            <option value="contrato">🤝 Contrato de Prestação de Serviço</option>
+                            <option value="alteracao_endereco">🏠 Requerimento de Alteração de Endereço</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Cliente / Outorgante:</label>
+                        <select name="cliente_id" id="select_cliente" class="form-select" required>
+                            <option value="">Digite para pesquisar...</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-bold">Veículo:</label>
+                        <select name="veiculo_placa" id="select_veiculo" class="form-select">
+                            <option value="">Primeiro selecione um cliente...</option>
+                        </select>
+                    </div>
+
+                    <div id="box_outorgado" class="card bg-light border p-3 mb-3 d-none">
+                        <label class="form-label fw-bold text-dark border-bottom pb-2 w-100">Quem será o Procurador (Outorgado)?</label>
+                        
+                        <div class="d-flex gap-4 mb-3 mt-2">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_outorgado" id="out_escritorio" value="escritorio" checked>
+                                <label class="form-check-label fw-bold" for="out_escritorio">
+                                    🏢 Meu Escritório (Padrão)
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_outorgado" id="out_outro" value="outro">
+                                <label class="form-check-label fw-bold text-primary" for="out_outro">
+                                    👤 Outra Pessoa (Buscar)
+                                </label>
+                            </div>
+                        </div>
+
+                        <div id="div_busca_outorgado" class="d-none animate__animated animate__fadeIn">
+                            <label class="small text-muted mb-1">Pesquise abaixo quem receberá os poderes (ex: Comprador):</label>
+                            <select name="outorgado_id" id="select_outorgado" class="form-select w-100">
+                                <option value="">Digite Nome ou CPF do Outorgado...</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3 d-none" id="campo_valor">
+                        <label class="form-label fw-bold text-success">Valor (R$):</label>
+                        <input type="text" name="valor_recibo" id="input_valor" class="form-control form-control-lg" placeholder="0,00" onkeyup="formatarMoeda(this)">
+                    </div>
+
+                    <div class="mb-3 d-none" id="campo_motivo">
+                        <label class="form-label fw-bold text-danger">Motivo (2ª Via):</label>
+                        <input type="text" name="motivo_2via" id="input_motivo" class="form-control" placeholder="Ex: Perda, Extravio...">
+                    </div>
+                    
+                    <div class="mb-3 d-none" id="campo_alteracao">
+                        <label class="form-label fw-bold text-primary">Descrição da Alteração:</label>
+                        <input type="text" name="alteracao_pretendida" id="input_alteracao" class="form-control" placeholder="Ex: Mudança de Cor...">
+                    </div>
+
+                    <div class="mb-4" id="campo_servicos">
+                        <label class="form-label fw-bold d-block" id="label_servicos">Serviços / Referente a:</label>
+                        <div class="card p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
+                            {% for servico in servicos %}
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" name="servicos_selecionados" value="{{ servico.id }}" id="serv_{{ servico.id }}">
+                                    <label class="form-check-label" for="serv_{{ servico.id }}">{{ servico.nome }}</label>
+                                </div>
+                            {% empty %}
+                                <span class="text-muted small">Nenhum serviço cadastrado.</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="fas fa-print me-2"></i> Gerar e Imprimir
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        
+        // --- CONFIGURAÇÃO SELECT2 ---
+        var configSelect2 = {
+            theme: 'bootstrap-5',
+            width: '100%',
+            language: {
+                inputTooShort: function() { return "Digite 3 caracteres..."; },
+                noResults: function() { return "Nenhum cadastro encontrado."; },
+                searching: function() { return "Buscando..."; }
+            },
+            ajax: {
+                url: '{% url "buscar_clientes" %}',
+                dataType: 'json',
+                delay: 250,
+                data: function (params) { return { term: params.term }; },
+                processResults: function (data) { return { results: data.results }; },
+                cache: true
+            },
+            minimumInputLength: 3
+        };
+
+        // Aplica Select2 nos dois campos
+        $('#select_cliente').select2({ ...configSelect2, placeholder: 'Busque o Cliente (Outorgante)...' });
+        $('#select_outorgado').select2({ ...configSelect2, placeholder: 'Busque o Procurador (Outorgado)...' });
+
+        // Evento ao selecionar Cliente -> Busca Veículos
+        $('#select_cliente').on('select2:select', function (e) {
+            carregarVeiculos(e.params.data.id);
+        });
+
+
+        // --- LÓGICA DO RADIO BUTTON (MOSTRAR/ESCONDER BUSCA) ---
+        // Escuta qualquer mudança nos botões de rádio 'tipo_outorgado'
+        $('input[name="tipo_outorgado"]').change(function() {
+            if ($('#out_outro').is(':checked')) {
+                // Se marcou "Outra Pessoa", mostra o campo de busca
+                $('#div_busca_outorgado').removeClass('d-none');
+            } else {
+                // Se marcou "Escritório", esconde e limpa
+                $('#div_busca_outorgado').addClass('d-none');
+                $('#select_outorgado').val(null).trigger('change'); 
+            }
+        });
+
+        // Executa uma vez ao carregar para garantir o estado correto
+        $('input[name="tipo_outorgado"]:checked').trigger('change');
+
+        // Inicializa visibilidade dos campos extras
+        toggleCamposExtras();
+    });
+
+    // --- FUNÇÕES AUXILIARES ---
+
+    function toggleCamposExtras() {
+        const tipo = document.getElementById('tipo_documento').value;
+        
+        // IDs para esconder/resetar
+        const divs = ['campo_motivo', 'campo_alteracao', 'campo_servicos', 'campo_valor', 'box_outorgado'];
+        const inputsRequired = ['input_motivo', 'input_alteracao', 'input_valor'];
+        const labelServicos = document.getElementById('label_servicos');
+
+        // 1. Esconde tudo primeiro
+        divs.forEach(id => document.getElementById(id).classList.add('d-none'));
+        inputsRequired.forEach(id => { 
+            let el = document.getElementById(id); 
+            if(el) el.required = false; 
+        });
+
+        // 2. Mostra conforme a seleção
+        if (tipo === 'requerimento_2via') {
+            document.getElementById('campo_motivo').classList.remove('d-none');
+        } 
+        else if (tipo === 'alteracao_caracteristica') {
+            document.getElementById('campo_alteracao').classList.remove('d-none');
+            document.getElementById('input_alteracao').required = true;
+        }
+        else if (tipo === 'procuracao') {
+            document.getElementById('campo_servicos').classList.remove('d-none');
+            labelServicos.innerText = "Serviços a Solicitar (Para Procuração):";
+        }
+        else if (tipo === 'recibo') {
+            document.getElementById('campo_valor').classList.remove('d-none');
+            document.getElementById('input_valor').required = true;
+            document.getElementById('campo_servicos').classList.remove('d-none');
+            labelServicos.innerText = "Referente aos serviços:";
+        }
+        else if (tipo === 'contrato') {
+            document.getElementById('campo_valor').classList.remove('d-none');
+            document.getElementById('campo_servicos').classList.remove('d-none');
+            labelServicos.innerText = "Objeto do Contrato:";
+        }
+        else if (tipo === 'procuracao_particular') {
+            // Mostra o box de escolha do Outorgado
+            document.getElementById('box_outorgado').classList.remove('d-none');
+        }
+    }
+
+    function carregarVeiculos(clienteId) {
+        const selectVeiculo = $('#select_veiculo');
+        selectVeiculo.empty().append('<option value="">Carregando...</option>');
+        
+        if(!clienteId) return;
+
+        $.ajax({
+            url: `/api/veiculos-cliente/${clienteId}/`,
+            method: 'GET',
+            success: function(data) {
+                selectVeiculo.empty();
+                if (data.length === 0) {
+                    selectVeiculo.append('<option value="">Nenhum veículo cadastrado</option>');
+                } else {
+                    selectVeiculo.append('<option value="">-- Selecione o Veículo --</option>');
+                    data.forEach(function(v) {
+                        selectVeiculo.append(`<option value="${v.placa}">${v.placa} - ${v.modelo}</option>`);
+                    });
+                }
+            },
+            error: function() {
+                selectVeiculo.empty().append('<option value="">Erro ao buscar veículos</option>');
+            }
+        });
+    }
+
+    function formatarMoeda(i) {
+        var v = i.value.replace(/\D/g,'');
+        v = (v/100).toFixed(2) + '';
+        v = v.replace(".", ",");
+        v = v.replace(/(\d)(\d{3})(\d{3}),/g, "$1.$2.$3,");
+        v = v.replace(/(\d)(\d{3}),/g, "$1.$2,");
+        i.value = v;
+    }
+</script>
+{% endblock %}

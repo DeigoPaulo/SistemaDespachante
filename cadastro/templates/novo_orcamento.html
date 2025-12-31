@@ -1,0 +1,322 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Novo Orçamento{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<style>
+    /* Ajuste fino para o Select2 parecer um input nativo do Bootstrap 5 */
+    .select2-container--bootstrap-5 .select2-selection {
+        min-height: 38px;
+        padding-top: 4px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        
+        <form method="post" id="form-orcamento">
+            {% csrf_token %}
+            
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="fw-bold mb-0 text-dark">
+                    <i class="fas fa-file-invoice-dollar text-success me-2"></i> Novo Orçamento
+                </h2>
+                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-primary">1. Destinatário</h6>
+                    
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="switch_cliente_avulso">
+                        <label class="form-check-label small fw-bold user-select-none" for="switch_cliente_avulso">
+                            Cliente não cadastrado?
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="card-body">
+                    <div id="container_busca_banco">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Buscar Cliente Cadastrado</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light border-end-0"><i class="fas fa-search text-muted"></i></span>
+                            <select name="cliente_id" id="select_cliente_orcamento" class="form-select">
+                                <option value="">Digite Nome, CPF/CNPJ ou Placa...</option>
+                            </select>
+                        </div>
+                        <div class="form-text text-muted small mt-1">
+                            O sistema buscará automaticamente em todos os campos.
+                        </div>
+                    </div>
+
+                    <div id="container_cliente_avulso" class="d-none">
+                        <label class="form-label small fw-bold text-muted text-uppercase">Nome do Cliente (Avulso)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-warning border-end-0 text-dark"><i class="fas fa-user-edit"></i></span>
+                            <input type="text" name="cliente_nome_avulso" id="input_nome_avulso" 
+                                   class="form-control border-start-0 bg-light" placeholder="Digite o nome para sair no orçamento...">
+                        </div>
+                        <div class="form-text text-muted small mt-2">
+                            <i class="fas fa-info-circle me-1"></i> Use esta opção apenas para orçamentos rápidos. Este cliente <strong>não</strong> será salvo no banco de dados.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-primary">2. Itens do Serviço</h6>
+                </div>
+                <div class="card-body p-0">
+                    <table class="table table-hover align-middle mb-0" id="tabela-itens">
+                        <thead class="table-light small text-center">
+                            <tr>
+                                <th class="text-start ps-4">Descrição do Serviço</th>
+                                <th width="150px">Valor (R$)</th>
+                                <th width="50px"></th>
+                            </tr>
+                        </thead>
+                        
+                        <tbody id="lista_itens_adicionados">
+                            </tbody>
+
+                        <tfoot class="bg-light">
+                            <tr>
+                                <td colspan="3" class="p-3">
+                                    <label class="small text-muted fw-bold mb-1">Adicionar Serviço:</label>
+                                    <div class="input-group">
+                                        <input class="form-control" list="datalistOptions" id="input_busca_servico" placeholder="Digite para buscar (ex: Licenciamento)...">
+                                        
+                                        <datalist id="datalistOptions">
+                                            {% for servico in servicos %}
+                                                <option value="{{ servico.nome }}" 
+                                                        data-id="{{ servico.id }}" 
+                                                        data-preco="{{ servico.valor_total }}">
+                                                </option>
+                                            {% endfor %}
+                                        </datalist>
+
+                                        <button type="button" class="btn btn-primary px-4" id="btn-add-item">
+                                            <i class="fas fa-plus me-1"></i> Adicionar
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-5 bg-dark text-white">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-6">
+                            <label class="form-label small text-white-50 fw-bold">Observações</label>
+                            <textarea name="observacoes" class="form-control bg-secondary text-white border-0" rows="3" placeholder="Condições de pagamento, prazos, validade..."></textarea>
+                        </div>
+                        
+                        <div class="col-md-6 mt-3 mt-md-0">
+                            <div class="d-flex justify-content-between mb-2">
+                                <span>Subtotal:</span>
+                                <span class="fw-bold" id="lbl_subtotal">R$ 0,00</span>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <span>Desconto (R$):</span>
+                                <input type="number" step="0.01" name="desconto" id="input_desconto" 
+                                       class="form-control form-control-sm text-end w-25" value="0.00">
+                            </div>
+                            <hr class="border-white opacity-25">
+                            <div class="d-flex justify-content-between fs-4 fw-bold text-success">
+                                <span>Total Final:</span>
+                                <span id="lbl_total">R$ 0,00</span>
+                                <input type="hidden" name="valor_total_hidden" id="valor_total_hidden" value="0.00">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer border-0 bg-success p-0">
+                    <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 rounded-0 rounded-bottom">
+                        <i class="fas fa-check-circle me-2"></i> GERAR ORÇAMENTO
+                    </button>
+                </div>
+            </div>
+
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
+<script>
+    $(document).ready(function() {
+        
+        // --- 1. CONFIGURAÇÃO PODEROSA DO SELECT2 (Igual ao Processo Rápido) ---
+        $('#select_cliente_orcamento').select2({
+            theme: 'bootstrap-5',
+            width: '100%',
+            placeholder: 'Digite Nome, CPF/CNPJ ou Placa...',
+            allowClear: true,
+            language: {
+                inputTooShort: function() { return "Digite 3 caracteres..."; },
+                noResults: function() { return "Nenhum cliente encontrado."; },
+                searching: function() { return "Buscando..."; }
+            },
+            ajax: {
+                url: "{% url 'buscar_clientes' %}", // Certifique-se que essa rota existe
+                dataType: 'json',
+                delay: 250,
+                data: function (params) {
+                    return { term: params.term }; // Envia o termo digitado
+                },
+                processResults: function (data) {
+                    return { results: data.results }; // Recebe os resultados
+                },
+                cache: true
+            },
+            minimumInputLength: 3
+        });
+
+        // --- 2. LÓGICA DE ALTERNÂNCIA (BUSCA vs AVULSO) ---
+        const switchAvulso = document.getElementById('switch_cliente_avulso');
+        const containerBanco = document.getElementById('container_busca_banco');
+        const containerAvulso = document.getElementById('container_cliente_avulso');
+        const inputNomeAvulso = document.getElementById('input_nome_avulso');
+
+        switchAvulso.addEventListener('change', function() {
+            if (this.checked) {
+                // Modo Avulso: Esconde Select2, Mostra Input Texto
+                containerBanco.classList.add('d-none');
+                containerAvulso.classList.remove('d-none');
+                inputNomeAvulso.focus();
+                
+                // Limpa o Select2 para não enviar ID errado
+                $('#select_cliente_orcamento').val(null).trigger('change');
+            } else {
+                // Modo Banco: Mostra Select2, Esconde Input Texto
+                containerBanco.classList.remove('d-none');
+                containerAvulso.classList.add('d-none');
+                inputNomeAvulso.value = '';
+            }
+        });
+
+        // --- 3. LÓGICA DE SERVIÇOS E CÁLCULOS (Mantida a sua lógica original) ---
+        let subtotalGlobal = 0.00;
+
+        document.getElementById('btn-add-item').addEventListener('click', function() {
+            const input = document.getElementById('input_busca_servico');
+            const datalist = document.getElementById('datalistOptions');
+            const valorDigitado = input.value;
+            
+            // Busca a opção correspondente na lista
+            let servicoSelecionado = null;
+            for (let i = 0; i < datalist.options.length; i++) {
+                if (datalist.options[i].value === valorDigitado) {
+                    servicoSelecionado = datalist.options[i];
+                    break;
+                }
+            }
+
+            if (!servicoSelecionado) {
+                alert("Por favor, selecione um serviço válido da lista sugerida.");
+                return;
+            }
+
+            const id = servicoSelecionado.getAttribute('data-id');
+            const nome = servicoSelecionado.value;
+            let rawPreco = servicoSelecionado.getAttribute('data-preco');
+            if(typeof rawPreco === 'string') rawPreco = rawPreco.replace(',', '.');
+            const preco = parseFloat(rawPreco);
+
+            adicionarLinhaTabela(id, nome, preco);
+
+            input.value = '';
+            input.focus();
+        });
+
+        function adicionarLinhaTabela(id, nome, preco) {
+            const tbody = document.getElementById('lista_itens_adicionados');
+            const novaLinha = document.createElement('tr');
+
+            novaLinha.innerHTML = `
+                <td class="ps-4">
+                    <span class="fw-bold text-dark">${nome}</span>
+                    <input type="hidden" name="servicos[]" value="${id}">
+                    <input type="hidden" name="precos[]" value="${preco}">
+                </td>
+                <td class="text-center">
+                    R$ ${preco.toFixed(2).replace('.', ',')}
+                </td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm text-danger" onclick="removerLinha(this, ${preco})">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+
+            tbody.appendChild(novaLinha);
+            atualizarTotais(preco);
+        }
+
+        window.removerLinha = function(botao, valorRemovido) {
+            botao.closest('tr').remove();
+            atualizarTotais(-valorRemovido);
+        }
+
+        function atualizarTotais(valorDiferenca) {
+            subtotalGlobal += valorDiferenca;
+            if(subtotalGlobal < 0) subtotalGlobal = 0;
+            renderizarTotaisNaTela();
+        }
+
+        function renderizarTotaisNaTela() {
+            const inputDesconto = document.getElementById('input_desconto');
+            let desconto = parseFloat(inputDesconto.value);
+            if (isNaN(desconto)) desconto = 0;
+
+            if(desconto > subtotalGlobal) {
+                desconto = subtotalGlobal;
+            }
+
+            const totalFinal = subtotalGlobal - desconto;
+
+            document.getElementById('lbl_subtotal').innerText = 'R$ ' + subtotalGlobal.toFixed(2).replace('.', ',');
+            document.getElementById('lbl_total').innerText = 'R$ ' + totalFinal.toFixed(2).replace('.', ',');
+            document.getElementById('valor_total_hidden').value = totalFinal.toFixed(2);
+        }
+
+        document.getElementById('input_desconto').addEventListener('input', renderizarTotaisNaTela);
+
+        // --- 4. VALIDAÇÃO NO SUBMIT ---
+        document.getElementById('form-orcamento').addEventListener('submit', function(event) {
+            const isAvulso = switchAvulso.checked;
+            const clienteId = $('#select_cliente_orcamento').val(); // Pega do Select2
+            const nomeAvulso = inputNomeAvulso.value.trim();
+
+            if (isAvulso) {
+                if (!nomeAvulso) {
+                    alert('Por favor, digite o nome do cliente avulso.');
+                    event.preventDefault();
+                    inputNomeAvulso.focus();
+                    return false;
+                }
+            } else {
+                if (!clienteId) {
+                    alert('Por favor, pesquise e selecione um cliente cadastrado.');
+                    event.preventDefault();
+                    $('#select_cliente_orcamento').select2('open');
+                    return false;
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

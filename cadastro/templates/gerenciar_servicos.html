@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+
+{% block title %}Tabela de Serviços{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-primary text-white">
+                <h6 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2"></i> Novo Serviço</h6>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Nome do Serviço</label>
+                        <input type="text" name="nome" class="form-control" placeholder="Ex: Transferência" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Custo Base (Detran)</label>
+                        <div class="input-group">
+                            <span class="input-group-text">R$</span>
+                            <input type="text" name="valor_base" class="form-control mask-money" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Honorários (Lucro)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-success text-white">R$</span>
+                            <input type="text" name="honorarios" class="form-control mask-money fw-bold" required>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Salvar Serviço</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold"><i class="fas fa-list me-2"></i> Tabela de Preços</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small">
+                        <tr>
+                            <th>Serviço</th>
+                            <th>Custo</th>
+                            <th>Honorários</th>
+                            <th>Total</th>
+                            <th class="text-end">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for servico in servicos %}
+                        <tr>
+                            <td class="fw-bold">{{ servico.nome }}</td>
+                            <td class="text-muted">R$ {{ servico.valor_base }}</td>
+                            <td class="text-success fw-bold">R$ {{ servico.honorarios }}</td>
+                            <td class="fw-bold fs-6">R$ {{ servico.valor_total }}</td>
+                            <td class="text-end">
+                                <a href="{% url 'excluir_servico' servico.id %}" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Remover este serviço?')">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-muted">Nenhum serviço cadastrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    $(document).ready(function(){
+        $('.mask-money').mask('000.000.000,00', {reverse: true});
+    });
+</script>
+{% endblock %}

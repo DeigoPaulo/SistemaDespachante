@@ -1,0 +1,57 @@
+/* Customizações do Dashboard */
+.card-shadow { box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15)!important; }
+.border-left-primary { border-left: 0.25rem solid #4e73df!important; }
+.text-gray-300 { color: #dddfeb!important; }
+.text-gray-800 { color: #5a5c69!important; }
+
+/* Tabela mais elegante */
+.table th { font-weight: 600; text-transform: uppercase; font-size: 0.8rem; color: #6c757d; }
+.badge { font-weight: 500; letter-spacing: 0.5px; }
+
+/* Ajuste do Navbar */
+.navbar-brand { font-weight: 700; letter-spacing: 1px; }
+
+/* --- Estilos Profissionais Dashboard --- */
+.bg-primary-soft { background-color: rgba(13, 110, 253, 0.12); }
+.smaller { font-size: 0.7rem; letter-spacing: 0.05em; }
+
+.table thead th { 
+    font-size: 0.72rem; 
+    text-transform: uppercase; 
+    font-weight: 700; 
+    color: #747d8c;
+    letter-spacing: 1px;
+    padding: 15px 10px;
+}
+
+/* Badge Estilo Dot (Ponto) */
+.badge-dot {
+    background-color: transparent !important;
+    border: 1px solid #dee2e6;
+    color: #495057 !important;
+    font-weight: 600;
+    padding: 5px 10px;
+}
+.badge-dot::before {
+    content: "";
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: currentColor;
+    margin-right: 6px;
+}
+
+/* Efeito de link no Proprietário */
+.group-hover-edit:hover .text-dark {
+    color: #0d6efd !important;
+    text-decoration: underline;
+}
+
+/* Botão customizado */
+.btn-white { background: #fff; color: #333; }
+
+/* Ajuste de badges de alerta */
+.text-danger.smaller { color: #eb4d4b !important; }
+.text-success.smaller { color: #2ecc71 !important; }
+.text-warning.smaller { color: #f1c40f !important; }

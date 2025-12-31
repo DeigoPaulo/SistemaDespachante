@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+
+{% block title %}Meus Orçamentos{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4 mt-3">
+    <h2 class="fw-bold text-dark"><i class="fas fa-list-alt text-primary me-2"></i> Meus Orçamentos</h2>
+    <a href="{% url 'novo_orcamento' %}" class="btn btn-success shadow">
+        <i class="fas fa-plus me-2"></i> Novo Orçamento
+    </a>
+</div>
+
+<div class="card shadow-sm border-0 bg-light mb-4">
+    <div class="card-body py-3">
+        <form method="GET" class="row g-2 align-items-center">
+            <div class="col-md-6">
+                <input type="text" name="termo" class="form-control" placeholder="Buscar por Cliente ou Nº..." value="{{ filters.termo|default:'' }}">
+            </div>
+            <div class="col-md-4">
+                <select name="status" class="form-select">
+                    <option value="">Todos os Status</option>
+                    <option value="PENDENTE">Pendente</option>
+                    <option value="APROVADO">Aprovado</option>
+                    <option value="CANCELADO">Cancelado</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-search me-1"></i> Filtrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card shadow border-0">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4">Nº</th>
+                        <th>Cliente</th>
+                        <th>Data</th>
+                        <th>Valor Total</th>
+                        <th class="text-center">Status</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in orcamentos %}
+                    <tr>
+                        <td class="ps-4 fw-bold text-muted">#{{ item.id }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ item.nome_cliente_display }}</div>
+                            {% if item.cliente %}
+                                <small class="text-muted"><i class="fas fa-user-check me-1"></i> Cadastrado</small>
+                            {% else %}
+                                <small class="text-muted fst-italic"><i class="fas fa-user me-1"></i> Avulso</small>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.data_criacao|date:"d/m/Y" }}</td>
+                        <td class="fw-bold text-primary">R$ {{ item.valor_total }}</td>
+                        <td class="text-center">
+                            {% if item.status == 'PENDENTE' %}
+                                <span class="badge bg-warning text-dark">Pendente</span>
+                            {% elif item.status == 'APROVADO' %}
+                                <span class="badge bg-success">Aprovado</span>
+                            {% else %}
+                                <span class="badge bg-danger">Cancelado</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            <a href="{% url 'detalhe_orcamento' item.id %}" class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                                <i class="fas fa-eye"></i>
+                            </a>
+                            
+                            <button type="button" class="btn btn-sm btn-outline-danger btn-excluir" 
+                                    data-id="{{ item.id }}" 
+                                    data-bs-toggle="modal" 
+                                    data-bs-target="#modalExcluirOrcamento">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i>
+                            <h5>Nenhum orçamento encontrado.</h5>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalExcluirOrcamento" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja apagar este orçamento permanentemente?</p>
+                <small class="text-danger fw-bold"><i class="fas fa-exclamation-triangle"></i> Essa ação não pode ser desfeita.</small>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                
+                <form id="form-excluir" method="POST">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Sim, Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Script para passar o ID correto para o Modal
+    const modalExcluir = document.getElementById('modalExcluirOrcamento');
+    modalExcluir.addEventListener('show.bs.modal', function (event) {
+        // Botão que acionou o modal
+        const button = event.relatedTarget;
+        
+        // Extrai o ID do data-id="..."
+        const idOrcamento = button.getAttribute('data-id');
+        
+        // Atualiza o Action do formulário
+        const form = document.getElementById('form-excluir');
+        // Atenção: A URL base deve bater com o seu urls.py (/orcamento/ID/excluir/)
+        form.action = `/orcamento/${idOrcamento}/excluir/`;
+    });
+</script>
+{% endblock %}

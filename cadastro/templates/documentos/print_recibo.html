@@ -1,0 +1,190 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Recibo - {{ cliente.nome }}</title>
+    <style>
+        @page { size: A4; margin: 1cm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #000; background: #fff; }
+        
+        .recibo-container {
+            border: 2px solid #444;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+            background-color: #fff;
+            position: relative;
+        }
+
+        /* CABEÇALHO DO RECIBO */
+        .header-recibo { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #ccc; padding-bottom: 15px; margin-bottom: 15px; }
+        .empresa-info h2 { margin: 0; font-size: 18px; text-transform: uppercase; color: #000; }
+        .empresa-info p { margin: 2px 0; font-size: 12px; color: #555; }
+        
+        .valor-box {
+            border: 2px solid #000;
+            background: #eee;
+            padding: 10px 20px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .valor-box small { display: block; font-size: 10px; text-transform: uppercase; }
+        .valor-box span { font-size: 20px; font-weight: bold; }
+
+        /* CORPO */
+        .linha-texto { font-size: 14px; line-height: 1.8; text-align: justify; margin-bottom: 15px; }
+        .campo-preenchido { font-weight: bold; border-bottom: 1px solid #999; padding: 0 5px; }
+
+        /* RODAPÉ - AQUI ESTÁ A MUDANÇA */
+        .rodape-recibo { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-top: 100px; /* Aumentei de 40px para 100px para caber assinatura digital */
+            align-items: flex-end; 
+        }
+        
+        .data-local { font-size: 14px; }
+        .assinatura { text-align: center; border-top: 1px solid #000; padding-top: 5px; width: 250px; font-size: 12px; }
+
+        /* Título da Via */
+        .via-tag { 
+            position: absolute; 
+            top: 0; 
+            left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: #fff; 
+            padding: 0 10px; 
+            font-size: 12px; 
+            font-weight: bold; 
+            color: #777;
+        }
+        
+        .linha-corte { border-top: 2px dashed #999; margin: 40px 0; position: relative; }
+        .linha-corte::after { content: "✂️ Cortar aqui"; position: absolute; top: -12px; right: 0; background: #fff; font-size: 12px; color: #777; padding-left: 5px;}
+
+        /* ESTILO DO BOTÃO DE IMPRIMIR */
+        .btn-print {
+            background-color: #0d6efd;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: background 0.3s;
+        }
+        .btn-print:hover { background-color: #0b5ed7; }
+
+        /* TUDO DENTRO DA CLASSE .no-print SOME NA HORA DE IMPRIMIR */
+        @media print { 
+            .no-print { display: none !important; } 
+            body { background: white; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="position: fixed; top: 20px; right: 20px; z-index: 1000;">
+        <button onclick="window.print()" class="btn-print">
+            🖨️ Imprimir Recibo
+        </button>
+    </div>
+
+    <div class="recibo-container">
+        <div class="via-tag">1ª VIA - CLIENTE</div>
+        
+        <div class="header-recibo">
+            <div class="empresa-info">
+                <h2>{{ despachante.nome_fantasia }}</h2>
+                <p>{{ despachante.razao_social }} | CNPJ: {{ despachante.cnpj }}</p>
+                <p>{{ despachante.endereco_completo }}</p>
+                <p>Tel: {{ despachante.telefone }}</p>
+            </div>
+            <div class="valor-box">
+                <small>VALOR</small>
+                <span>R$ {{ valor_recibo }}</span>
+            </div>
+        </div>
+
+        <div class="linha-texto">
+            Recebemos de <span class="campo-preenchido">{{ cliente.nome|upper }}</span>, 
+            CPF/CNPJ <span class="campo-preenchido">{{ cliente.cpf_cnpj }}</span>, 
+            RG <span class="campo-preenchido">{{ cliente.rg|default:"_________" }} - {{ cliente.uf_rg|default:cliente.uf }}</span>,
+            a importância supramencionada de <strong>R$ {{ valor_recibo }}</strong>, 
+            referente aos serviços de: <span class="campo-preenchido">{{ servicos_solicitados }}</span>
+            
+            {% if veiculo %}
+                do veículo Placa: <span class="campo-preenchido">{{ veiculo.placa }}</span>, 
+                Modelo: <span class="campo-preenchido">{{ veiculo.modelo }}</span>.
+            {% else %}
+                (Veículo não especificado).
+            {% endif %}
+        </div>
+
+        <div class="linha-texto">
+            Para maior clareza, firmamos o presente recibo dando plena e geral quitação.
+        </div>
+
+        <div class="rodape-recibo">
+            <div class="data-local">
+                Goiânia, {{ hoje|date:"d" }} de {{ hoje|date:"F" }} de {{ hoje|date:"Y" }}
+            </div>
+            <div class="assinatura">
+                {{ despachante.nome_fantasia|upper }}<br>
+                Assinatura do Recebedor
+            </div>
+        </div>
+    </div>
+
+    <div class="linha-corte"></div>
+
+    <div class="recibo-container">
+        <div class="via-tag">2ª VIA - ARQUIVO</div>
+        
+        <div class="header-recibo">
+            <div class="empresa-info">
+                <h2>{{ despachante.nome_fantasia }}</h2>
+                <p>{{ despachante.razao_social }} | CNPJ: {{ despachante.cnpj }}</p>
+                <p>{{ despachante.endereco_completo }}</p>
+                <p>Tel: {{ despachante.telefone }}</p>
+            </div>
+            <div class="valor-box">
+                <small>VALOR</small>
+                <span>R$ {{ valor_recibo }}</span>
+            </div>
+        </div>
+
+        <div class="linha-texto">
+            Recebemos de <span class="campo-preenchido">{{ cliente.nome|upper }}</span>, 
+            CPF/CNPJ <span class="campo-preenchido">{{ cliente.cpf_cnpj }}</span>, 
+            a importância supramencionada de <strong>R$ {{ valor_recibo }}</strong>, 
+            referente aos serviços de: <span class="campo-preenchido">{{ servicos_solicitados }}</span>
+            
+            {% if veiculo %}
+                do veículo Placa: <span class="campo-preenchido">{{ veiculo.placa }}</span>, 
+                Modelo: <span class="campo-preenchido">{{ veiculo.modelo }}</span>.
+            {% else %}
+                (Veículo não especificado).
+            {% endif %}
+        </div>
+
+        <div class="linha-texto">
+            Para maior clareza, firmamos o presente recibo dando plena e geral quitação.
+        </div>
+
+        <div class="rodape-recibo">
+            <div class="data-local">
+                Goiânia, {{ hoje|date:"d" }} de {{ hoje|date:"F" }} de {{ hoje|date:"Y" }}
+            </div>
+            <div class="assinatura">
+                {{ despachante.nome_fantasia|upper }}<br>
+                Assinatura do Recebedor
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>

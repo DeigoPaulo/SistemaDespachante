@@ -1,0 +1,224 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard - DespachaPro{% endblock %}
+
+{% block content %}
+
+<div class="row align-items-center mb-4">
+    <div class="col-md-6">
+        <h2 class="fw-bold mb-0">Visão Geral</h2>
+        <p class="text-muted mb-0"><i class="fas fa-building me-1"></i> {{ perfil.despachante.nome_fantasia }}</p>
+    </div>
+    <div class="col-md-6 text-md-end mt-3 mt-md-0">
+        <a href="{% url 'cadastro_rapido' %}" class="btn btn-primary shadow-sm px-4">
+            <i class="fas fa-bolt me-2"></i> Iniciar Processo Rápido
+        </a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card border-0 border-start border-4 border-primary shadow-sm h-100">
+            <div class="card-body py-3">
+                <h6 class="text-uppercase text-muted small fw-bold mb-1">Fila de Trabalho</h6>
+                <div class="d-flex align-items-center">
+                    <h3 class="fw-bold mb-0 me-2">{{ total_abertos }}</h3>
+                    <span class="badge bg-primary-soft text-primary smaller">PENDENTES</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+        <div class="card border-0 border-start border-4 border-success shadow-sm h-100">
+            <div class="card-body py-3">
+                <h6 class="text-uppercase text-muted small fw-bold mb-1">Abertos no Mês</h6>
+                <h3 class="fw-bold mb-0">{{ total_mes }}</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 col-lg-3 mb-3">
+        <a href="{% url 'novo_orcamento' %}" class="text-decoration-none">
+            <div class="card border-0 shadow-sm h-100 bg-white hover-card">
+                <div class="card-body py-3 d-flex align-items-center justify-content-between">
+                    <div>
+                        <h6 class="text-uppercase text-muted small fw-bold mb-1">Comercial</h6>
+                        <span class="fw-bold text-dark"><i class="fas fa-calculator me-1"></i> Criar Orçamento</span>
+                    </div>
+                    <i class="fas fa-chevron-right text-muted"></i>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 overflow-hidden">
+    
+    <div class="card-header bg-white py-3 border-bottom">
+        <div class="row align-items-center g-2">
+            <div class="col-md-4">
+                <h6 class="fw-bold mb-0 text-dark">
+                    <i class="fas fa-stream me-2 text-primary"></i> Processos em Andamento
+                </h6>
+            </div>
+            
+            <div class="col-md-8">
+                <form method="GET" class="d-flex justify-content-md-end gap-2">
+                    <div class="input-group input-group-sm" style="max-width: 300px;">
+                        <span class="input-group-text bg-white"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" name="busca" class="form-control" 
+                               placeholder="Cliente, Placa ou Protocolo..." 
+                               value="{{ termo_busca|default:'' }}">
+                    </div>
+
+                    <div class="input-group input-group-sm" style="max-width: 180px;">
+                        <span class="input-group-text bg-white"><i class="fas fa-calendar-alt text-muted"></i></span>
+                        <input type="date" name="data_filtro" class="form-control" 
+                               value="{{ data_filtro|default:'' }}">
+                    </div>
+
+                    <button type="submit" class="btn btn-sm btn-primary">Filtrar</button>
+
+                    {% if data_filtro or termo_busca %}
+                    <a href="{% url 'dashboard' %}" class="btn btn-sm btn-outline-secondary" title="Limpar Filtros">
+                        <i class="fas fa-times"></i>
+                    </a>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="table-responsive table-wrapper">
+        <table class="table table-hover align-middle mb-0" id="tabelaProcessos">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">nº Processo</th>
+                    <th>Proprietário</th>
+                    <th>Veículo</th>
+                    <th>Serviço</th>
+                    <th>Data / Prazo</th>
+                    <th>Status</th>
+                    <th class="text-center">Ação</th>
+                </tr>
+            </thead>
+            <tbody class="border-top-0">
+                {% for processo in fila_processos %}
+                <tr>
+                    <td class="ps-4">
+                        <span class="fw-bold text-dark">#{{ processo.numero_atendimento|default:"--" }}</span>
+                    </td>
+
+                    <td>
+                        <a href="{% url 'editar_cliente' processo.cliente.id %}" class="text-decoration-none group-hover-edit" title="Editar Cliente">
+                            <div class="fw-bold text-dark">{{ processo.cliente.nome }}</div>
+                            <div class="small text-muted">
+                                <i class="fas fa-phone-alt smaller me-1"></i>{{ processo.cliente.telefone }}
+                            </div>
+                        </a>
+                    </td>
+
+                    <td>
+                        <a href="{% url 'editar_veiculo' processo.veiculo.id %}" class="text-decoration-none" title="Editar Veículo">
+                            <span class="badge bg-dark font-monospace px-2 py-1 mb-1">{{ processo.veiculo.placa }}</span>
+                            <div class="smaller text-muted text-uppercase fw-bold">{{ processo.veiculo.modelo }}</div>
+                        </a>
+                    </td>
+
+                    <td>
+                        <span class="badge bg-light text-secondary border fw-bold">{{ processo.servico|upper }}</span>
+                    </td>
+
+                    <td>
+                        <div class="small fw-bold text-dark">
+                            {% if processo.data_entrega %}
+                                {{ processo.data_entrega|date:"d/m/Y" }}
+                                <span class="text-muted fw-normal" style="font-size: 0.75rem;">(Prazo)</span>
+                            {% else %}
+                                {{ processo.data_solicitacao|date:"d/m/Y" }}
+                                <span class="text-muted fw-normal" style="font-size: 0.75rem;">(Solic.)</span>
+                            {% endif %}
+                        </div>
+
+                        {% if processo.alerta_cor == 'danger' %}
+                            <span class="text-danger fw-bold smaller"><i class="fas fa-exclamation-circle me-1"></i>ATRASADO</span>
+                        {% elif processo.alerta_cor == 'warning' %}
+                            <span class="text-warning fw-bold smaller"><i class="fas fa-clock me-1"></i>ALERTA</span>
+                        {% else %}
+                            <span class="text-success fw-bold smaller"><i class="fas fa-check-circle me-1"></i>NO PRAZO</span>
+                        {% endif %}
+                    </td>
+
+                    <td>
+                        {% if processo.status == 'SOLICITADO' %}
+                            <span class="badge badge-dot bg-primary">Solicitado</span>
+                        {% elif processo.status == 'EM_ANALISE' %}
+                            <span class="badge badge-dot bg-info text-dark">Em Análise</span>
+                        {% elif processo.status == 'PENDENTE' %}
+                            <span class="badge badge-dot bg-warning text-dark">Pendente</span>
+                        {% else %}
+                            <span class="badge badge-dot bg-secondary">{{ processo.get_status_display }}</span>
+                        {% endif %}
+                    </td>
+
+                    <td class="text-center">
+                        <a href="{% url 'editar_atendimento' processo.id %}"
+                           class="btn btn-sm btn-outline-primary border-0 rounded-circle"
+                           style="width: 32px; height: 32px; line-height: 20px;"
+                           title="Atualizar Status">
+                            <i class="fas fa-sync-alt"></i>
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr class="no-filter">
+                    <td colspan="7" class="text-center py-5">
+                        <div class="opacity-25 mb-3">
+                            <i class="fas fa-search fa-4x"></i>
+                        </div>
+                        <h5 class="text-muted fw-bold">Nenhum processo encontrado</h5>
+                        <p class="text-muted mb-0">
+                            {% if termo_busca %}
+                                Não encontramos nada buscando por "<strong>{{ termo_busca }}</strong>".
+                            {% elif data_filtro %}
+                                Não há processos para a data {{ data_filtro|date:"d/m/Y" }}.
+                            {% else %}
+                                Sua fila de trabalho está vazia.
+                            {% endif %}
+                        </p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hover-card:hover {
+        transform: translateY(-2px);
+        transition: transform 0.2s;
+        cursor: pointer;
+    }
+
+    /* --- ESTILO DA BARRA DE ROLAGEM E FIXAÇÃO --- */
+    .table-wrapper {
+        max-height: 550px; /* Altura máxima antes de aparecer a barra de rolagem */
+        overflow-y: auto;  /* Ativa a rolagem vertical */
+        position: relative;
+    }
+
+    /* Cabeçalho Fixo (Sticky Header) */
+    .table-wrapper thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10; /* Garante que fique acima das linhas */
+        background-color: #f8f9fa; /* Mesma cor do table-light para não ficar transparente */
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1); /* Sombra suave para separar */
+    }
+</style>
+{% endblock %}

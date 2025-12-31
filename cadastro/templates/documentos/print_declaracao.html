@@ -1,0 +1,156 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Declaração de Residência - {{ cliente.nome }}</title>
+    <style>
+        @page { size: A4; margin: 1.5cm; }
+        
+        body { 
+            font-family: Arial, Helvetica, sans-serif; 
+            font-size: 11pt; 
+            line-height: 1.4; 
+            color: #000; 
+            background: #fff; 
+        }
+        
+        /* CABEÇALHO AJUSTADO */
+        .header-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-bottom: 0.5cm; /* Reduzi um pouco a margem */
+            border-bottom: 2px solid #000; 
+            padding-bottom: 15px; 
+        }
+        
+        .header-table td { vertical-align: bottom; }
+        
+        /* Ajuste da Logo do Governo (Direita) */
+        .logo-right { 
+            text-align: right; 
+            width: 60%; /* Ocupa a outra metade */
+        }
+        
+        /* AUMENTO DO TAMANHO DAS IMAGENS */
+        .img-logo { 
+            max-height: 110px; /* Aumentado de 70px para 110px */
+            width: auto; 
+            display: block;
+        }
+        
+        /* Para a logo da direita flutuar corretamente */
+        .logo-right .img-logo {
+            margin-left: auto; 
+        }
+
+        .titulo { 
+            text-align: center; 
+            font-weight: bold; 
+            margin-top: 1cm;
+            margin-bottom: 1.5cm; 
+            font-size: 16pt; 
+            text-decoration: underline; 
+            text-transform: uppercase;
+        }
+        
+        .texto { 
+            text-align: justify; 
+            margin-bottom: 1cm; 
+            text-indent: 2em; 
+        }
+        
+        .destaque { font-weight: bold; }
+        
+        .assinatura-box { margin-top: 2cm; text-align: center; }
+        .linha-assinatura { border-top: 1px solid #000; width: 60%; margin: 0 auto; margin-top: 1cm; padding-top: 0.2cm; }
+        
+        .declaracao-box { 
+            margin-top: 2cm; 
+            border: 1px solid #000; 
+            padding: 15px; 
+            text-align: center; 
+            font-size: 10pt;
+            page-break-inside: avoid;
+        }
+
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="position: fixed; top: 10px; right: 10px; background: #eee; padding: 10px; border-radius: 5px;">
+        <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">🖨️ Imprimir</button>
+    </div>
+
+    <table class="header-table">
+        <tr>
+            <td class="logo-right">
+                <img src="{% static 'img/logo_governo.png' %}" alt="Governo de Goiás" class="img-logo">
+            </td>
+        </tr>
+    </table>
+
+    <div class="titulo">DECLARAÇÃO DE RESIDÊNCIA</div>
+
+    <div class="texto">
+        Eu: <span class="destaque">{{ cliente.nome|upper }}</span>, 
+        CPF: <span class="destaque">{{ cliente.cpf_cnpj }}</span>, 
+        Portador(a) da Carteira de identidade nº: <span class="destaque">{{ cliente.rg|default:"_________" }}</span>, 
+        Órgão Emissor: <span class="destaque">{{ cliente.orgao_expedidor|default:"____" }}</span>, 
+        UF RG: <span class="destaque">{{ cliente.uf_rg|default:cliente.uf }}</span>, 
+        
+        <strong>DECLARO</strong> que resido à Rua/Av.: <span class="destaque">{{ cliente.rua }}</span>, 
+        N°: <span class="destaque">{{ cliente.numero }}</span>, 
+        
+        {% if cliente.quadra %}Qd.: <span class="destaque">{{ cliente.quadra }}</span>,{% endif %}
+        {% if cliente.lote %}Lt.: <span class="destaque">{{ cliente.lote }}</span>,{% endif %}
+        {% if cliente.complemento %}Complemento: <span class="destaque">{{ cliente.complemento }}</span>,{% endif %}
+        
+        Bairro: <span class="destaque">{{ cliente.bairro }}</span>, 
+        Cidade: <span class="destaque">{{ cliente.cidade }}</span>, 
+        Estado: <span class="destaque">{{ cliente.uf }}</span>, 
+        CEP: <span class="destaque">{{ cliente.cep }}</span>.
+    </div>
+
+    <div class="texto">
+        Email: <span class="destaque">{{ cliente.email|default:"_____________________" }}</span>, 
+        Celular: <span class="destaque">{{ cliente.telefone }}</span>.
+    </div>
+
+    <div class="texto">
+        <strong>E RESPONSABILIZO-ME</strong> sob as penas da lei penal, civil e administrativa, pela autenticidade do endereço acima transcrito, 
+        cuja declaração de endereço representa a expressão da verdade, sujeitando-me às sanções estabelecidas no 
+        <strong>art. 299, do Código Penal</strong> (falsificação ideológica), e no 
+        <strong>art. 242, do Código de Trânsito Brasileiro</strong> (infração gravíssima, multa e 7 (sete) pontos na ACC, Permissão para Dirigir/CNH do(a) declarante), 
+        caso seja configurado falsa a declaração.
+    </div>
+
+    <div class="assinatura-box">
+        Local e Data:<br>
+        <strong>Goiânia, {{ hoje|date:"d/m/Y" }}</strong>
+        
+        <div class="linha-assinatura">
+            {{ cliente.nome|upper }}<br>
+            <small>Assinatura do Outorgante/Declarante</small>
+        </div>
+    </div>
+
+    <div class="declaracao-box">
+        <strong>DECLARAÇÃO</strong><br><br>
+        Declaro sob a responsabilidade de Lei junto ao DETRAN-GO, que a assinatura neste formulário é de próprio punho do outorgante, feita em nossa presença.
+        
+        <br><br><br>
+        
+        Goiânia, {{ hoje|date:"d/m/Y" }}<br>
+        _____________________________________________<br>
+        <strong>{{ despachante.nome_fantasia|upper }}</strong>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // window.print(); 
+        }
+    </script>
+</body>
+</html>

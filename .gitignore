@@ -1,0 +1,10 @@
+# .gitignore padrão para Django
+__pycache__/
+*.py[cod]
+*~
+db.sqlite3
+.env
+.venv
+venv/
+env/
+.DS_Store+
