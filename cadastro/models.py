@@ -23,8 +23,10 @@ class Despachante(models.Model):
 
 class PerfilUsuario(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
+    
+    # Mantendo sua estrutura original intacta
     despachante = models.ForeignKey(
-        Despachante, on_delete=models.CASCADE, related_name='funcionarios'
+        'Despachante', on_delete=models.CASCADE, related_name='funcionarios'
     )
 
     pode_fazer_upload = models.BooleanField(default=False)
@@ -38,8 +40,22 @@ class PerfilUsuario(models.Model):
         max_length=10, choices=TIPO_CHOICES, default='OPERAR'
     )
 
+    # --- NOVO: O "TEMPORIZADOR" DE ACESSO ---
+    data_expiracao = models.DateField(
+        null=True, 
+        blank=True, 
+        help_text="Data limite para acesso ao sistema. Deixe em branco para acesso vitalício."
+    )
+
     def __str__(self):
         return f"{self.user.username} - {self.despachante.nome_fantasia}"
+
+    # Método auxiliar para o Admin mostrar status colorido
+    def get_dias_restantes(self):
+        if not self.data_expiracao:
+            return None # Sem limite
+        hoje = timezone.now().date()
+        return (self.data_expiracao - hoje).days
 
 
 class Cliente(models.Model):
