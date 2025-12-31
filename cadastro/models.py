@@ -7,6 +7,7 @@ from django.utils import timezone
 # ==============================================================================
 
 class Despachante(models.Model):
+    # --- SEUS CAMPOS ORIGINAIS (MANTIDOS) ---
     nome_fantasia = models.CharField(max_length=255)
     razao_social = models.CharField(max_length=255)
     cnpj = models.CharField(max_length=18, unique=True)
@@ -16,6 +17,21 @@ class Despachante(models.Model):
     endereco_completo = models.TextField()
     data_cadastro = models.DateTimeField(auto_now_add=True)
     ativo = models.BooleanField(default=True)
+
+    # --- NOVOS CAMPOS PARA O FINANCEIRO (SaaS / Asaas) ---
+    email_fatura = models.EmailField(
+        blank=True, null=True, 
+        help_text="E-mail que receberá os boletos/Pix da mensalidade."
+    )
+    valor_mensalidade = models.DecimalField(
+        max_digits=10, decimal_places=2, default=100.00, 
+        help_text="Valor da assinatura mensal deste despachante."
+    )
+    asaas_customer_id = models.CharField(
+        max_length=50, blank=True, null=True, 
+        verbose_name="ID Asaas",
+        help_text="ID gerado automaticamente pela integração."
+    )
 
     def __str__(self):
         return self.nome_fantasia
@@ -40,7 +56,7 @@ class PerfilUsuario(models.Model):
         max_length=10, choices=TIPO_CHOICES, default='OPERAR'
     )
 
-    # --- NOVO: O "TEMPORIZADOR" DE ACESSO ---
+    # --- O "TEMPORIZADOR" DE ACESSO ---
     data_expiracao = models.DateField(
         null=True, 
         blank=True, 
