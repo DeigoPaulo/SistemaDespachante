@@ -5,60 +5,51 @@ from django.utils.html import format_html
 from django.utils import timezone
 from .models import Despachante, PerfilUsuario, Cliente, Veiculo, Atendimento
 
-# 1. Inline do Perfil (Usado tanto no Despachante quanto no Usuário)
+# --- 1. SEGURANÇA SAAS (O Filtro Mágico) ---
+# Esta classe precisa vir antes das outras para funcionar a herança
+class SaasFilterMixin:
+    """
+    Garante que o usuário só veja dados do seu próprio Despachante.
+    O Superusuário (Master) continua vendo tudo.
+    """
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Se for você (Master), mostra tudo
+        if request.user.is_superuser:
+            return qs
+        # Se for cliente/operador, filtra pelo despachante dele
+        if hasattr(request.user, 'perfilusuario') and request.user.perfilusuario.despachante:
+            return qs.filter(despachante=request.user.perfilusuario.despachante)
+        return qs.none() # Se não tiver perfil configurado, não vê nada (segurança)
+
+    def save_model(self, request, obj, form, change):
+        """Ao salvar, força o despachante do usuário logado (se não for Master)"""
+        if not request.user.is_superuser and not getattr(obj, 'despachante_id', None):
+            if hasattr(request.user, 'perfilusuario'):
+                obj.despachante = request.user.perfilusuario.despachante
+        super().save_model(request, obj, form, change)
+
+
+# --- 2. CONFIGURAÇÕES DO USUÁRIO ---
+
 class PerfilUsuarioInline(admin.StackedInline):
     model = PerfilUsuario
     can_delete = False
     verbose_name_plural = 'Perfil, Permissões e Assinatura'
-    fk_name = 'user' # Garante que o inline saiba conectar com o User
+    fk_name = 'user'
 
-# 2. SEU CÓDIGO ORIGINAL (Mantido Intacto)
-@admin.register(Despachante)
-class DespachanteAdmin(admin.ModelAdmin):
-    list_display = ('nome_fantasia', 'codigo_sindego', 'cnpj', 'ativo')
-    search_fields = ('nome_fantasia', 'cnpj', 'codigo_sindego')
-    # Nota: Removi o inline daqui para evitar confusão na edição, 
-    # mas se quiser ver os funcionários dentro do Despachante, pode descomentar:
-    # inlines = [PerfilUsuarioInline] 
-
-@admin.register(Cliente)
-class ClienteAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'cpf_cnpj', 'cidade', 'despachante')
-    list_filter = ('despachante', 'cidade')
-    search_fields = ('nome', 'cpf_cnpj')
-
-@admin.register(Veiculo)
-class VeiculoAdmin(admin.ModelAdmin):
-    list_display = ('placa', 'modelo', 'cor', 'cliente', 'despachante')
-    search_fields = ('placa', 'chassi', 'renavam')
-    list_filter = ('tipo', 'despachante')
-
-@admin.register(Atendimento)
-class AtendimentoAdmin(admin.ModelAdmin):
-    list_display = ('numero_atendimento', 'cliente', 'veiculo', 'servico', 'status', 'data_solicitacao')
-    list_filter = ('status', 'data_solicitacao', 'despachante')
-    search_fields = ('numero_atendimento', 'cliente__nome', 'veiculo__placa')
-    date_hierarchy = 'data_solicitacao'
-
-# 3. A NOVIDADE: O "Painel Master" de Controle de Assinaturas
-# Isso substitui a administração padrão de usuários do Django
 class CustomUserAdmin(UserAdmin):
-    inlines = (PerfilUsuarioInline, ) # Aqui você edita a data de expiração
+    inlines = (PerfilUsuarioInline, )
     
-    # Adicionamos colunas novas na lista de usuários
     list_display = ('username', 'email', 'get_despachante', 'get_status_assinatura', 'is_active')
-    
-    # Filtros laterais para te ajudar a achar quem venceu
     list_filter = ('is_active', 'is_staff', 'perfilusuario__despachante') 
 
-    # Coluna para mostrar de qual Despachante é o usuário
     def get_despachante(self, instance):
         if hasattr(instance, 'perfilusuario') and instance.perfilusuario.despachante:
             return instance.perfilusuario.despachante.nome_fantasia
         return "-"
     get_despachante.short_description = 'Despachante'
 
-    # Coluna do "Semáforo" (Cores e Prazos)
     def get_status_assinatura(self, instance):
         if not hasattr(instance, 'perfilusuario'):
             return "-"
@@ -77,6 +68,43 @@ class CustomUserAdmin(UserAdmin):
 
     get_status_assinatura.short_description = 'Status / Validade'
 
-# Desregistra o User padrão e coloca o nosso turbinado
+# Atualiza o Admin de Usuários
 admin.site.unregister(User)
 admin.site.register(User, CustomUserAdmin)
+
+
+# --- 3. SEUS MODELOS DE NEGÓCIO (Com a Blindagem Aplicada) ---
+
+@admin.register(Despachante)
+class DespachanteAdmin(admin.ModelAdmin):
+    # Despachante não usa o Mixin, pois só o Master acessa essa tela
+    list_display = ('nome_fantasia', 'codigo_sindego', 'cnpj', 'ativo')
+    search_fields = ('nome_fantasia', 'cnpj', 'codigo_sindego')
+
+@admin.register(Cliente)
+class ClienteAdmin(SaasFilterMixin, admin.ModelAdmin): # <--- Blindagem aqui
+    list_display = ('nome', 'cpf_cnpj', 'cidade', 'get_despachante_view')
+    list_filter = ('despachante', 'cidade')
+    search_fields = ('nome', 'cpf_cnpj')
+
+    # Helper para você (Master) ver de quem é o cliente na lista
+    def get_despachante_view(self, instance):
+        return instance.despachante.nome_fantasia if instance.despachante else '-'
+    get_despachante_view.short_description = 'Despachante'
+
+@admin.register(Veiculo)
+class VeiculoAdmin(SaasFilterMixin, admin.ModelAdmin): # <--- Blindagem aqui
+    list_display = ('placa', 'modelo', 'cor', 'cliente', 'get_despachante_view')
+    search_fields = ('placa', 'chassi', 'renavam')
+    list_filter = ('tipo', 'despachante')
+
+    def get_despachante_view(self, instance):
+        return instance.despachante.nome_fantasia if instance.despachante else '-'
+    get_despachante_view.short_description = 'Despachante'
+
+@admin.register(Atendimento)
+class AtendimentoAdmin(SaasFilterMixin, admin.ModelAdmin): # <--- Blindagem aqui
+    list_display = ('numero_atendimento', 'cliente', 'veiculo', 'servico', 'status', 'data_solicitacao')
+    list_filter = ('status', 'data_solicitacao', 'despachante')
+    search_fields = ('numero_atendimento', 'cliente__nome', 'veiculo__placa')
+    date_hierarchy = 'data_solicitacao'
