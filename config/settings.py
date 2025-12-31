@@ -10,6 +10,7 @@ from django.templatetags.static import static
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
+
 # ==============================================================================
 # 1. CAMINHOS BASE
 # ==============================================================================
@@ -157,7 +158,6 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Quando for para produção (internet), você mudará para SMTP:
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-
 
 
 
