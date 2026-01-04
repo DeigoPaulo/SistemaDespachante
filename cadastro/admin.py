@@ -2,10 +2,15 @@ from django.contrib import admin
 from django.contrib.auth.models import User
 from django.contrib.auth.admin import UserAdmin
 from django.utils.html import format_html
-from django.contrib import messages  # Importante para as mensagens de sucesso/erro
+from django.contrib import messages
+from django.core.mail import send_mail 
+from django.utils import timezone      
+from datetime import timedelta         
+from django.conf import settings
+
 from .models import Despachante, PerfilUsuario, Cliente, Veiculo, Atendimento
-# Certifique-se de que o arquivo asaas.py existe na mesma pasta
-from .asaas import criar_cliente_asaas 
+# Importamos as funções do asaas.py
+from .asaas import criar_cliente_asaas, gerar_boleto_asaas
 
 # --- 1. SEGURANÇA SAAS (O Filtro Mágico) ---
 class SaasFilterMixin:
@@ -70,27 +75,30 @@ admin.site.register(User, CustomUserAdmin)
 
 @admin.register(Despachante)
 class DespachanteAdmin(admin.ModelAdmin):
-    # Adicionei 'asaas_customer_id' na lista para você ver se deu certo
-    list_display = ('nome_fantasia', 'codigo_sindego', 'cnpj', 'asaas_customer_id', 'ativo')
-    search_fields = ('nome_fantasia', 'cnpj', 'codigo_sindego')
+    # --- AQUI ESTÁ A ATUALIZAÇÃO ---
+    # Adicionei 'razao_social' para aparecer na lista
+    list_display = ('nome_fantasia', 'razao_social', 'codigo_sindego', 'cnpj', 'status_financeiro', 'ativo')
     
-    # --- AQUI ESTÁ A NOVIDADE: O BOTÃO DO ASAAS ---
-    actions = ['gerar_cadastro_asaas']
+    # Adicionei também na busca para facilitar encontrar a empresa
+    search_fields = ('nome_fantasia', 'razao_social', 'cnpj', 'codigo_sindego')
+    
+    actions = ['gerar_cadastro_asaas', 'gerar_fatura_e_renovar_30_dias']
 
-    @admin.action(description='💰 Criar/Sincronizar Cliente no Asaas')
+    def status_financeiro(self, obj):
+        if obj.asaas_customer_id:
+            return "🟢 Integrado"
+        return "🔴 Pendente"
+    status_financeiro.short_description = "Status Asaas"
+
+    # --- AÇÃO 1: APENAS SINCRONIZAR CADASTRO ---
+    @admin.action(description='🔄 Sincronizar Cliente no Asaas (Sem Cobrança)')
     def gerar_cadastro_asaas(self, request, queryset):
         sucesso = 0
         erros = 0
         
         for despachante in queryset:
-            # Chama a função que criamos no arquivo asaas.py
             novo_id = criar_cliente_asaas(despachante)
-            
             if novo_id:
-                # O update acontece dentro da função criar_cliente_asaas geralmente,
-                # mas aqui garantimos que o admin saiba que o ID existe.
-                # Se sua função asaas.py já salva o objeto, ótimo.
-                # Se ela só retorna a string, precisamos salvar aqui:
                 if despachante.asaas_customer_id != novo_id:
                     despachante.asaas_customer_id = novo_id
                     despachante.save()
@@ -98,11 +106,77 @@ class DespachanteAdmin(admin.ModelAdmin):
             else:
                 erros += 1
         
-        # Mensagem feedback para você no topo da tela
         if erros > 0:
-            self.message_user(request, f"{sucesso} sincronizados. {erros} erros. Verifique o console/logs.", messages.WARNING)
+            self.message_user(request, f"{sucesso} sinc. {erros} erros.", messages.WARNING)
         else:
-            self.message_user(request, f"{sucesso} despachantes sincronizados com sucesso no Asaas!", messages.SUCCESS)
+            self.message_user(request, f"{sucesso} despachantes sincronizados!", messages.SUCCESS)
+
+    # --- AÇÃO 2: GERAR FATURA + EMAIL + RENOVAR ACESSO ---
+    @admin.action(description='💰 Gerar Fatura, Enviar E-mail e Renovar (+30 dias)')
+    def gerar_fatura_e_renovar_30_dias(self, request, queryset):
+        sucesso = 0
+        erros = 0
+
+        for despachante in queryset:
+            # 1. Garante cadastro no Asaas
+            if not despachante.asaas_customer_id:
+                criar_cliente_asaas(despachante)
+            
+            # 2. Gera o Boleto
+            resultado = gerar_boleto_asaas(despachante)
+
+            if resultado['sucesso']:
+                link_pdf = resultado['link_boleto']
+                link_pagar = resultado['link_fatura']
+
+                # 3. Monta e Envia o E-mail
+                assunto = f"Fatura Disponível - {despachante.nome_fantasia}"
+                mensagem = f"""
+                Olá, {despachante.nome_fantasia}!
+
+                Sua mensalidade do sistema DespachaPro foi gerada.
+                
+                Valor: R$ {despachante.valor_mensalidade}
+                
+                📄 Baixar Boleto PDF: {link_pdf}
+                💳 Pagar (Pix/Boleto): {link_pagar}
+
+                Seu acesso ao sistema foi renovado preventivamente por mais 30 dias.
+                
+                Att,
+                Equipe DespachaPro
+                """
+                
+                try:
+                    email_destino = despachante.email_fatura or despachante.email
+                    send_mail(
+                        assunto,
+                        mensagem,
+                        settings.DEFAULT_FROM_EMAIL or 'financeiro@seusistema.com.br',
+                        [email_destino],
+                        fail_silently=False,
+                    )
+                except Exception as e:
+                    self.message_user(request, f"Fatura gerada, mas erro ao enviar email para {despachante}: {e}", level=messages.WARNING)
+
+                # 4. Renova o acesso dos usuários deste despachante
+                funcionarios = PerfilUsuario.objects.filter(despachante=despachante)
+                hoje = timezone.now().date()
+                dias_liberados = 30
+                
+                for perfil in funcionarios:
+                    if not perfil.data_expiracao or perfil.data_expiracao < hoje:
+                        perfil.data_expiracao = hoje + timedelta(days=dias_liberados)
+                    else:
+                        perfil.data_expiracao = perfil.data_expiracao + timedelta(days=dias_liberados)
+                    perfil.save()
+
+                sucesso += 1
+            else:
+                erros += 1
+                self.message_user(request, f"Erro Asaas ({despachante}): {resultado.get('erro')}", level=messages.ERROR)
+
+        self.message_user(request, f"Processo finalizado: {sucesso} faturas enviadas e renovadas.", level=messages.SUCCESS)
 
 
 @admin.register(Cliente)

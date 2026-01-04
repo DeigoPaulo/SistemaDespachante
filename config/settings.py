@@ -35,7 +35,9 @@ ALLOWED_HOSTS = []
 # 3. APLICAÇÕES INSTALADAS
 # ==============================================================================
 INSTALLED_APPS = [
-    "unfold",
+    #"unfold",
+    "unfold.contrib.filters",  # (Opcional) Adicione se quiser filtros bonitos
+    "unfold.contrib.forms",  # (Opcional) Adicione se quiser formulários bonitos
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -163,15 +165,10 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # --- CONFIGURAÇÃO DO VISUAL (UNFOLD) ---
 UNFOLD = {
-    "SITE_TITLE": "Sistema Despachante",  # O que aparece na aba do navegador
-    "SITE_HEADER": "Painel de Gestão",    # O texto grande no topo do menu
-    "SITE_URL": "/",                      # Para onde vai ao clicar no logo
-    
-    # Ícone ao lado do nome (usando Material Symbols do Google)
-    # Lista de ícones: https://fonts.google.com/icons
-    "SITE_SYMBOL": "speed",               
-    
-    # Personalização das cores (opcional - deixe assim para o azul padrão bonito)
+    "SITE_TITLE": "Sistema Despachante",
+    "SITE_HEADER": "Painel de Gestão",
+    "SITE_URL": "/",
+    "SITE_SYMBOL": "speed",
     "COLORS": {
         "primary": {
             "50": "239 246 255",
@@ -180,64 +177,59 @@ UNFOLD = {
             "300": "147 197 253",
             "400": "96 165 250",
             "500": "59 130 246",
-            "600": "37 99 235",  # Cor principal
+            "600": "37 99 235",
             "700": "29 78 216",
             "800": "30 64 175",
             "900": "30 58 138",
         },
     },
-
-    # Menu Lateral (Sidebar)
     "SIDEBAR": {
-        "show_search": True,  # Barra de busca no menu
+        "show_search": True,
         "show_all_applications": True,
-        
-        # Aqui você define a ordem e ícones dos menus
         "navigation": [
             {
-                "title": _("Gestão Operacional"),
-                "separator": True,  # Linha divisória
+                "title": "Gestão Operacional",
+                "separator": True,
                 "items": [
                     {
-                        "title": _("Clientes"),
-                        "icon": "person", 
+                        "title": "Clientes",
+                        "icon": "person",
                         "link": reverse_lazy("admin:cadastro_cliente_changelist"),
                     },
                     {
-                        "title": _("Veículos"),
+                        "title": "Veículos",
                         "icon": "directions_car",
                         "link": reverse_lazy("admin:cadastro_veiculo_changelist"),
                     },
                     {
-                        "title": _("Atendimentos"),
+                        "title": "Atendimentos",
                         "icon": "assignment",
                         "link": reverse_lazy("admin:cadastro_atendimento_changelist"),
                     },
                 ],
             },
             {
-                "title": _("Administração do Sistema"),
+                "title": "Administração do Sistema",
                 "separator": True,
-                "collapse": True, # Começa fechado para não poluir
+                "collapse": True,
                 "items": [
                     {
-                        "title": _("Usuários e Acessos"),
+                        "title": "Usuários e Acessos",
                         "icon": "group",
                         "link": reverse_lazy("admin:auth_user_changelist"),
-                        "permission": lambda request: request.user.is_superuser, # Só você vê
+                        "permission": lambda request: request.user.is_superuser,
                     },
                     {
-                        "title": _("Despachantes (Empresas)"),
+                        "title": "Despachantes (Empresas)",
                         "icon": "domain",
                         "link": reverse_lazy("admin:cadastro_despachante_changelist"),
-                        "permission": lambda request: request.user.is_superuser, # Só você vê
+                        "permission": lambda request: request.user.is_superuser,
                     },
                 ],
             },
         ],
     },
 }
-
 
 
 

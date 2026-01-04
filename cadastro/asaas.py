@@ -1,11 +1,11 @@
 import requests
-import json
+import re
+from datetime import date, timedelta
 from django.conf import settings
 
-# --- CONFIGURAÇÃO ---
-# Crie sua conta em: https://sandbox.asaas.com/
-# Vá em Minha Conta > Integração > Chave de API
-ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmIzNmQxMWUzLTVmMmItNGM3Yy1hNTI3LThmNjg1ZjhkMDhiMTo6JGFhY2hfOWZmZmRiZmItNTYzMS00N2QwLTk3YTAtZWI1N2I3NTFlOTAx" # <--- COLE SUA CHAVE AQUI (começa com $aact)
+# --- SUAS CHAVES ---
+# Chave mantida exatamente como você enviou
+ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmIwNzU1ZjdiLWZkNmMtNDg1OS1iMzM5LTI5ZGNjYmU1ZGQzMTo6JGFhY2hfODdhNGE1N2UtOWE4Yi00ODQzLWEwZDEtNGE3MjdjZDg2NzFl"
 ASAAS_URL = "https://sandbox.asaas.com/api/v3"
 
 def headers():
@@ -16,38 +16,91 @@ def headers():
 
 def criar_cliente_asaas(despachante):
     """
-    Cria ou atualiza o cliente no Asaas com base nos dados do Despachante.
-    Retorna o ID do cliente (cus_xxx) ou None se der erro.
+    Cria ou recupera o cliente no Asaas.
+    Retorna o ID (cus_xxx) ou None se der erro.
     """
-    url = f"{ASAAS_URL}/customers"
-    
-    # 1. Se já tem ID, retorna ele (evita duplicação)
+    # 1. Se já tem ID salvo no banco, retorna ele
     if despachante.asaas_customer_id:
         return despachante.asaas_customer_id
 
-    # 2. Monta os dados para enviar
-    # Tenta usar o email de fatura, se não tiver, usa o email principal
-    email_envio = despachante.email_fatura or despachante.email or "sem_email@sistema.com"
+    # 2. Limpeza de dados (Remove pontos e traços do CNPJ)
+    cpf_limpo = re.sub(r'[^0-9]', '', despachante.cnpj)
+
+    # 3. Lógica do Nome: Prioriza Razão Social. Se não tiver, usa Nome Fantasia.
+    nome_final = despachante.razao_social if despachante.razao_social else despachante.nome_fantasia
+
+    url = f"{ASAAS_URL}/customers"
     
     payload = {
-        "name": despachante.nome_fantasia,
-        "cpfCnpj": despachante.cnpj,
-        "email": email_envio,
-        "phone": despachante.telefone,
-        "externalReference": str(despachante.id) # Ajuda a cruzar dados no futuro
+        "name": nome_final, # <-- Atualizado para usar o nome correto
+        "cpfCnpj": cpf_limpo,
+        "email": despachante.email_fatura or despachante.email or "email@teste.com",
+        "mobilePhone": despachante.telefone,
+        
+        # --- NOVOS CAMPOS DE ENDEREÇO ---
+        # Enviamos o endereço completo no campo principal
+        "address": despachante.endereco_completo,
+        "addressNumber": "S/N", # Obrigatório na API
+        "postalCode": "74000-000", # CEP Genérico (Goiânia) para validar
+        
+        "externalReference": str(despachante.id)
     }
 
-    # 3. Envia para o Asaas
     try:
         response = requests.post(url, json=payload, headers=headers())
         
         if response.status_code == 200:
             data = response.json()
-            return data['id'] # Sucesso! Retorna algo tipo 'cus_00005...'
+            
+            # SALVA NO BANCO
+            despachante.asaas_customer_id = data['id']
+            despachante.save()
+            
+            return data['id']
         else:
-            print(f"Erro Asaas: {response.status_code} - {response.text}")
+            print(f"❌ Erro Asaas (Criar Cliente): {response.text}")
             return None
+
+    except Exception as e:
+        print(f"❌ Erro de conexão: {e}")
+        return None
+
+def gerar_boleto_asaas(despachante, dias_para_vencimento=3):
+    """
+    Gera o boleto e retorna os links.
+    """
+    # 1. Tenta obter ou criar o cliente
+    customer_id = criar_cliente_asaas(despachante)
+
+    # 2. TRAVA DE SEGURANÇA
+    if not customer_id:
+        return {"sucesso": False, "erro": "Não foi possível cadastrar o cliente (Verifique CNPJ válido)"}
+
+    # 3. Calcula vencimento e monta boleto
+    data_vencimento = date.today() + timedelta(days=dias_para_vencimento)
+
+    payload = {
+        "customer": customer_id,
+        "billingType": "BOLETO",
+        "value": float(despachante.valor_mensalidade),
+        "dueDate": data_vencimento.strftime("%Y-%m-%d"),
+        "description": f"Mensalidade Sistema - Venc: {data_vencimento.strftime('%d/%m/%Y')}",
+        "postalService": False
+    }
+
+    try:
+        response = requests.post(f"{ASAAS_URL}/payments", json=payload, headers=headers())
+        
+        if response.status_code == 200:
+            data = response.json()
+            return {
+                "sucesso": True,
+                "link_boleto": data['bankSlipUrl'],
+                "link_fatura": data['invoiceUrl'],
+                "id": data['id']
+            }
+        else:
+            return {"sucesso": False, "erro": f"Asaas rejeitou cobrança: {response.text}"}
             
     except Exception as e:
-        print(f"Erro de conexão com Asaas: {e}")
-        return None
+        return {"sucesso": False, "erro": str(e)}

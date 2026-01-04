@@ -1,10 +1,13 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views
+from cadastro.views import minha_view_de_login
+from .views import minha_view_de_login, pagar_mensalidade
 
 urlpatterns = [
     # --- Autenticação (Login/Logout) ---
-    path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
+    #path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
+    path('login/', minha_view_de_login, name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 
     # --- RECUPERAÇÃO DE SENHA (NOVAS ROTAS) ---
@@ -57,4 +60,6 @@ urlpatterns = [
     
 
     path('relatorios/mensal/', views.relatorio_mensal, name='relatorio_mensal'),
+
+    path('financeiro/pagar/', pagar_mensalidade, name='pagar_mensalidade'),
 ]

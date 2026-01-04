@@ -63,6 +63,8 @@ class PerfilUsuario(models.Model):
         help_text="Data limite para acesso ao sistema. Deixe em branco para acesso vitalício."
     )
 
+    ultimo_session_key = models.CharField(max_length=40, null=True, blank=True)
+
     def __str__(self):
         return f"{self.user.username} - {self.despachante.nome_fantasia}"
 

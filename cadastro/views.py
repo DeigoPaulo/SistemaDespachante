@@ -15,30 +15,90 @@ from django.contrib import messages # Importante para avisar o erro na tela
 from .models import TipoServico, Cliente, Atendimento
 from .models import Orcamento, ItemOrcamento
 
-# --- SINAL PARA DERRUBAR SESSÕES ANTIGAS ---
-from django.contrib.auth.signals import user_logged_in
-from django.dispatch import receiver
+from django.shortcuts import render, redirect
+from django.contrib.auth import authenticate, login
 from django.contrib.sessions.models import Session
+from .models import PerfilUsuario  # Importe seu modelo de perfil criado
+from .asaas import gerar_boleto_asaas
 
-@receiver(user_logged_in)
-def logout_other_sessions(sender, request, user, **kwargs):
-    # Pega a chave da sessão atual (que acabou de logar)
-    current_session_key = request.session.session_key
+# ==============================================================================
+# 1. VIEW DE LOGIN (Sua lógica original mantida)
+# ==============================================================================
+def minha_view_de_login(request):
+    contexto = {'erro_login': False}
 
-    # Percorre todas as sessões ativas no banco
-    # (Nota: Em sistemas com milhões de usuários, isso deve ser otimizado)
-    for session in Session.objects.all():
-        try:
-            data = session.get_decoded()
-        except:
-            continue
-            
-        # Se a sessão for do usuário que acabou de logar...
-        if data.get('_auth_user_id') == str(user.id):
-            # ...e não for a sessão atual
-            if session.session_key != current_session_key:
-                session.delete()
+    if request.method == 'POST':
+        # 1. Pega dados do form
+        username_form = request.POST.get('username')
+        password_form = request.POST.get('password')
 
+        # 2. Autentica
+        user = authenticate(request, username=username_form, password=password_form)
+
+        if user is not None:
+            # Faz o login (cria sessão em memória)
+            login(request, user)
+
+            # GARANTIA: Se a sessão não tiver chave ainda, força criar e salvar agora
+            if not request.session.session_key:
+                request.session.create()
+
+            nova_chave = request.session.session_key
+
+            # 3. Lógica de Single Session (Um dispositivo por vez)
+            # Usa get_or_create para evitar erro se o perfil ainda não existir
+            perfil, created = PerfilUsuario.objects.get_or_create(user=user)
+            chave_antiga = perfil.ultimo_session_key
+
+            if chave_antiga and chave_antiga != nova_chave:
+                try:
+                    # Tenta apagar a sessão anterior do banco
+                    Session.objects.get(session_key=chave_antiga).delete()
+                except Session.DoesNotExist:
+                    # Se já não existia, segue o jogo
+                    pass
+
+            # 4. Atualiza o perfil com a chave atual
+            perfil.ultimo_session_key = nova_chave
+            perfil.save()
+
+            return redirect('dashboard')
+        
+        else:
+            # Senha incorreta
+            contexto['erro_login'] = True
+
+    return render(request, 'login.html', context=contexto)
+
+
+# ==============================================================================
+# 2. VIEW DE PAGAMENTO (Nova função)
+# ==============================================================================
+@login_required
+def pagar_mensalidade(request):
+    """
+    Função chamada pelo botão 'Pagar Agora' no Dashboard.
+    Gera o boleto no Asaas e redireciona o usuário para a tela de pagamento.
+    """
+    # 1. Tenta pegar o despachante do usuário logado
+    try:
+        # Verifica se o usuário tem perfil e despachante vinculado
+        despachante = request.user.perfilusuario.despachante
+    except AttributeError:
+        messages.error(request, "Usuário sem perfil de despachante vinculado.")
+        return redirect('dashboard')
+
+    # 2. Chama a função do arquivo asaas.py
+    resultado = gerar_boleto_asaas(despachante)
+
+    # 3. Verifica se deu certo
+    if resultado['sucesso']:
+        # Se deu certo, manda o usuário direto para o link da fatura (Pix/Boleto)
+        return redirect(resultado['link_fatura'])
+    else:
+        # Se deu erro, mostra aviso na tela e volta pro dashboard
+        messages.error(request, f"Erro ao gerar fatura: {resultado.get('erro')}")
+        return redirect('dashboard')
 # ==============================================================================
 # DASHBOARD E FLUXO PRINCIPAL
 # ==============================================================================
