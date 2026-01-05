@@ -21,6 +21,14 @@ from django.contrib.sessions.models import Session
 from .models import PerfilUsuario  # Importe seu modelo de perfil criado
 from .asaas import gerar_boleto_asaas
 from django.contrib.auth.models import User
+
+from django.http import FileResponse
+from .forms import CompressaoPDFForm
+from .utils import comprimir_pdf_memoria
+from django.urls import reverse
+
+
+
 # ==============================================================================
 # 1. VIEW DE LOGIN (Com suporte a E-mail e Usuário)
 # ==============================================================================
@@ -217,30 +225,35 @@ def novo_atendimento(request):
     })
 
 
+from django.urls import reverse  # <--- Adicione esse import no topo do arquivo
+
+# ... (seu código) ...
+
 @login_required
 def editar_atendimento(request, id):
-    """
-    Permite alterar status, PRAZOS e observações.
-    """
     perfil = request.user.perfilusuario
     
-    # Busca o atendimento garantindo que pertence ao despachante logado
+    # Busca o atendimento
     atendimento = get_object_or_404(Atendimento, id=id, despachante=perfil.despachante)
     
     if request.method == 'POST':
         form = AtendimentoForm(request.user, request.POST, instance=atendimento)
         if form.is_valid():
             form.save()
-            # Redireciona de volta para o Dashboard para ver a mudança
             return redirect('dashboard')
     else:
         form = AtendimentoForm(request.user, instance=atendimento)
         
     return render(request, 'form_generico.html', {
         'form': form, 
-        'titulo': f'Editar Processo #{atendimento.numero_atendimento or "S/N"}'
+        'titulo': f'Editar Processo #{atendimento.numero_atendimento or "S/N"}',
+        
+        # --- AQUI ESTÁ A CORREÇÃO ---
+        # Enviamos para o template exatamente qual URL deve ser chamada para excluir
+        'url_excluir': reverse('excluir_atendimento', args=[atendimento.id]),
+        'texto_modal': f"Tem certeza que deseja excluir o processo do veículo {atendimento.veiculo.placa}?",
+        'url_voltar': reverse('dashboard') # Botão voltar vai pro dashboard
     })
-
 
 @login_required
 def detalhe_cliente(request, id):
@@ -1000,49 +1013,51 @@ def imprimir_documento(request):
         valor_recibo = request.POST.get('valor_recibo')
         
         # Dados para lógica do Outorgado (Procuração Particular)
-        tipo_outorgado = request.POST.get('tipo_outorgado') # 'escritorio' ou 'outro'
+        tipo_outorgado = request.POST.get('tipo_outorgado') 
         outorgado_id = request.POST.get('outorgado_id')
 
-        # 2. Pega o Despachante Logado (usaremos várias vezes)
+        # --- [NOVO] Campos específicos da Procuração ATPV-e ---
+        comprador_id = request.POST.get('comprador_id') # Id do cliente que está comprando
+        valor_venda = request.POST.get('valor_venda')
+        numero_crv = request.POST.get('numero_crv')
+        numero_atpv = request.POST.get('numero_atpv')
+        # -----------------------------------------------------
+
         despachante_obj = request.user.perfilusuario.despachante
 
-        # 3. BUSCA SEGURA DO CLIENTE (OUTORGANTE)
+        # 3. BUSCA SEGURA DO CLIENTE (OUTORGANTE/VENDEDOR)
         cliente = get_object_or_404(
             Cliente, 
             id=cliente_id, 
             despachante=despachante_obj
         )
         
-        # 4. BUSCA DO VEÍCULO (Opcional)
+        # 4. BUSCA DO VEÍCULO
         veiculo = None
         if veiculo_placa:
             veiculo = Veiculo.objects.filter(placa=veiculo_placa, cliente=cliente).first()
 
-        # 5. LÓGICA DO OUTORGADO (Quem recebe os poderes)
-        # Cria um dicionário padrão para facilitar o uso no template
+        # 5. LÓGICA DO OUTORGADO (PROCURADOR)
         outorgado_dados = {}
-
         if tipo_doc == 'procuracao_particular' and tipo_outorgado == 'outro' and outorgado_id:
-            # Se escolheu "Outra Pessoa", buscamos ela no banco de Clientes
             try:
                 pessoa = Cliente.objects.get(id=outorgado_id, despachante=despachante_obj)
-                outorgado_dados = {
-                    'nome': pessoa.nome.upper(),
-                    'doc': f"CPF/CNPJ: {pessoa.cpf_cnpj}",
-                    'rg': f"RG: {pessoa.rg or ''} {pessoa.orgao_expedidor or ''}",
-                    'endereco': f"{pessoa.rua}, {pessoa.numero}, {pessoa.bairro}",
-                    'cidade': f"{pessoa.cidade}/{pessoa.uf}",
-                    'cep': pessoa.cep,
-                    'telefone': pessoa.telefone
-                }
+                outorgado_dados = _formatar_dados_pessoa(pessoa) # Usei uma função auxiliar pra limpar o código
             except Cliente.DoesNotExist:
-                # Fallback de segurança: se não achar, usa o escritório
                 outorgado_dados = _dados_do_escritorio(despachante_obj)
         else:
-            # Padrão: O Outorgado é o Escritório/Despachante
             outorgado_dados = _dados_do_escritorio(despachante_obj)
 
-        # 6. FORMATAÇÃO DOS SERVIÇOS
+        # 6. [NOVO] LÓGICA DO COMPRADOR (Para ATPV-e)
+        comprador_dados = {}
+        if tipo_doc == 'procuracao_atpv' and comprador_id:
+            try:
+                comp = Cliente.objects.get(id=comprador_id, despachante=despachante_obj)
+                comprador_dados = _formatar_dados_pessoa(comp)
+            except Cliente.DoesNotExist:
+                comprador_dados = {'nome': 'COMPRADOR NÃO ENCONTRADO'}
+
+        # 7. FORMATAÇÃO DOS SERVIÇOS
         lista_nomes_servicos = []
         if servicos_selecionados_ids:
             servicos_objs = TipoServico.objects.filter(id__in=servicos_selecionados_ids)
@@ -1050,22 +1065,34 @@ def imprimir_documento(request):
         
         texto_servicos = ", ".join(lista_nomes_servicos) if lista_nomes_servicos else "______________________________________________________"
 
-        # 7. CONTEXTO GERAL (Enviado para o PDF)
+        # 8. CONTEXTO GERAL
         context = {
             'cliente': cliente,
             'veiculo': veiculo,
             'despachante': despachante_obj,
-            'outorgado': outorgado_dados, # <--- NOVO: Dados prontos do procurador
+            'outorgado': outorgado_dados,
             'hoje': timezone.now(),
             'servicos_solicitados': texto_servicos,
             'motivo_2via': motivo_2via,
             'alteracao_pretendida': alteracao_pretendida,
-            'valor_recibo': valor_recibo
+            'valor_recibo': valor_recibo,
+            
+            # [NOVO] Passando os dados novos para o template
+            'comprador': comprador_dados,
+            'transacao': {
+                'valor': valor_venda,
+                'crv': numero_crv,
+                'atpv': numero_atpv
+            }
         }
 
-        # 8. SELEÇÃO DO DOCUMENTO
+        # 9. SELEÇÃO DO DOCUMENTO (Adicionei o elif novo)
         if tipo_doc == 'procuracao':
             return render(request, 'documentos/print_procuracao.html', context)
+        
+        elif tipo_doc == 'procuracao_atpv': # <--- AQUI ESTÁ A NOVA OPÇÃO
+            return render(request, 'documentos/print_procuracao_atpv.html', context) # O HTML que fizemos antes
+
         elif tipo_doc == 'procuracao_particular':
             return render(request, 'documentos/print_procuracao_particular.html', context)
         elif tipo_doc == 'declaracao':
@@ -1081,18 +1108,56 @@ def imprimir_documento(request):
         elif tipo_doc == 'alteracao_endereco': 
             return render(request, 'documentos/print_alteracao_endereco.html', context)
     
-        
-            
     return redirect('selecao_documento')
 
-# Função auxiliar interna para não repetir código (coloque fora da view ou no mesmo arquivo)
+# --- Funções Auxiliares (Para ficar organizado) ---
+
 def _dados_do_escritorio(despachante):
     return {
         'nome': despachante.nome_fantasia.upper(),
-        'doc': f"CNPJ: {despachante.cnpj} | Credencial: {despachante.codigo_sindego}",
-        'rg': "", 
+        'doc': f"CNPJ: {despachante.cnpj} | Código: {despachante.codigo_sindego}",
         'endereco': despachante.endereco_completo,
-        'cidade': "Goiânia/GO", # Ou despachante.cidade_uf se tiver
-        'cep': "",
+        'cidade': "Goiânia",
+        'uf': "GO",
         'telefone': despachante.telefone
     }
+
+def _formatar_dados_pessoa(pessoa):
+    """Padroniza os dados de Cliente para serem usados como Outorgado ou Comprador"""
+    return {
+        'nome': pessoa.nome.upper(),
+        'cpf_cnpj': pessoa.cpf_cnpj, # Usei chaves genéricas para facilitar no HTML
+        'doc': pessoa.cpf_cnpj,      # Mantive compatibilidade se algum template usa .doc
+        'rg': f"{pessoa.rg or ''} {pessoa.orgao_expedidor or ''}",
+        'endereco': f"{pessoa.rua}, {pessoa.numero}, {pessoa.bairro}",
+        'cidade': pessoa.cidade,
+        'uf': pessoa.uf,
+        'cep': pessoa.cep,
+        'email': pessoa.email,
+        'telefone': pessoa.telefone
+    }
+
+@login_required
+def ferramentas_compressao(request):
+    if request.method == 'POST':
+        form = CompressaoPDFForm(request.POST, request.FILES)
+        
+        if form.is_valid():
+            arquivo = request.FILES['arquivo_pdf']
+            
+            # Chama a função do utils.py (que agora usa a biblioteca PyMuPDF/Fitz)
+            pdf_pronto = comprimir_pdf_memoria(arquivo)
+
+            if pdf_pronto:
+                # FileResponse entende objetos BytesIO perfeitamente
+                return FileResponse(
+                    pdf_pronto, 
+                    as_attachment=True, 
+                    filename=f"Otimizado_{arquivo.name}"
+                )
+            else:
+                messages.error(request, "Não foi possível comprimir este arquivo. Verifique se ele não está protegido por senha.")
+    else:
+        form = CompressaoPDFForm()
+
+    return render(request, 'ferramentas/compressao.html', {'form': form})

@@ -1,0 +1,183 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Procuração ATPV-e - {{ cliente.nome }}</title>
+    <style>
+        @page { 
+            size: A4; 
+            margin: 1.0cm; 
+        }
+        
+        body { 
+            font-family: "Times New Roman", Times, serif; 
+            font-size: 11pt; 
+            line-height: 1.3; 
+            color: #000; 
+            background: #fff; 
+        }
+
+        .titulo { 
+            text-align: center; 
+            font-weight: bold; 
+            font-size: 12pt; 
+            text-decoration: underline;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+        }
+
+        .secao-titulo {
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-top: 12px;
+            margin-bottom: 3px;
+            border-bottom: 1px solid #000;
+            font-size: 10pt;
+            background-color: #f0f0f0;
+            padding: 2px 5px;
+        }
+
+        .texto { 
+            text-align: justify; 
+            margin-bottom: 5px;
+        }
+        
+        .destaque { font-weight: bold; }
+        
+        .box-destaque {
+            border: 1px solid #000;
+            padding: 5px 8px;
+            margin-top: 2px;
+            background-color: #fff;
+        }
+
+        .assinatura-box { 
+            margin-top: 1.0cm; 
+            text-align: center; 
+        }
+        
+        /* AQUI ESTÁ A CORREÇÃO: Adicionei margin-top para afastar a linha da data */
+        .linha-assinatura { 
+            border-top: 1px solid #000; 
+            width: 70%; 
+            margin: 0 auto; 
+            margin-top: 1.5cm; /* Espaço para assinar (aprox 2 dedos) */
+            padding-top: 5px; 
+        }
+
+        .declaracao { 
+            margin-top: 1.5cm; 
+            border: 1px solid #000; 
+            padding: 10px; 
+            font-size: 10pt; 
+            text-align: center; 
+            page-break-inside: avoid; 
+        }
+
+        .flex-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="position: fixed; top: 10px; right: 10px; background: #eee; padding: 10px; border-radius: 5px;">
+        <button onclick="window.print()" style="padding: 10px 20px; font-size: 16px; cursor: pointer;">🖨️ Imprimir</button>
+    </div>
+
+    <div class="titulo">PROCURAÇÃO - INTENÇÃO DE VENDA E EMISSÃO ATPV-E</div>
+
+    <div class="texto">
+        Pelo presente instrumento de procuração, o <strong>PROPRIETÁRIO(a) VENDEDOR(a)</strong>:
+    </div>
+
+    <div class="secao-titulo">OUTORGANTE</div>
+    <div class="texto">
+        Nome: <span class="destaque">{{ cliente.nome|upper }}</span>, 
+        CPF/CNPJ: <span class="destaque">{{ cliente.cpf_cnpj }}</span>, 
+        Endereço: {{ cliente.rua }}, Nº {{ cliente.numero }}, 
+        {% if cliente.quadra %}Qd.: {{ cliente.quadra }}, Lt.: {{ cliente.lote }},{% endif %}
+        {% if cliente.complemento %}Compl.: {{ cliente.complemento }},{% endif %}
+        Bairro: {{ cliente.bairro }}, Cidade: {{ cliente.cidade }}/{{ cliente.uf }}, 
+        CEP: {{ cliente.cep }}, Email: {{ cliente.email|default:"Não informado" }}, 
+        Celular: {{ cliente.telefone }}.
+    </div>
+
+    <div class="secao-titulo">OUTORGADO (DESPACHANTE)</div>
+    <div class="texto">
+        Nomeia e constitui seu bastante procurador o Despachante: 
+        <span class="destaque">{{ outorgado.nome|default:"DESPACHANTE PADRAO" }}</span>, 
+        CNPJ/CPF: {{ outorgado.doc }}, 
+        Código: <span class="destaque">{{ outorgado.codigo_sindego }}</span>,
+        com sede à {{ outorgado.endereco }}, Cidade: {{ outorgado.cidade }}/{{ outorgado.uf }}.
+    </div>
+
+    <div class="secao-titulo">OBJETO / PODERES</div>
+    <div class="texto">
+        Para como se presente fosse, representá-lo junto ao <strong>DETRAN/GO</strong>, para a solicitação dos serviços de 
+        <strong>INCLUSÃO DE INTENÇÃO DE VENDA</strong> ou <strong>CANCELAMENTO DE INTENÇÃO DE VENDA</strong> 
+        e/ou <strong>EMISSÃO DA ATPV-E</strong>, do veículo abaixo discriminado, podendo para tanto, requerer e assinar 
+        o que necessário for, efetuar pagamentos, receber e dar quitações, alegar, concordar, discordar, prestar declarações 
+        e informações, enfim, praticar quaisquer outros atos que se fizerem necessários para o fiel cumprimento deste Mandato.
+        Fica autorizado o repasse de informações e dados ao DETRAN e seus órgãos parceiros, em conformidade com a LGPD.
+    </div>
+
+    <div class="secao-titulo">DADOS DO VEÍCULO</div>
+    <div class="box-destaque">
+        {% if veiculo %}
+            Marca/Modelo: <span class="destaque">{{ veiculo.marca }} / {{ veiculo.modelo }}</span>, 
+            Placa: <span class="destaque">{{ veiculo.placa }}</span>, 
+            Ano Fab/Mod: {{ veiculo.ano_fabricacao }}/{{ veiculo.ano_modelo }}<br>
+            Cor: {{ veiculo.cor|default:"___" }}, 
+            Chassi: <span class="destaque">{{ veiculo.chassi|default:"___________________________" }}</span>
+        {% else %}
+            <span class="destaque" style="color:red;">VEÍCULO NÃO SELECIONADO</span>
+        {% endif %}
+    </div>
+
+    <div class="secao-titulo">DADOS DO COMPRADOR E TRANSAÇÃO</div>
+    <div class="texto" style="font-size: 9pt; margin-bottom: 2px;">
+        Declaro que os dados abaixo são a expressão da verdade, assumindo a inteira responsabilidade por eles.
+    </div>
+    
+    <div class="box-destaque">
+        <strong>COMPRADOR:</strong> <span class="destaque">{{ comprador.nome|default:"_________________________________________________" }}</span>, 
+        <strong>CPF/CNPJ:</strong> {{ comprador.cpf_cnpj|default:"____________________" }}<br>
+        
+        <strong>ENDEREÇO:</strong> {{ comprador.endereco|default:"___________________________________________________" }} - {{ comprador.cidade|default:"___" }}/{{ comprador.uf|default:"__" }}<br>
+        <strong>EMAIL:</strong> {{ comprador.email|default:"________________________________" }}<br>
+        
+        <hr style="border: 0; border-top: 1px dashed #000; margin: 5px 0;">
+        
+        <div class="flex-row">
+            <span><strong>VALOR:</strong> R$ {{ transacao.valor|default:"________" }}</span>
+            <span><strong>CRV:</strong> {{ transacao.crv|default:"________" }}</span>
+            <span><strong>ATPV-e:</strong> {{ transacao.atpv|default:"________" }}</span>
+        </div>
+    </div>
+
+    <div class="assinatura-box">
+        <div>Goiânia, {{ hoje|date:"d" }} de {{ hoje|date:"F" }} de {{ hoje|date:"Y" }}</div>
+        
+        <div class="linha-assinatura">
+            {{ cliente.nome|upper }}<br>
+            <span style="font-size: 8pt;">CPF/CNPJ: {{ cliente.cpf_cnpj }}</span><br>
+            <small>(Assinatura do Proprietário Vendedor)</small>
+        </div>
+    </div>
+
+    <div class="declaracao">
+        <strong>DECLARAÇÃO</strong><br>
+        Declaramos, sob a pena da lei, que a assinatura aposta na Procuração é de próprio punho do outorgante, feita em nossa presença, onde desde já assumimos a responsabilidade civil e criminal.
+        <br><br><br>
+        __________________________________________<br>
+        <strong>{{ outorgado.nome|default:"DESPACHANTE"|upper }}</strong><br>
+        <small>Código: {{ despachante.codigo_sindego|default:"_____" }}</small>
+    </div>
+
+</body>
+</html>

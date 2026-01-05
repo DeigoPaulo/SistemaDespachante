@@ -62,4 +62,6 @@ urlpatterns = [
     path('relatorios/mensal/', views.relatorio_mensal, name='relatorio_mensal'),
 
     path('financeiro/pagar/', views.pagar_mensalidade, name='pagar_mensalidade'),
+
+    path('ferramentas/comprimir-pdf/', views.ferramentas_compressao, name='ferramentas_compressao'),
 ]

@@ -12,7 +12,7 @@
                     <i class="fas fa-pen-square me-2"></i> {{ titulo }}
                 </h5>
                 
-                {% if form.instance.pk %}
+                {% if form.instance.pk and url_excluir %}
                     <button type="button" class="btn btn-danger btn-sm text-white border border-light" data-bs-toggle="modal" data-bs-target="#modalExcluir">
                         <i class="fas fa-trash-alt me-1"></i> Excluir
                     </button>
@@ -45,7 +45,7 @@
                     {% endfor %}
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4 border-top pt-3">
-                        <a href="{% url 'lista_clientes' %}" class="btn btn-secondary me-md-2">
+                        <a href="{{ url_voltar|default:'javascript:history.back()' }}" class="btn btn-secondary me-md-2">
                             <i class="fas fa-arrow-left me-1"></i> Voltar
                         </a>
                         <button type="submit" class="btn btn-success px-4 shadow">
@@ -59,7 +59,7 @@
     </div>
 </div>
 
-{% if form.instance.pk %}
+{% if form.instance.pk and url_excluir %}
 <div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -68,17 +68,18 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Tem certeza que deseja excluir <strong>{{ form.instance.nome|default:"este registro" }}</strong>?</p>
+                <p>{{ texto_modal|default:"Tem certeza que deseja excluir este registro permanentemente?" }}</p>
+                
                 <div class="alert alert-warning small mb-0">
-                    <i class="fas fa-info-circle me-1"></i> <strong>Atenção:</strong> Ao excluir este cliente, todos os veículos e históricos de atendimento vinculados a ele também serão apagados permanentemente.
+                    <i class="fas fa-info-circle me-1"></i> <strong>Atenção:</strong> Esta ação não pode ser desfeita.
                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
                 
-                <form action="{% url 'excluir_cliente' form.instance.pk %}" method="POST">
+                <form action="{{ url_excluir }}" method="POST">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-danger">Sim, Excluir Definitivamente</button>
+                    <button type="submit" class="btn btn-danger">Sim, Excluir</button>
                 </form>
             </div>
         </div>

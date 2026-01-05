@@ -123,3 +123,13 @@ class VeiculoForm(forms.ModelForm):
             )
 
         return placa
+
+class CompressaoPDFForm(forms.Form):
+    arquivo_pdf = forms.FileField(
+        label="Selecione o PDF",
+        help_text="O sistema vai limpar metadados e otimizar a estrutura do arquivo.",
+        widget=forms.ClearableFileInput(attrs={
+            'class': 'form-control form-control-lg', 
+            'accept': 'application/pdf'
+        })
+    )

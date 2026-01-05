@@ -22,7 +22,7 @@
                         <label class="form-label fw-bold">Selecione o Documento:</label>
                         <select name="tipo_documento" id="tipo_documento" class="form-select form-select-lg" onchange="toggleCamposExtras()">
                             <option value="procuracao">📄 Procuração Despachante</option>
-                            <option value="procuracao_particular">⚖️ Procuração Particular (Compra/Venda)</option>
+                            <option value="procuracao_atpv">🚙 Procuração ATPV-e (Intenção de Venda)</option> <option value="procuracao_particular">⚖️ Procuração Particular (Compra/Venda)</option>
                             <option value="declaracao">🏠 Declaração de Residência</option>
                             <option value="requerimento_2via">🚗 Requerimento 2ª Via CRV/CRLV</option>
                             <option value="alteracao_caracteristica">🛠️ Alteração de Características</option>
@@ -46,6 +46,31 @@
                         </select>
                     </div>
 
+                    <div id="box_atpv" class="card bg-light border p-3 mb-3 d-none">
+                        <h6 class="text-primary border-bottom pb-2 fw-bold mb-3">Dados da Transação (ATPV-e)</h6>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Quem é o Comprador?</label>
+                            <select name="comprador_id" id="select_comprador" class="form-select w-100">
+                                <option value="">Busque o Comprador no sistema...</option>
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label fw-bold text-success">Valor Venda (R$):</label>
+                                <input type="text" name="valor_venda" id="input_valor_venda" class="form-control" placeholder="0,00" onkeyup="formatarMoeda(this)">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label fw-bold">Nº do CRV:</label>
+                                <input type="text" name="numero_crv" id="input_crv" class="form-control" placeholder="Ex: 123456789">
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label fw-bold">Nº ATPV-e:</label>
+                                <input type="text" name="numero_atpv" id="input_atpv" class="form-control" placeholder="Opcional">
+                            </div>
+                        </div>
+                    </div>
                     <div id="box_outorgado" class="card bg-light border p-3 mb-3 d-none">
                         <label class="form-label fw-bold text-dark border-bottom pb-2 w-100">Quem será o Procurador (Outorgado)?</label>
                         
@@ -71,6 +96,7 @@
                             </select>
                         </div>
                     </div>
+
                     <div class="mb-3 d-none" id="campo_valor">
                         <label class="form-label fw-bold text-success">Valor (R$):</label>
                         <input type="text" name="valor_recibo" id="input_valor" class="form-control form-control-lg" placeholder="0,00" onkeyup="formatarMoeda(this)">
@@ -139,9 +165,10 @@
             minimumInputLength: 3
         };
 
-        // Aplica Select2 nos dois campos
+        // Aplica Select2 nos campos (Adicionado o select_comprador)
         $('#select_cliente').select2({ ...configSelect2, placeholder: 'Busque o Cliente (Outorgante)...' });
         $('#select_outorgado').select2({ ...configSelect2, placeholder: 'Busque o Procurador (Outorgado)...' });
+        $('#select_comprador').select2({ ...configSelect2, placeholder: 'Busque o Comprador...' }); // NOVO
 
         // Evento ao selecionar Cliente -> Busca Veículos
         $('#select_cliente').on('select2:select', function (e) {
@@ -150,19 +177,16 @@
 
 
         // --- LÓGICA DO RADIO BUTTON (MOSTRAR/ESCONDER BUSCA) ---
-        // Escuta qualquer mudança nos botões de rádio 'tipo_outorgado'
         $('input[name="tipo_outorgado"]').change(function() {
             if ($('#out_outro').is(':checked')) {
-                // Se marcou "Outra Pessoa", mostra o campo de busca
                 $('#div_busca_outorgado').removeClass('d-none');
             } else {
-                // Se marcou "Escritório", esconde e limpa
                 $('#div_busca_outorgado').addClass('d-none');
                 $('#select_outorgado').val(null).trigger('change'); 
             }
         });
 
-        // Executa uma vez ao carregar para garantir o estado correto
+        // Executa uma vez ao carregar
         $('input[name="tipo_outorgado"]:checked').trigger('change');
 
         // Inicializa visibilidade dos campos extras
@@ -174,9 +198,9 @@
     function toggleCamposExtras() {
         const tipo = document.getElementById('tipo_documento').value;
         
-        // IDs para esconder/resetar
-        const divs = ['campo_motivo', 'campo_alteracao', 'campo_servicos', 'campo_valor', 'box_outorgado'];
-        const inputsRequired = ['input_motivo', 'input_alteracao', 'input_valor'];
+        // IDs para esconder/resetar (Adicionado box_atpv)
+        const divs = ['campo_motivo', 'campo_alteracao', 'campo_servicos', 'campo_valor', 'box_outorgado', 'box_atpv'];
+        const inputsRequired = ['input_motivo', 'input_alteracao', 'input_valor', 'input_valor_venda', 'input_crv']; // Adicionados novos inputs
         const labelServicos = document.getElementById('label_servicos');
 
         // 1. Esconde tudo primeiro
@@ -210,8 +234,13 @@
             labelServicos.innerText = "Objeto do Contrato:";
         }
         else if (tipo === 'procuracao_particular') {
-            // Mostra o box de escolha do Outorgado
             document.getElementById('box_outorgado').classList.remove('d-none');
+        }
+        // NOVA LÓGICA PARA ATPV
+        else if (tipo === 'procuracao_atpv') {
+            document.getElementById('box_atpv').classList.remove('d-none');
+            document.getElementById('input_valor_venda').required = true;
+            // CRV geralmente é obrigatório, ATPV as vezes não tem ainda, deixei opcional no required
         }
     }
 
