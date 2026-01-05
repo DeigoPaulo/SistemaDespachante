@@ -20,20 +20,35 @@ from django.contrib.auth import authenticate, login
 from django.contrib.sessions.models import Session
 from .models import PerfilUsuario  # Importe seu modelo de perfil criado
 from .asaas import gerar_boleto_asaas
-
+from django.contrib.auth.models import User
 # ==============================================================================
-# 1. VIEW DE LOGIN (Sua lógica original mantida)
+# 1. VIEW DE LOGIN (Com suporte a E-mail e Usuário)
 # ==============================================================================
 def minha_view_de_login(request):
     contexto = {'erro_login': False}
 
     if request.method == 'POST':
         # 1. Pega dados do form
-        username_form = request.POST.get('username')
+        # O campo HTML chama 'username', mas o usuário pode ter digitado um e-mail
+        login_input = request.POST.get('username') 
         password_form = request.POST.get('password')
+        
+        # Variável que vamos passar para o authenticate
+        username_para_autenticar = login_input
 
-        # 2. Autentica
-        user = authenticate(request, username=username_form, password=password_form)
+        # --- LÓGICA NOVA: Verificar se é E-mail ---
+        # Se tiver '@', assumimos que é um email e buscamos o username correspondente
+        if '@' in login_input:
+            try:
+                user_obj = User.objects.get(email=login_input)
+                username_para_autenticar = user_obj.username
+            except User.DoesNotExist:
+                # Se não achar o email, deixa como está (o authenticate vai falhar depois)
+                pass
+        # ------------------------------------------
+
+        # 2. Autentica (usando o username descoberto ou o digitado)
+        user = authenticate(request, username=username_para_autenticar, password=password_form)
 
         if user is not None:
             # Faz o login (cria sessão em memória)
@@ -65,11 +80,10 @@ def minha_view_de_login(request):
             return redirect('dashboard')
         
         else:
-            # Senha incorreta
+            # Senha incorreta ou usuário não encontrado
             contexto['erro_login'] = True
 
     return render(request, 'login.html', context=contexto)
-
 
 # ==============================================================================
 # 2. VIEW DE PAGAMENTO (Nova função)

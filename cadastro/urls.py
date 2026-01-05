@@ -1,24 +1,26 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from . import views
-from cadastro.views import minha_view_de_login
-from .views import minha_view_de_login, pagar_mensalidade
+from . import views 
 
 urlpatterns = [
     # --- Autenticação (Login/Logout) ---
-    #path('login/', auth_views.LoginView.as_view(template_name='login.html'), name='login'),
-    path('login/', minha_view_de_login, name='login'),
+    path('login/', views.minha_view_de_login, name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 
-    # --- RECUPERAÇÃO DE SENHA (NOVAS ROTAS) ---
-    # 1. Solicitar a troca (Digitar email)
-    path('reset-password/', auth_views.PasswordResetView.as_view(template_name='password_reset.html'), name='password_reset'),
+    # --- RECUPERAÇÃO DE SENHA (CORRIGIDO) ---
+    # Agora apontando para a pasta 'registration' e os arquivos corretos
+    
+    # 1. Solicitar a troca
+    path('reset-password/', auth_views.PasswordResetView.as_view(template_name='registration/password_reset_form.html'), name='password_reset'),
+    
     # 2. Aviso de email enviado
-    path('reset-password/done/', auth_views.PasswordResetDoneView.as_view(template_name='password_reset_done.html'), name='password_reset_done'),
-    # 3. Link seguro para definir nova senha (uidb64 e token são gerados pelo Django)
-    path('reset-password/confirm/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='password_reset_confirm.html'), name='password_reset_confirm'),
+    path('reset-password/done/', auth_views.PasswordResetDoneView.as_view(template_name='registration/password_reset_done.html'), name='password_reset_done'),
+    
+    # 3. Link seguro para definir nova senha
+    path('reset-password/confirm/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='registration/password_reset_confirm.html'), name='password_reset_confirm'),
+    
     # 4. Sucesso (Senha alterada)
-    path('reset-password/complete/', auth_views.PasswordResetCompleteView.as_view(template_name='password_reset_complete.html'), name='password_reset_complete'),
+    path('reset-password/complete/', auth_views.PasswordResetCompleteView.as_view(template_name='registration/password_reset_complete.html'), name='password_reset_complete'),
 
     # --- Dashboard (Página Inicial) ---
     path('', views.dashboard, name='dashboard'),
@@ -34,7 +36,6 @@ urlpatterns = [
     path('cliente/<int:id>/detalhes/', views.detalhe_cliente, name='detalhe_cliente'),
     path('clientes/', views.lista_clientes, name='lista_clientes'),
     path('relatorios/servicos/', views.relatorio_servicos, name='relatorio_servicos'),
-    
 
     # --- Cadastros de Base ---
     path('cliente/novo/', views.novo_cliente, name='novo_cliente'),
@@ -57,9 +58,8 @@ urlpatterns = [
 
     path('documentos/gerar/', views.selecao_documento, name='selecao_documento'),
     path('documentos/imprimir/', views.imprimir_documento, name='imprimir_documento'),
-    
 
     path('relatorios/mensal/', views.relatorio_mensal, name='relatorio_mensal'),
 
-    path('financeiro/pagar/', pagar_mensalidade, name='pagar_mensalidade'),
+    path('financeiro/pagar/', views.pagar_mensalidade, name='pagar_mensalidade'),
 ]
