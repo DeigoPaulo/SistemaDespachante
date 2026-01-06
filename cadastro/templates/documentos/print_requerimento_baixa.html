@@ -1,0 +1,240 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Requerimento de Baixa - {{ veiculo.placa }}</title>
+    <style>
+        @page { 
+            size: A4; 
+            margin: 0.7cm; /* Margem ajustada para caber tudo com folga */
+        }
+        body { 
+            font-family: Arial, sans-serif; 
+            font-size: 10pt; 
+            color: #000; 
+            line-height: 1.2; 
+        }
+        
+        /* CABEÇALHO COM LOGOS */
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .header-table td { vertical-align: middle; text-align: center; }
+        
+        /* CAIXAS E TÍTULOS */
+        .box-title { 
+            background-color: #ddd; 
+            font-weight: bold; 
+            text-align: center; 
+            border: 1px solid #000; 
+            padding: 4px; 
+            margin-bottom: -1px; 
+            font-size: 9pt; 
+            text-transform: uppercase;
+        }
+        .box-container { 
+            border: 1px solid #000; 
+            margin-bottom: 8px; 
+            padding: 8px; 
+        }
+        
+        /* LINHAS DE CAMPOS */
+        .linha { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .campo { flex-grow: 1; margin-right: 12px; }
+        .campo:last-child { margin-right: 0; }
+        
+        .campo label { font-weight: bold; font-size: 8pt; margin-right: 3px; }
+        .campo span { 
+            border-bottom: 1px solid #000; 
+            display: block; 
+            min-height: 18px; /* Altura mínima para linha de escrita */
+            padding-left: 5px; 
+            font-weight: bold;
+            font-size: 10pt;
+            position: relative;
+            top: 2px;
+        }
+        
+        .check-item { margin-bottom: 3px; font-size: 10pt; }
+        .declaracao-texto { text-align: justify; font-size: 10pt; margin: 8px 0; line-height: 1.4; }
+        
+        /* ASSINATURA */
+        .assinatura-box { margin-top: 30px; text-align: center; }
+        .assinatura-linha { border-top: 1px solid #000; width: 70%; margin: 0 auto; padding-top: 3px; }
+        
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="no-print" style="position: fixed; top: 10px; right: 10px; background: #eee; padding: 10px; border-radius: 5px;">
+        <button onclick="window.print()" style="cursor: pointer; padding: 5px 15px;">🖨️ Imprimir</button>
+    </div>
+
+    <table class="header-table">
+        <tr>
+            <td width="20%">
+                <img src="{% static 'img/GoiasCerto.png' %}" alt="Governo GO" style="height: 75px; max-width: 100%;">
+            </td>
+            <td width="60%" style="font-weight: bold; font-size: 11pt;">
+                DEPARTAMENTO DE TRÂNSITO DE GOIÁS<br>
+                DIRETORIA DE OPERAÇÕES<br>
+                GERÊNCIA DE REGULARIZAÇÃO DE VEÍCULOS<br>
+                <br>
+                <span style="font-size: 13pt; text-decoration: underline;">REQUERIMENTO PARA BAIXA DE VEÍCULOS</span>
+            </td>
+            <td width="20%">
+                <img src="{% static 'img/DetranGo.png' %}" alt="Detran GO" style="height: 75px; max-width: 100%;">
+            </td>
+        </tr>
+    </table>
+
+    <div class="box-title">DADOS DO PROPRIETÁRIO DO VEÍCULO (Obrigatório o preenchimento)</div>
+    <div class="box-container">
+        <div class="linha">
+            <div class="campo" style="flex: 3;">
+                <label>NOME:</label>
+                <span>{{ cliente.nome|upper }}</span>
+            </div>
+            <div class="campo" style="flex: 1;">
+                <label>RG:</label>
+                <span>{{ cliente.rg|default:"" }}</span>
+            </div>
+        </div>
+        
+        <div class="linha">
+            <div class="campo" style="flex: 1;">
+                <label>CPF/CNPJ:</label>
+                <span>{{ cliente.cpf_cnpj }}</span>
+            </div>
+            <div class="campo" style="flex: 1;">
+                <label>ÓRGÃO EXPEDIDOR:</label>
+                <span>{{ cliente.orgao_expedidor|default:"" }} / {{ cliente.uf_rg|default:"" }}</span>
+            </div>
+            <div class="campo" style="flex: 1;">
+                <label>FONE:</label>
+                <span>{{ cliente.telefone }}</span>
+            </div>
+        </div>
+
+        <div class="linha">
+            <div class="campo" style="flex: 3;">
+                <label>ENDEREÇO:</label>
+                <span>{{ cliente.rua }}, {{ cliente.numero }} {{ cliente.complemento }}</span>
+            </div>
+            <div class="campo" style="flex: 1;">
+                <label>CEP:</label>
+                <span>{{ cliente.cep }}</span>
+            </div>
+        </div>
+
+        <div class="linha">
+            <div class="campo" style="flex: 2;">
+                <label>BAIRRO:</label>
+                <span>{{ cliente.bairro }}</span>
+            </div>
+            <div class="campo" style="flex: 2;">
+                <label>CIDADE/UF:</label>
+                <span>{{ cliente.cidade }} / {{ cliente.uf }}</span>
+            </div>
+        </div>
+        
+        <div class="linha">
+            <div class="campo">
+                <label>E-MAIL:</label>
+                <span>{{ cliente.email|default:"" }}</span>
+            </div>
+        </div>
+        
+        <div class="linha" style="margin-top: 10px; border-top: 1px dotted #ccc; padding-top: 5px;">
+            <div class="campo" style="display: flex; align-items: center;">
+                <label style="font-size: 9pt;">POSSUI PROCURADOR?</label> 
+                <span style="border: none; margin-left: 10px;">
+                    ( <strong>{% if possui_procurador_baixa == 'sim' %} X {% else %} &nbsp;&nbsp; {% endif %}</strong> ) SIM 
+                    &nbsp;&nbsp;&nbsp;&nbsp; 
+                    ( <strong>{% if possui_procurador_baixa == 'nao' %} X {% else %} &nbsp;&nbsp; {% endif %}</strong> ) NÃO
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <div class="box-title">DADOS DO VEÍCULO</div>
+    <div class="box-container">
+        <div class="linha">
+            <div class="campo">
+                <label>PLACA:</label>
+                <span>{{ veiculo.placa }}</span>
+            </div>
+            <div class="campo">
+                <label>MODELO:</label>
+                <span>{{ veiculo.modelo }}</span>
+            </div>
+        </div>
+        <div class="linha">
+            <div class="campo">
+                <label>CHASSI:</label>
+                <span>{{ veiculo.chassi|default:"" }}</span>
+            </div>
+            <div class="campo">
+                <label>RENAVAM:</label>
+                <span>{{ veiculo.renavam|default:"" }}</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="box-title">IDENTIFICAÇÃO DO PROPRIETÁRIO</div>
+    <div class="box-container">
+        <div class="check-item">
+            ( <strong>{% if tipo_solicitante_baixa == 'proprietario' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) Proprietário do veículo
+        </div>
+        <div class="check-item">
+            ( <strong>{% if tipo_solicitante_baixa == 'adquirente' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) Adquirente com comunicado de venda registrado junto ao DETRAN
+        </div>
+        <div class="check-item">
+            ( <strong>{% if tipo_solicitante_baixa == 'representante' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) Representante Legal / Procuração / Inventariante
+        </div>
+    </div>
+
+    <div class="box-title">DECLARAÇÃO</div>
+    <div class="box-container">
+        <p class="declaracao-texto">
+            Por meio deste termo, venho requerer a <strong>baixa do registro</strong> do veículo junto ao DETRAN/GO, nos termos da RESOLUÇÃO CONTRAN Nº 967 e PORTARIA Nº 493/2025/DETRAN, pelo seguinte motivo:
+        </p>
+
+        <div class="check-item">
+            ( <strong>{% if motivo_baixa == 'irrecuperavel' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) veículo irrecuperável
+        </div>
+        <div class="check-item">
+            ( <strong>{% if motivo_baixa == 'desmontado' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) veículo definitivamente desmontado
+        </div>
+        <div class="check-item">
+            ( <strong>{% if motivo_baixa == 'sinistrado' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) veículo sinistrado com laudo de perda total ou com registro de danos de grande monta
+        </div>
+        <div class="check-item">
+            ( <strong>{% if motivo_baixa == 'sucata' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) veículo vendido ou leiloado, classificado como sucata
+        </div>
+        <div class="check-item">
+            ( <strong>{% if motivo_baixa == 'frota' %}X{% else %}&nbsp;&nbsp;{% endif %}</strong> ) Frota desativada - não é licenciado há 10 (dez) anos ou mais e possui 25 (vinte e cinco) anos ou mais de fabricação
+        </div>
+
+        <p class="declaracao-texto" style="margin-top: 15px;">
+            <strong>Declaro que as placas e recorte do chassi do veículo foram inutilizados</strong> e Declaro sob as penas da lei, que o contido acima é a expressão da verdade, assumindo todos e quaisquer ônus decorrentes deste ato, isentando o DETRAN-GO e seus prepostos das responsabilidades de natureza CÍVIL, PENAL E/OU ADMINISTRATIVA, resultante desta solicitação. Declaro, ainda, que autorizo o envio da Certidão de Baixa ou do Ato de Indeferimento ao endereço de email informado acima.
+        </p>
+    </div>
+
+    <div class="assinatura-box">
+        Goiânia, {{ hoje|date:"d" }} de {{ hoje|date:"F" }} de {{ hoje|date:"Y" }}
+        <br><br><br>
+        <div class="assinatura-linha">
+            {% if tipo_solicitante_baixa == 'representante' and outorgado.nome %}
+                {{ outorgado.nome|upper }}
+            {% else %}
+                {{ cliente.nome|upper }}
+            {% endif %}
+            <br>
+            <span style="font-size: 8pt;">Assinatura do Proprietário/Representante Legal</span><br>
+            <span style="font-size: 7pt;">(Reconhecida firma por verdadeira ou Assinatura Digital)</span>
+        </div>
+    </div>
+
+</body>
+</html>

@@ -1012,20 +1012,25 @@ def imprimir_documento(request):
         alteracao_pretendida = request.POST.get('alteracao_pretendida')
         valor_recibo = request.POST.get('valor_recibo')
         
-        # Dados para lógica do Outorgado (Procuração Particular)
+        # Dados para lógica do Outorgado (Procuração Particular e Baixa)
         tipo_outorgado = request.POST.get('tipo_outorgado') 
         outorgado_id = request.POST.get('outorgado_id')
 
-        # --- [NOVO] Campos específicos da Procuração ATPV-e ---
-        comprador_id = request.POST.get('comprador_id') # Id do cliente que está comprando
+        # Campos ATPV-e
+        comprador_id = request.POST.get('comprador_id')
         valor_venda = request.POST.get('valor_venda')
         numero_crv = request.POST.get('numero_crv')
         numero_atpv = request.POST.get('numero_atpv')
-        # -----------------------------------------------------
+
+        # --- [NOVO] Campos para Baixa de Veículo ---
+        motivo_baixa = request.POST.get('motivo_baixa')
+        tipo_solicitante_baixa = request.POST.get('tipo_solicitante_baixa')
+        possui_procurador_baixa = request.POST.get('possui_procurador_baixa') # Captura se é SIM ou NÃO
+        # -------------------------------------------
 
         despachante_obj = request.user.perfilusuario.despachante
 
-        # 3. BUSCA SEGURA DO CLIENTE (OUTORGANTE/VENDEDOR)
+        # 3. BUSCA SEGURA DO CLIENTE
         cliente = get_object_or_404(
             Cliente, 
             id=cliente_id, 
@@ -1037,18 +1042,24 @@ def imprimir_documento(request):
         if veiculo_placa:
             veiculo = Veiculo.objects.filter(placa=veiculo_placa, cliente=cliente).first()
 
-        # 5. LÓGICA DO OUTORGADO (PROCURADOR)
+        # 5. LÓGICA DO OUTORGADO (Atualizada para aceitar Baixa também)
         outorgado_dados = {}
-        if tipo_doc == 'procuracao_particular' and tipo_outorgado == 'outro' and outorgado_id:
+        
+        # Lista de documentos que permitem escolher um Procurador específico
+        docs_com_procurador = ['procuracao_particular', 'requerimento_baixa']
+
+        if tipo_doc in docs_com_procurador and tipo_outorgado == 'outro' and outorgado_id:
             try:
                 pessoa = Cliente.objects.get(id=outorgado_id, despachante=despachante_obj)
-                outorgado_dados = _formatar_dados_pessoa(pessoa) # Usei uma função auxiliar pra limpar o código
+                outorgado_dados = _formatar_dados_pessoa(pessoa)
             except Cliente.DoesNotExist:
+                # Se não achar, usa o escritório como padrão de segurança
                 outorgado_dados = _dados_do_escritorio(despachante_obj)
         else:
+            # Padrão: Dados do escritório (Despachante)
             outorgado_dados = _dados_do_escritorio(despachante_obj)
 
-        # 6. [NOVO] LÓGICA DO COMPRADOR (Para ATPV-e)
+        # 6. LÓGICA DO COMPRADOR
         comprador_dados = {}
         if tipo_doc == 'procuracao_atpv' and comprador_id:
             try:
@@ -1076,23 +1087,23 @@ def imprimir_documento(request):
             'motivo_2via': motivo_2via,
             'alteracao_pretendida': alteracao_pretendida,
             'valor_recibo': valor_recibo,
-            
-            # [NOVO] Passando os dados novos para o template
             'comprador': comprador_dados,
             'transacao': {
                 'valor': valor_venda,
                 'crv': numero_crv,
                 'atpv': numero_atpv
-            }
+            },
+            # Dados da Baixa
+            'motivo_baixa': motivo_baixa,
+            'tipo_solicitante_baixa': tipo_solicitante_baixa,
+            'possui_procurador_baixa': possui_procurador_baixa
         }
 
-        # 9. SELEÇÃO DO DOCUMENTO (Adicionei o elif novo)
+        # 9. SELEÇÃO DO DOCUMENTO
         if tipo_doc == 'procuracao':
             return render(request, 'documentos/print_procuracao.html', context)
-        
-        elif tipo_doc == 'procuracao_atpv': # <--- AQUI ESTÁ A NOVA OPÇÃO
-            return render(request, 'documentos/print_procuracao_atpv.html', context) # O HTML que fizemos antes
-
+        elif tipo_doc == 'procuracao_atpv':
+            return render(request, 'documentos/print_procuracao_atpv.html', context)
         elif tipo_doc == 'procuracao_particular':
             return render(request, 'documentos/print_procuracao_particular.html', context)
         elif tipo_doc == 'declaracao':
@@ -1107,6 +1118,8 @@ def imprimir_documento(request):
             return render(request, 'documentos/print_contrato.html', context)    
         elif tipo_doc == 'alteracao_endereco': 
             return render(request, 'documentos/print_alteracao_endereco.html', context)
+        elif tipo_doc == 'requerimento_baixa':
+            return render(request, 'documentos/print_requerimento_baixa.html', context)
     
     return redirect('selecao_documento')
 

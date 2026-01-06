@@ -22,10 +22,12 @@
                         <label class="form-label fw-bold">Selecione o Documento:</label>
                         <select name="tipo_documento" id="tipo_documento" class="form-select form-select-lg" onchange="toggleCamposExtras()">
                             <option value="procuracao">📄 Procuração Despachante</option>
-                            <option value="procuracao_atpv">🚙 Procuração ATPV-e (Intenção de Venda)</option> <option value="procuracao_particular">⚖️ Procuração Particular (Compra/Venda)</option>
+                            <option value="procuracao_atpv">🚙 Procuração ATPV-e (Intenção de Venda)</option>
+                            <option value="procuracao_particular">⚖️ Procuração Particular (Compra/Venda)</option>
                             <option value="declaracao">🏠 Declaração de Residência</option>
                             <option value="requerimento_2via">🚗 Requerimento 2ª Via CRV/CRLV</option>
                             <option value="alteracao_caracteristica">🛠️ Alteração de Características</option>
+                            <option value="requerimento_baixa">📉 Requerimento de Baixa de Veículo</option>
                             <option value="recibo">💰 Recibo de Pagamento</option>
                             <option value="contrato">🤝 Contrato de Prestação de Serviço</option>
                             <option value="alteracao_endereco">🏠 Requerimento de Alteração de Endereço</option>
@@ -46,16 +48,57 @@
                         </select>
                     </div>
 
+                    <div id="box_baixa" class="card bg-light border p-3 mb-3 d-none">
+                        <h6 class="text-danger border-bottom pb-2 fw-bold mb-3">Dados para Baixa</h6>
+                        
+                        <label class="form-label fw-bold small text-uppercase">Identificação do Solicitante:</label>
+                        <div class="d-flex flex-wrap gap-3 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_solicitante_baixa" value="proprietario" id="baixa_proprietario" checked>
+                                <label class="form-check-label" for="baixa_proprietario">Proprietário do veículo</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_solicitante_baixa" value="adquirente" id="baixa_adquirente">
+                                <label class="form-check-label" for="baixa_adquirente">Adquirente</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="tipo_solicitante_baixa" value="representante" id="baixa_representante">
+                                <label class="form-check-label" for="baixa_representante">Representante Legal / Procurador</label>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-2 border rounded mb-3">
+                            <label class="form-label fw-bold small text-muted mb-1">Possui Procurador? (Automático)</label>
+                            <div class="d-flex gap-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="possui_procurador_baixa" value="sim" id="proc_sim">
+                                    <label class="form-check-label fw-bold text-primary" for="proc_sim">SIM</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="possui_procurador_baixa" value="nao" id="proc_nao" checked>
+                                    <label class="form-check-label fw-bold text-secondary" for="proc_nao">NÃO</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <label class="form-label fw-bold small text-uppercase">Motivo da Baixa:</label>
+                        <select name="motivo_baixa" class="form-select">
+                            <option value="irrecuperavel">Veículo Irrecuperável</option>
+                            <option value="desmontado">Veículo Definitivamente Desmontado</option>
+                            <option value="sinistrado">Veículo Sinistrado (Perda Total / Grande Monta)</option>
+                            <option value="sucata">Veículo Vendido/Leiloado como Sucata</option>
+                            <option value="frota">Frota Desativada (Não licenciado há 10 anos)</option>
+                        </select>
+                    </div>
+
                     <div id="box_atpv" class="card bg-light border p-3 mb-3 d-none">
                         <h6 class="text-primary border-bottom pb-2 fw-bold mb-3">Dados da Transação (ATPV-e)</h6>
-                        
                         <div class="mb-3">
                             <label class="form-label fw-bold">Quem é o Comprador?</label>
                             <select name="comprador_id" id="select_comprador" class="form-select w-100">
                                 <option value="">Busque o Comprador no sistema...</option>
                             </select>
                         </div>
-
                         <div class="row">
                             <div class="col-md-4 mb-3">
                                 <label class="form-label fw-bold text-success">Valor Venda (R$):</label>
@@ -71,9 +114,9 @@
                             </div>
                         </div>
                     </div>
+
                     <div id="box_outorgado" class="card bg-light border p-3 mb-3 d-none">
                         <label class="form-label fw-bold text-dark border-bottom pb-2 w-100">Quem será o Procurador (Outorgado)?</label>
-                        
                         <div class="d-flex gap-4 mb-3 mt-2">
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="tipo_outorgado" id="out_escritorio" value="escritorio" checked>
@@ -88,7 +131,6 @@
                                 </label>
                             </div>
                         </div>
-
                         <div id="div_busca_outorgado" class="d-none animate__animated animate__fadeIn">
                             <label class="small text-muted mb-1">Pesquise abaixo quem receberá os poderes (ex: Comprador):</label>
                             <select name="outorgado_id" id="select_outorgado" class="form-select w-100">
@@ -101,17 +143,14 @@
                         <label class="form-label fw-bold text-success">Valor (R$):</label>
                         <input type="text" name="valor_recibo" id="input_valor" class="form-control form-control-lg" placeholder="0,00" onkeyup="formatarMoeda(this)">
                     </div>
-
                     <div class="mb-3 d-none" id="campo_motivo">
                         <label class="form-label fw-bold text-danger">Motivo (2ª Via):</label>
                         <input type="text" name="motivo_2via" id="input_motivo" class="form-control" placeholder="Ex: Perda, Extravio...">
                     </div>
-                    
                     <div class="mb-3 d-none" id="campo_alteracao">
                         <label class="form-label fw-bold text-primary">Descrição da Alteração:</label>
                         <input type="text" name="alteracao_pretendida" id="input_alteracao" class="form-control" placeholder="Ex: Mudança de Cor...">
                     </div>
-
                     <div class="mb-4" id="campo_servicos">
                         <label class="form-label fw-bold d-block" id="label_servicos">Serviços / Referente a:</label>
                         <div class="card p-3 bg-light" style="max-height: 200px; overflow-y: auto;">
@@ -144,7 +183,6 @@
 
 <script>
     $(document).ready(function() {
-        
         // --- CONFIGURAÇÃO SELECT2 ---
         var configSelect2 = {
             theme: 'bootstrap-5',
@@ -165,18 +203,15 @@
             minimumInputLength: 3
         };
 
-        // Aplica Select2 nos campos (Adicionado o select_comprador)
         $('#select_cliente').select2({ ...configSelect2, placeholder: 'Busque o Cliente (Outorgante)...' });
         $('#select_outorgado').select2({ ...configSelect2, placeholder: 'Busque o Procurador (Outorgado)...' });
-        $('#select_comprador').select2({ ...configSelect2, placeholder: 'Busque o Comprador...' }); // NOVO
+        $('#select_comprador').select2({ ...configSelect2, placeholder: 'Busque o Comprador...' });
 
-        // Evento ao selecionar Cliente -> Busca Veículos
         $('#select_cliente').on('select2:select', function (e) {
             carregarVeiculos(e.params.data.id);
         });
 
-
-        // --- LÓGICA DO RADIO BUTTON (MOSTRAR/ESCONDER BUSCA) ---
+        // --- LÓGICA DE PROCURADOR NO BOX OUTORGADO ---
         $('input[name="tipo_outorgado"]').change(function() {
             if ($('#out_outro').is(':checked')) {
                 $('#div_busca_outorgado').removeClass('d-none');
@@ -186,61 +221,64 @@
             }
         });
 
-        // Executa uma vez ao carregar
-        $('input[name="tipo_outorgado"]:checked').trigger('change');
+        // --- AUTOMAÇÃO DA BAIXA DE VEÍCULO ---
+        // Se clicar em REPRESENTANTE -> Marca SIM e Mostra Outorgado
+        // Se clicar em PROPRIETÁRIO/ADQUIRENTE -> Marca NÃO e Esconde Outorgado
+        $('input[name="tipo_solicitante_baixa"]').change(function() {
+            var tipo = $(this).val();
+            
+            if (tipo === 'representante') {
+                $('#proc_sim').prop('checked', true); // Marca SIM
+                $('#box_outorgado').removeClass('d-none'); // Mostra caixa pra escolher quem é
+            } else {
+                $('#proc_nao').prop('checked', true); // Marca NÃO
+                $('#box_outorgado').addClass('d-none'); // Esconde caixa
+            }
+        });
 
-        // Inicializa visibilidade dos campos extras
+        // Inicializa
+        $('input[name="tipo_outorgado"]:checked').trigger('change');
         toggleCamposExtras();
     });
 
-    // --- FUNÇÕES AUXILIARES ---
-
     function toggleCamposExtras() {
         const tipo = document.getElementById('tipo_documento').value;
+        const divs = ['campo_motivo', 'campo_alteracao', 'campo_servicos', 'campo_valor', 'box_outorgado', 'box_atpv', 'box_baixa'];
         
-        // IDs para esconder/resetar (Adicionado box_atpv)
-        const divs = ['campo_motivo', 'campo_alteracao', 'campo_servicos', 'campo_valor', 'box_outorgado', 'box_atpv'];
-        const inputsRequired = ['input_motivo', 'input_alteracao', 'input_valor', 'input_valor_venda', 'input_crv']; // Adicionados novos inputs
-        const labelServicos = document.getElementById('label_servicos');
-
-        // 1. Esconde tudo primeiro
+        // Reset inicial
         divs.forEach(id => document.getElementById(id).classList.add('d-none'));
-        inputsRequired.forEach(id => { 
-            let el = document.getElementById(id); 
-            if(el) el.required = false; 
-        });
-
-        // 2. Mostra conforme a seleção
+        
+        // Regras de Exibição
         if (tipo === 'requerimento_2via') {
             document.getElementById('campo_motivo').classList.remove('d-none');
         } 
         else if (tipo === 'alteracao_caracteristica') {
             document.getElementById('campo_alteracao').classList.remove('d-none');
-            document.getElementById('input_alteracao').required = true;
         }
         else if (tipo === 'procuracao') {
             document.getElementById('campo_servicos').classList.remove('d-none');
-            labelServicos.innerText = "Serviços a Solicitar (Para Procuração):";
         }
         else if (tipo === 'recibo') {
             document.getElementById('campo_valor').classList.remove('d-none');
-            document.getElementById('input_valor').required = true;
             document.getElementById('campo_servicos').classList.remove('d-none');
-            labelServicos.innerText = "Referente aos serviços:";
         }
         else if (tipo === 'contrato') {
             document.getElementById('campo_valor').classList.remove('d-none');
             document.getElementById('campo_servicos').classList.remove('d-none');
-            labelServicos.innerText = "Objeto do Contrato:";
         }
         else if (tipo === 'procuracao_particular') {
             document.getElementById('box_outorgado').classList.remove('d-none');
         }
-        // NOVA LÓGICA PARA ATPV
         else if (tipo === 'procuracao_atpv') {
             document.getElementById('box_atpv').classList.remove('d-none');
-            document.getElementById('input_valor_venda').required = true;
-            // CRV geralmente é obrigatório, ATPV as vezes não tem ainda, deixei opcional no required
+        }
+        else if (tipo === 'requerimento_baixa') {
+            document.getElementById('box_baixa').classList.remove('d-none');
+            
+            // Verifica se 'representante' já está marcado para manter box_outorgado visível
+            if ($('#baixa_representante').is(':checked')) {
+                $('#box_outorgado').removeClass('d-none');
+            }
         }
     }
 
