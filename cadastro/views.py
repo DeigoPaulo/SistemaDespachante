@@ -26,6 +26,7 @@ from django.http import FileResponse
 from .forms import CompressaoPDFForm
 from .utils import comprimir_pdf_memoria
 from django.urls import reverse
+import base64
 
 
 
@@ -300,7 +301,21 @@ def excluir_cliente(request, id):
 @login_required
 def lista_clientes(request):
     perfil = request.user.perfilusuario
+    
+    # Começa pegando a lista base do despachante
     clientes = Cliente.objects.filter(despachante=perfil.despachante).order_by('nome')
+    
+    # Verifica se tem termo de busca na URL (ex: ?q=joao)
+    search_term = request.GET.get('q')
+
+    if search_term:
+        # Filtra onde o termo aparece no Nome, CPF/CNPJ ou Telefone
+        clientes = clientes.filter(
+            Q(nome__icontains=search_term) | 
+            Q(cpf_cnpj__icontains=search_term) |
+            Q(telefone__icontains=search_term)
+        )
+
     return render(request, 'lista_clientes.html', {'clientes': clientes})
 
 @login_required
@@ -556,7 +571,7 @@ def cadastro_rapido(request):
             pass
 
     # Renderiza o template passando os serviços do banco
-    return render(request, 'cadastro_rapido.html', {
+    return render(request, 'processos/cadastro_rapido.html', {
         'servicos_db': servicos_db
     })
 
@@ -567,44 +582,47 @@ def cadastro_rapido(request):
 def buscar_clientes(request):
     term = request.GET.get('term', '')
     
-    # Garante que o usuário tem perfil
+    # Garante que o usuário tem perfil e despachante vinculado
     perfil = getattr(request.user, 'perfilusuario', None)
-    if not perfil:
+    if not perfil or not perfil.despachante:
         return JsonResponse({'results': []}, safe=False)
 
     despachante = perfil.despachante
     
-    # 1. Limpa o termo para tentar buscar apenas por números (CPF limpo)
-    term_limpo = re.sub(r'\D', '', term) 
+    # 1. Filtro Base: Apenas clientes deste despachante
+    filters = Q(despachante=despachante)
 
-    # 2. Monta a query PODEROSA:
-    # - Nome contém o termo OU
-    # - CPF contém o termo exato digitado OU
-    # - CPF contém apenas os números digitados OU
-    # - PLACA de algum veículo do cliente contém o termo (NOVO!)
-    filters = Q(despachante=despachante) & (
-        Q(nome__icontains=term) | 
-        Q(cpf_cnpj__icontains=term) | 
-        Q(cpf_cnpj__icontains=term_limpo) |
-        Q(veiculos__placa__icontains=term) # <--- A MÁGICA ACONTECE AQUI
-    )
+    if term:
+        # Limpa o termo para tentar buscar apenas por números (ex: busca CPF sem ponto)
+        term_limpo = re.sub(r'\D', '', term) 
 
-    # .distinct() é obrigatório aqui porque estamos filtrando por uma tabela relacionada (veículos)
-    clientes = Cliente.objects.filter(filters).distinct()[:20]
+        # 2. Monta a query PODEROSA:
+        filters = filters & (
+            Q(nome__icontains=term) | 
+            Q(cpf_cnpj__icontains=term) | 
+            Q(telefone__icontains=term) |
+            # AQUI ESTAVA O ERRO: Mudamos de 'veiculo' para 'veiculos' (plural)
+            Q(veiculos__placa__icontains=term)  
+        )
+        
+        if term_limpo:
+             # Adiciona busca extra pelo CPF limpo se houver números
+             filters |= Q(cpf_cnpj__icontains=term_limpo)
+
+    # 3. Executa a Query
+    # .distinct() é obrigatório aqui para não repetir o cliente se ele tiver 2 carros que batem na busca
+    clientes = Cliente.objects.filter(filters).distinct().order_by('nome')[:20]
 
     results = []
     for c in clientes:
-        # Montamos o texto que vai aparecer na lista
-        text_display = f"{c.nome} | CPF: {c.cpf_cnpj}"
+        # Formatação bonita para o Select2
+        text_display = f"{c.nome.upper()} - {c.cpf_cnpj}"
         
         results.append({
             'id': c.id,
-            'text': text_display,  # O Select2 usa o campo 'text' para exibir
-            'cpf': c.cpf_cnpj,
-            'telefone': c.telefone
+            'text': text_display  # O Select2 usa este campo 'text' para exibir na lista
         })
     
-    # Retornamos num formato padrão { "results": [...] }
     return JsonResponse({'results': results}, safe=False)
 
 @login_required
@@ -750,7 +768,7 @@ def novo_orcamento(request):
         # Redireciona para a tela de visualização/impressão desse orçamento específico
         return redirect('detalhe_orcamento', id=orcamento.id)
 
-    return render(request, 'novo_orcamento.html', {'servicos': servicos_disponiveis})
+    return render(request, 'financeiro/novo_orcamento.html', {'servicos': servicos_disponiveis})
 
 # views.py
 
@@ -759,7 +777,7 @@ def detalhe_orcamento(request, id):
     # Busca o orçamento garantindo que pertence ao despachante logado
     orcamento = get_object_or_404(Orcamento, id=id, despachante=request.user.perfilusuario.despachante)
     
-    return render(request, 'detalhe_orcamento.html', {'orcamento': orcamento})
+    return render(request, 'financeiro/detalhe_orcamento.html', {'orcamento': orcamento})
 
 # views.py
 
@@ -827,10 +845,10 @@ def listar_orcamentos(request):
     if status_filtro:
         orcamentos = orcamentos.filter(status=status_filtro)
         
-    return render(request, 'lista_orcamentos.html', {
+    return render(request, 'financeiro/lista_orcamentos.html', {
         'orcamentos': orcamentos,
         'filters': request.GET 
-    })
+})
 
 @login_required
 def excluir_orcamento(request, id):
@@ -1022,11 +1040,10 @@ def imprimir_documento(request):
         numero_crv = request.POST.get('numero_crv')
         numero_atpv = request.POST.get('numero_atpv')
 
-        # --- [NOVO] Campos para Baixa de Veículo ---
+        # Campos para Baixa de Veículo
         motivo_baixa = request.POST.get('motivo_baixa')
         tipo_solicitante_baixa = request.POST.get('tipo_solicitante_baixa')
-        possui_procurador_baixa = request.POST.get('possui_procurador_baixa') # Captura se é SIM ou NÃO
-        # -------------------------------------------
+        possui_procurador_baixa = request.POST.get('possui_procurador_baixa') 
 
         despachante_obj = request.user.perfilusuario.despachante
 
@@ -1042,10 +1059,9 @@ def imprimir_documento(request):
         if veiculo_placa:
             veiculo = Veiculo.objects.filter(placa=veiculo_placa, cliente=cliente).first()
 
-        # 5. LÓGICA DO OUTORGADO (Atualizada para aceitar Baixa também)
+        # 5. LÓGICA DO OUTORGADO
         outorgado_dados = {}
         
-        # Lista de documentos que permitem escolher um Procurador específico
         docs_com_procurador = ['procuracao_particular', 'requerimento_baixa']
 
         if tipo_doc in docs_com_procurador and tipo_outorgado == 'outro' and outorgado_id:
@@ -1053,10 +1069,8 @@ def imprimir_documento(request):
                 pessoa = Cliente.objects.get(id=outorgado_id, despachante=despachante_obj)
                 outorgado_dados = _formatar_dados_pessoa(pessoa)
             except Cliente.DoesNotExist:
-                # Se não achar, usa o escritório como padrão de segurança
                 outorgado_dados = _dados_do_escritorio(despachante_obj)
         else:
-            # Padrão: Dados do escritório (Despachante)
             outorgado_dados = _dados_do_escritorio(despachante_obj)
 
         # 6. LÓGICA DO COMPRADOR
@@ -1067,6 +1081,18 @@ def imprimir_documento(request):
                 comprador_dados = _formatar_dados_pessoa(comp)
             except Cliente.DoesNotExist:
                 comprador_dados = {'nome': 'COMPRADOR NÃO ENCONTRADO'}
+
+        # --- [NOVO] PROCESSAMENTO DAS FOTOS (Para Termos Fotográficos) ---
+        fotos_processadas = []
+        for i in range(1, 5): # Loop de 1 a 4 (foto1, foto2, foto3, foto4)
+            campo_foto = f'foto{i}'
+            if campo_foto in request.FILES:
+                # Converte a imagem enviada para Base64 para exibir no HTML
+                img_b64 = _imagem_para_base64(request.FILES[campo_foto])
+                fotos_processadas.append(img_b64)
+            else:
+                fotos_processadas.append(None)
+        # -----------------------------------------------------------------
 
         # 7. FORMATAÇÃO DOS SERVIÇOS
         lista_nomes_servicos = []
@@ -1093,10 +1119,10 @@ def imprimir_documento(request):
                 'crv': numero_crv,
                 'atpv': numero_atpv
             },
-            # Dados da Baixa
             'motivo_baixa': motivo_baixa,
             'tipo_solicitante_baixa': tipo_solicitante_baixa,
-            'possui_procurador_baixa': possui_procurador_baixa
+            'possui_procurador_baixa': possui_procurador_baixa,
+            'fotos': fotos_processadas # [NOVO] Adiciona as fotos ao contexto
         }
 
         # 9. SELEÇÃO DO DOCUMENTO
@@ -1120,10 +1146,16 @@ def imprimir_documento(request):
             return render(request, 'documentos/print_alteracao_endereco.html', context)
         elif tipo_doc == 'requerimento_baixa':
             return render(request, 'documentos/print_requerimento_baixa.html', context)
+        
+        # --- [NOVAS ROTAS] ---
+        elif tipo_doc == 'termo_fotografico_veiculo':
+            return render(request, 'documentos/print_termo_fotografico_veiculo.html', context)
+        elif tipo_doc == 'termo_fotografico_placas':
+            return render(request, 'documentos/print_termo_fotografico_placas.html', context)
     
     return redirect('selecao_documento')
 
-# --- Funções Auxiliares (Para ficar organizado) ---
+# --- Funções Auxiliares ---
 
 def _dados_do_escritorio(despachante):
     return {
@@ -1135,6 +1167,59 @@ def _dados_do_escritorio(despachante):
         'telefone': despachante.telefone
     }
 
+def _formatar_dados_pessoa(pessoa):
+    # Função que você provavelmente já tem no seu código original,
+    # mantive a chamada para não quebrar a lógica do Outorgado/Comprador.
+    return {
+        'nome': pessoa.nome.upper(),
+        'cpf_cnpj': pessoa.cpf_cnpj,
+        'rg': pessoa.rg,
+        'endereco': f"{pessoa.rua}, {pessoa.numero} {pessoa.complemento} - {pessoa.bairro}",
+        'cidade': pessoa.cidade,
+        'uf': pessoa.uf
+    }
+
+def _imagem_para_base64(imagem_upload):
+    """
+    Lê o arquivo de imagem enviado pelo formulário e retorna 
+    uma string base64 pronta para ser usada na tag <img> do HTML.
+    """
+    try:
+        if not imagem_upload: return None
+        imagem_bytes = imagem_upload.read()
+        imagem_b64 = base64.b64encode(imagem_bytes).decode('utf-8')
+        return f"data:{imagem_upload.content_type};base64,{imagem_b64}"
+    except:
+        return None
+
+# --- Funções Auxiliares ---
+
+def _dados_do_escritorio(despachante):
+    return {
+        'nome': despachante.nome_fantasia.upper(),
+        'doc': f"CNPJ: {despachante.cnpj} | Código: {despachante.codigo_sindego}",
+        'endereco': despachante.endereco_completo,
+        'cidade': "Goiânia",
+        'uf': "GO",
+        'telefone': despachante.telefone
+    }
+
+def _imagem_para_base64(imagem_upload):
+    """
+    Lê o arquivo de imagem enviado pelo formulário e retorna 
+    uma string base64 pronta para ser usada na tag <img> do HTML.
+    """
+    try:
+        if not imagem_upload: return None
+        # Lê os bytes da imagem
+        imagem_bytes = imagem_upload.read()
+        # Converte para base64
+        imagem_b64 = base64.b64encode(imagem_bytes).decode('utf-8')
+        # Retorna formatado para HTML
+        return f"data:{imagem_upload.content_type};base64,{imagem_b64}"
+    except:
+        return None
+        
 def _formatar_dados_pessoa(pessoa):
     """Padroniza os dados de Cliente para serem usados como Outorgado ou Comprador"""
     return {

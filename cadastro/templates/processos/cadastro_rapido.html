@@ -171,16 +171,7 @@
 
 <script>
     $(document).ready(function() {
-        // --- VARIAVEIS ---
-        var cardCliente = $('#cliente-selecionado');
-        var areaBusca = $('#area-busca'); // A div que contém o Select2
-        var areaVeiculosExistentes = $('#area-veiculos-existentes');
-        var listaVeiculosExistentes = $('#lista-veiculos-existentes');
-
-        // Pega as opções do select modelo para usar no "Adicionar Serviço"
-        var opcoesServicosHTML = $('#modelo-opcoes-servicos').html();
-
-        // --- 1. CONFIGURAÇÃO DO SELECT2 (BUSCA DINÂMICA) ---
+        // --- CONFIGURAÇÃO SELECT2 (SERVER-SIDE) ---
         $('#select_cliente_busca').select2({
             theme: 'bootstrap-5',
             width: '100%',
@@ -192,140 +183,77 @@
                 searching: function() { return "Buscando..."; }
             },
             ajax: {
-                url: "{% url 'buscar_clientes' %}", // URL da sua View
+                url: "{% url 'buscar_clientes' %}", 
                 dataType: 'json',
-                delay: 250,
+                delay: 300, // 300ms de delay para não sobrecarregar
                 data: function (params) {
-                    return {
-                        term: params.term // Envia o termo digitado
-                    };
+                    return { term: params.term };
                 },
                 processResults: function (data) {
-                    return {
-                        results: data.results // O formato que a view retorna agora ({ results: [...] })
-                    };
+                    return { results: data.results };
                 },
                 cache: true
             },
             minimumInputLength: 3
         });
 
-        // --- 2. QUANDO O CLIENTE É SELECIONADO ---
+        // --- QUANDO SELECIONA O CLIENTE ---
         $('#select_cliente_busca').on('select2:select', function (e) {
             var data = e.params.data;
             
-            // Preenche o Card
             $('#input-cliente-id').val(data.id);
             
-            // A view retorna 'text' (Nome | CPF). Se quiser separado, precisa ajustar a view para mandar campos extras
-            // Mas geralmente o select2 guarda dados extras se a view mandar.
-            // Vamos assumir que a view manda 'cpf' e 'telefone' além de 'text'.
-            
-            // Nome: vamos pegar a primeira parte do texto ou o campo 'nome' se a view mandar
-            var nomeDisplay = data.nome || data.text.split('|')[0].trim(); 
-            
-            $('#lbl-nome').text(nomeDisplay);
-            $('#lbl-cpf').text(data.cpf || '---');
-            $('#lbl-telefone').text(data.telefone || '---');
+            // Tenta pegar o nome do texto retornado (ex: "JOÃO SILVA - 123.456...")
+            var nomeDisplay = data.text.split('-')[0].trim(); 
+            var docDisplay = data.text.split('-')[1] ? data.text.split('-')[1].trim() : '';
 
-            // Esconde busca e mostra card
-            areaBusca.addClass('d-none'); // Esconde o Select2
-            cardCliente.removeClass('d-none');
+            $('#lbl-nome').text(nomeDisplay);
+            $('#lbl-cpf').text(docDisplay);
+            $('#lbl-telefone').text(''); // O select2 básico não traz telefone, mas não tem problema
+
+            // Troca visualização
+            $('#area-busca').addClass('d-none'); 
+            $('#cliente-selecionado').removeClass('d-none');
             
-            // Busca Veículos
+            // Busca Veículos deste cliente
             buscarVeiculosDoCliente(data.id);
         });
 
-
-        // --- 3. TROCAR CLIENTE ---
+        // --- TROCAR CLIENTE ---
         $('#btn-trocar-cliente').click(function() {
-            // Limpa dados
             $('#input-cliente-id').val('');
-            $('#select_cliente_busca').val(null).trigger('change'); // Reseta Select2
+            $('#select_cliente_busca').val(null).trigger('change'); 
             
-            // Troca visualização
-            cardCliente.addClass('d-none');
-            areaBusca.removeClass('d-none'); // Mostra Select2 de novo
+            $('#cliente-selecionado').addClass('d-none');
+            $('#area-busca').removeClass('d-none'); 
             
-            // Limpa veículos e tabela
-            areaVeiculosExistentes.addClass('d-none');
-            $('#tabela-veiculos-visual tbody').html('<tr id="linha-vazia"><td colspan="5" class="text-center text-muted small py-2">Nenhum veículo selecionado.</td></tr>');
+            $('#area-veiculos-existentes').addClass('d-none');
+            $('#tabela-veiculos-visual tbody').html('<tr id="linha-vazia"><td colspan="5" class="text-center text-muted small py-3">Nenhum veículo selecionado.</td></tr>');
             $('#veiculos-inputs-container').empty();
             
-            // Foca no Select2 (hack para abrir)
             $('#select_cliente_busca').select2('open');
         });
 
-
-        // --- 4. BUSCAR VEÍCULOS API (Lógica Mantida) ---
-        function buscarVeiculosDoCliente(clienteId) {
-            $.ajax({
-                url: `/api/veiculos-cliente/${clienteId}/`,
-                dataType: 'json',
-                success: function(data) {
-                    listaVeiculosExistentes.empty();
-                    if(data.length > 0) {
-                        data.forEach(function(v) {
-                            var dadosJson = JSON.stringify(v).replace(/"/g, '&quot;');
-                            var html = `
-                                <div class="col-md-3">
-                                    <div class="card h-100 border-primary shadow-sm veiculo-card-opcao" style="cursor: pointer;" data-veiculo="${dadosJson}">
-                                        <div class="card-body p-2 d-flex align-items-center">
-                                            <div class="bg-primary text-white rounded p-2 me-2"><i class="fas fa-car"></i></div>
-                                            <div>
-                                                <h6 class="mb-0 fw-bold">${v.placa}</h6>
-                                                <small class="text-muted" style="font-size: 0.8rem">${v.modelo}</small>
-                                            </div>
-                                            <div class="ms-auto"><i class="fas fa-plus-circle text-success"></i></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            `;
-                            listaVeiculosExistentes.append(html);
-                        });
-                        areaVeiculosExistentes.removeClass('d-none');
-                    } else {
-                        areaVeiculosExistentes.addClass('d-none');
-                    }
-                }
-            });
-        }
-
-        // --- 5. CLICOU NO VEÍCULO EXISTENTE (Lógica Mantida) ---
-        $(document).on('click', '.veiculo-card-opcao', function() {
-            var dados = $(this).data('veiculo');
-            var servicoPadrao = $('#modelo-opcoes-servicos option:nth-child(2)').val() || "Licenciamento";
-
-            adicionarNaTabela({
-                placa: dados.placa,
-                renavam: dados.renavam,
-                modelo: dados.modelo,
-                cor: dados.cor,
-                ano: dados.ano_fab,
-                servicos: [servicoPadrao],
-                atendimento: ''
-            });
-            $(this).fadeOut(200).fadeIn(200);
-        });
-
-        // --- 6. FUNÇÃO CENTRAL: ADICIONAR NA TABELA (Lógica Mantida) ---
+        // --- FUNÇÃO PARA ADICIONAR NA TABELA ---
         function adicionarNaTabela(v) {
             var tbody = $('#tabela-veiculos-visual tbody');
             $('#linha-vazia').remove();
 
             var rowId = 'row_' + Math.floor(Math.random() * 100000);
-            var listaServicos = Array.isArray(v.servicos) ? v.servicos : [v.servico];
+            var listaServicos = Array.isArray(v.servicos) ? v.servicos : [v.servicos];
+            // Garante que é array
+            if(!Array.isArray(listaServicos)) listaServicos = [v.servicos];
 
+            // Renderiza Linha
             var newRow = $(`
                 <tr id="${rowId}">
                     <td class="fw-bold text-primary align-middle">${v.placa}</td>
                     <td class="align-middle small">${v.modelo}</td>
                     <td>
                         <div class="d-flex flex-wrap gap-1 mb-1 container-badges"></div>
-                        
                         <select class="form-select form-select-sm select-add-servico text-muted" style="width: auto; display: inline-block;">
                             <option value="" selected>+ Add Serviço</option>
-                            ${opcoesServicosHTML}
+                            ${$('#modelo-opcoes-servicos').html()}
                         </select>
                     </td>
                     <td>
@@ -339,6 +267,7 @@
 
             tbody.append(newRow);
 
+            // Inputs Ocultos
             var container = $('#veiculos-inputs-container');
             var hiddenDiv = $(`
                 <div id="hidden_${rowId}">
@@ -355,6 +284,7 @@
             `);
             container.append(hiddenDiv);
 
+            // Gerencia os Serviços (Badges)
             function atualizarServicosRow() {
                 var containerBadges = newRow.find('.container-badges');
                 containerBadges.empty();
@@ -368,12 +298,13 @@
                     `);
                     containerBadges.append(badge);
                 });
-
+                // Atualiza o input hidden (ex: "Licenciamento + Transferência")
                 hiddenDiv.find('.input-servico-final').val(listaServicos.join(' + '));
             }
 
             atualizarServicosRow();
 
+            // Evento: Adicionar Serviço extra
             newRow.find('.select-add-servico').change(function() {
                 var novoServico = $(this).val();
                 if(novoServico) {
@@ -385,22 +316,80 @@
                 }
             });
 
+            // Evento: Remover Serviço
             newRow.on('click', '.btn-rm-serv', function() {
                 var idx = $(this).data('index');
                 listaServicos.splice(idx, 1);
                 atualizarServicosRow();
             });
 
+            // Evento: Remover Linha inteira
             newRow.find('.btn-remove-row').click(function() {
                 newRow.remove();
                 hiddenDiv.remove();
                 if(tbody.children().length === 0) {
-                    tbody.html('<tr id="linha-vazia"><td colspan="5" class="text-center text-muted small py-2">Nenhum veículo selecionado.</td></tr>');
+                    tbody.html('<tr id="linha-vazia"><td colspan="5" class="text-center text-muted small py-3">Nenhum veículo selecionado.</td></tr>');
                 }
             });
         }
 
-        // --- 7. MODAL: ADICIONAR VEÍCULO NOVO (Lógica Mantida) ---
+        // --- BUSCAR VEÍCULOS API ---
+        function buscarVeiculosDoCliente(clienteId) {
+            $.ajax({
+                url: `/api/veiculos-cliente/${clienteId}/`,
+                dataType: 'json',
+                success: function(data) {
+                    var lista = $('#lista-veiculos-existentes');
+                    lista.empty();
+                    if(data.length > 0) {
+                        data.forEach(function(v) {
+                            // Salva dados no data attribute para usar no clique
+                            var dadosJson = JSON.stringify(v).replace(/"/g, '&quot;');
+                            var html = `
+                                <div class="col-md-3">
+                                    <div class="card h-100 border-primary shadow-sm veiculo-card-opcao" style="cursor: pointer;" data-veiculo="${dadosJson}">
+                                        <div class="card-body p-2 d-flex align-items-center">
+                                            <div class="bg-primary text-white rounded p-2 me-2"><i class="fas fa-car"></i></div>
+                                            <div>
+                                                <h6 class="mb-0 fw-bold">${v.placa}</h6>
+                                                <small class="text-muted" style="font-size: 0.8rem">${v.modelo}</small>
+                                            </div>
+                                            <div class="ms-auto"><i class="fas fa-plus-circle text-success"></i></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                            lista.append(html);
+                        });
+                        $('#area-veiculos-existentes').removeClass('d-none');
+                    } else {
+                        $('#area-veiculos-existentes').addClass('d-none');
+                    }
+                }
+            });
+        }
+
+        // --- CLIQUE NO VEÍCULO EXISTENTE ---
+        $(document).on('click', '.veiculo-card-opcao', function() {
+            var dados = $(this).data('veiculo');
+            // Pega o primeiro serviço da lista como padrão ou Licenciamento
+            var servicoPadrao = $('#modelo-opcoes-servicos option:nth-child(2)').val() || "Licenciamento";
+
+            adicionarNaTabela({
+                placa: dados.placa,
+                renavam: dados.renavam,
+                modelo: dados.modelo,
+                cor: dados.cor,
+                ano: dados.ano_fab,
+                servicos: [servicoPadrao], // Array
+                atendimento: ''
+            });
+            
+            // Efeito visual de clique
+            $(this).fadeOut(150).fadeIn(150);
+        });
+
+        // --- MODAL: ADICIONAR NOVO VEÍCULO ---
         $('#btn-add-modal').click(function() {
             var dados = {
                 placa: $('#pop_placa').val().toUpperCase(),
@@ -420,7 +409,7 @@
 
             adicionarNaTabela(dados);
 
-            // Limpa e fecha
+            // Limpa Modal
             $('#pop_placa').val('');
             $('#pop_renavam').val('');
             $('#pop_modelo').val('');
@@ -431,37 +420,6 @@
             var modal = bootstrap.Modal.getInstance(modalEl);
             modal.hide();
         });
-        
-        // --- 8. AUTO-CARREGAR DO ORÇAMENTO (Se vier da aprovação) ---
-        // Verifica se veio parâmetro na URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const clienteIdUrl = urlParams.get('cliente_id');
-        
-        if (clienteIdUrl) {
-            // Se veio ID pela URL, precisamos "simular" a seleção do Select2
-            // Como o Select2 via AJAX não tem a opção carregada, precisamos criar uma Option manual
-            // e selecioná-la.
-            
-            // Faremos um fetch manual para pegar o nome do cliente e preencher
-            // Nota: Se quiser simplificar, pode só preencher o input hidden e rodar buscarVeiculosDoCliente
-            // Mas vamos tentar preencher o visual do Card
-             $.ajax({
-                url: "{% url 'buscar_clientes' %}", 
-                data: { 'term': clienteIdUrl }, // Tenta buscar pelo ID (nossa busca aceita CPF, se o termo for o CPF seria ideal)
-                // O ideal seria ter uma API detail cliente, mas vamos improvisar
-                // Como não temos endpoint "get_cliente_by_id", vamos apenas setar o ID e buscar os veiculos
-                success: function() {
-                    $('#input-cliente-id').val(clienteIdUrl);
-                    // Esconde busca e mostra card (Dados visuais ficarão vazios ou genéricos até melhorar a API)
-                    $('#lbl-nome').text("Cliente Selecionado (Carregado)");
-                    $('#lbl-cpf').text("");
-                    areaBusca.addClass('d-none');
-                    cardCliente.removeClass('d-none');
-                    buscarVeiculosDoCliente(clienteIdUrl);
-                }
-            });
-        }
-
     });
 </script>
 {% endblock %}

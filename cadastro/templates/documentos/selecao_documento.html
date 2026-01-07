@@ -15,7 +15,7 @@
                 <h5 class="mb-0"><i class="fas fa-file-signature me-2"></i> Gerador de Documentos</h5>
             </div>
             <div class="card-body p-4">
-                <form action="{% url 'imprimir_documento' %}" method="POST" target="_blank">
+                <form action="{% url 'imprimir_documento' %}" method="POST" target="_blank" enctype="multipart/form-data">
                     {% csrf_token %}
                     
                     <div class="mb-4">
@@ -27,7 +27,11 @@
                             <option value="declaracao">🏠 Declaração de Residência</option>
                             <option value="requerimento_2via">🚗 Requerimento 2ª Via CRV/CRLV</option>
                             <option value="alteracao_caracteristica">🛠️ Alteração de Características</option>
-                            <option value="requerimento_baixa">📉 Requerimento de Baixa de Veículo</option>
+                            <option value="requerimento_baixa">📉 Requerimento de Baixa de Veículo (RQ14)</option>
+                            
+                            <option value="termo_fotografico_veiculo">📸 Termo Fotográfico do Veículo (Anexo I)</option>
+                            <option value="termo_fotografico_placas">📸 Termo Inutilização Placas/Chassi (Anexo II)</option>
+                            
                             <option value="recibo">💰 Recibo de Pagamento</option>
                             <option value="contrato">🤝 Contrato de Prestação de Serviço</option>
                             <option value="alteracao_endereco">🏠 Requerimento de Alteração de Endereço</option>
@@ -37,7 +41,7 @@
                     <div class="mb-3">
                         <label class="form-label fw-bold">Cliente / Outorgante:</label>
                         <select name="cliente_id" id="select_cliente" class="form-select" required>
-                            <option value="">Digite para pesquisar...</option>
+                            <option value="">Digite 3 letras para pesquisar...</option>
                         </select>
                     </div>
 
@@ -63,7 +67,7 @@
                             </div>
                             <div class="form-check">
                                 <input class="form-check-input" type="radio" name="tipo_solicitante_baixa" value="representante" id="baixa_representante">
-                                <label class="form-check-label" for="baixa_representante">Representante Legal / Procurador</label>
+                                <label class="form-check-label" for="baixa_representante">Representante Legal</label>
                             </div>
                         </div>
 
@@ -89,6 +93,32 @@
                             <option value="sucata">Veículo Vendido/Leiloado como Sucata</option>
                             <option value="frota">Frota Desativada (Não licenciado há 10 anos)</option>
                         </select>
+                    </div>
+
+                    <div id="box_fotos" class="card bg-light border p-3 mb-3 d-none">
+                        <h6 class="text-success border-bottom pb-2 fw-bold mb-3"><i class="fas fa-camera me-2"></i> Upload das Fotos</h6>
+                        <div class="alert alert-info small py-2 mb-3">
+                            <i class="fas fa-info-circle me-1"></i> As fotos serão inseridas automaticamente no documento PDF.
+                        </div>
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted" id="lbl_foto1">Foto 1</label>
+                                <input type="file" name="foto1" class="form-control" accept="image/*">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted" id="lbl_foto2">Foto 2</label>
+                                <input type="file" name="foto2" class="form-control" accept="image/*">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted" id="lbl_foto3">Foto 3</label>
+                                <input type="file" name="foto3" class="form-control" accept="image/*">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small text-muted" id="lbl_foto4">Foto 4</label>
+                                <input type="file" name="foto4" class="form-control" accept="image/*">
+                            </div>
+                        </div>
                     </div>
 
                     <div id="box_atpv" class="card bg-light border p-3 mb-3 d-none">
@@ -183,7 +213,9 @@
 
 <script>
     $(document).ready(function() {
-        // --- CONFIGURAÇÃO SELECT2 ---
+        
+        // --- CONFIGURAÇÃO SELECT2 (Server-Side Search) ---
+        // Garante que só busca no banco quando o usuário digita
         var configSelect2 = {
             theme: 'bootstrap-5',
             width: '100%',
@@ -193,25 +225,30 @@
                 searching: function() { return "Buscando..."; }
             },
             ajax: {
-                url: '{% url "buscar_clientes" %}',
+                url: '{% url "buscar_clientes" %}', // Chama a View que usa Q()
                 dataType: 'json',
-                delay: 250,
-                data: function (params) { return { term: params.term }; },
-                processResults: function (data) { return { results: data.results }; },
+                delay: 300,
+                data: function (params) {
+                    return { term: params.term }; // Envia o que foi digitado
+                },
+                processResults: function (data) {
+                    return { results: data.results }; // Recebe o JSON filtrado
+                },
                 cache: true
             },
-            minimumInputLength: 3
+            minimumInputLength: 3 // Evita carregar todos os clientes de uma vez
         };
 
-        $('#select_cliente').select2({ ...configSelect2, placeholder: 'Busque o Cliente (Outorgante)...' });
+        $('#select_cliente').select2({ ...configSelect2, placeholder: 'Busque o Cliente (Nome ou CPF)...' });
         $('#select_outorgado').select2({ ...configSelect2, placeholder: 'Busque o Procurador (Outorgado)...' });
         $('#select_comprador').select2({ ...configSelect2, placeholder: 'Busque o Comprador...' });
 
+        // Ao selecionar cliente -> Carrega Veículos
         $('#select_cliente').on('select2:select', function (e) {
             carregarVeiculos(e.params.data.id);
         });
 
-        // --- LÓGICA DE PROCURADOR NO BOX OUTORGADO ---
+        // Lógica do Outorgado
         $('input[name="tipo_outorgado"]').change(function() {
             if ($('#out_outro').is(':checked')) {
                 $('#div_busca_outorgado').removeClass('d-none');
@@ -221,64 +258,86 @@
             }
         });
 
-        // --- AUTOMAÇÃO DA BAIXA DE VEÍCULO ---
-        // Se clicar em REPRESENTANTE -> Marca SIM e Mostra Outorgado
-        // Se clicar em PROPRIETÁRIO/ADQUIRENTE -> Marca NÃO e Esconde Outorgado
+        // Automação da Baixa de Veículo
         $('input[name="tipo_solicitante_baixa"]').change(function() {
             var tipo = $(this).val();
-            
             if (tipo === 'representante') {
-                $('#proc_sim').prop('checked', true); // Marca SIM
-                $('#box_outorgado').removeClass('d-none'); // Mostra caixa pra escolher quem é
+                $('#proc_sim').prop('checked', true);
+                $('#box_outorgado').removeClass('d-none');
             } else {
-                $('#proc_nao').prop('checked', true); // Marca NÃO
-                $('#box_outorgado').addClass('d-none'); // Esconde caixa
+                $('#proc_nao').prop('checked', true);
+                $('#box_outorgado').addClass('d-none');
             }
         });
 
-        // Inicializa
+        // Inicializa estado dos campos
         $('input[name="tipo_outorgado"]:checked').trigger('change');
         toggleCamposExtras();
     });
 
     function toggleCamposExtras() {
         const tipo = document.getElementById('tipo_documento').value;
-        const divs = ['campo_motivo', 'campo_alteracao', 'campo_servicos', 'campo_valor', 'box_outorgado', 'box_atpv', 'box_baixa'];
-        
-        // Reset inicial
+        const divs = ['campo_motivo', 'campo_alteracao', 'campo_servicos', 'campo_valor', 'box_outorgado', 'box_atpv', 'box_baixa', 'box_fotos'];
+        const inputsRequired = ['input_motivo', 'input_alteracao', 'input_valor', 'input_valor_venda', 'input_crv']; 
+        const labelServicos = document.getElementById('label_servicos');
+
+        // 1. Esconde tudo
         divs.forEach(id => document.getElementById(id).classList.add('d-none'));
-        
-        // Regras de Exibição
+        inputsRequired.forEach(id => { 
+            let el = document.getElementById(id); 
+            if(el) el.required = false; 
+        });
+
+        // 2. Mostra o necessário
         if (tipo === 'requerimento_2via') {
             document.getElementById('campo_motivo').classList.remove('d-none');
         } 
         else if (tipo === 'alteracao_caracteristica') {
             document.getElementById('campo_alteracao').classList.remove('d-none');
+            document.getElementById('input_alteracao').required = true;
         }
         else if (tipo === 'procuracao') {
             document.getElementById('campo_servicos').classList.remove('d-none');
+            labelServicos.innerText = "Serviços a Solicitar (Para Procuração):";
         }
         else if (tipo === 'recibo') {
             document.getElementById('campo_valor').classList.remove('d-none');
+            document.getElementById('input_valor').required = true;
             document.getElementById('campo_servicos').classList.remove('d-none');
+            labelServicos.innerText = "Referente aos serviços:";
         }
         else if (tipo === 'contrato') {
             document.getElementById('campo_valor').classList.remove('d-none');
             document.getElementById('campo_servicos').classList.remove('d-none');
+            labelServicos.innerText = "Objeto do Contrato:";
         }
         else if (tipo === 'procuracao_particular') {
             document.getElementById('box_outorgado').classList.remove('d-none');
         }
         else if (tipo === 'procuracao_atpv') {
             document.getElementById('box_atpv').classList.remove('d-none');
+            document.getElementById('input_valor_venda').required = true;
         }
         else if (tipo === 'requerimento_baixa') {
             document.getElementById('box_baixa').classList.remove('d-none');
-            
-            // Verifica se 'representante' já está marcado para manter box_outorgado visível
             if ($('#baixa_representante').is(':checked')) {
                 $('#box_outorgado').removeClass('d-none');
             }
+        }
+        // REGRAS PARA FOTOS
+        else if (tipo === 'termo_fotografico_veiculo') {
+            document.getElementById('box_fotos').classList.remove('d-none');
+            $('#lbl_foto1').text('1. Dianteira + Lateral Esquerda (45°)');
+            $('#lbl_foto2').text('2. Dianteira + Lateral Direita (45°)');
+            $('#lbl_foto3').text('3. Traseira + Lateral Esquerda (45°)');
+            $('#lbl_foto4').text('4. Traseira + Lateral Direita (45°)');
+        }
+        else if (tipo === 'termo_fotografico_placas') {
+            document.getElementById('box_fotos').classList.remove('d-none');
+            $('#lbl_foto1').text('1. Estrutura com gravação do chassi');
+            $('#lbl_foto2').text('2. Estrutura após remoção do chassi');
+            $('#lbl_foto3').text('3. Gravação removida (Recorte)');
+            $('#lbl_foto4').text('4. Placas cortadas ao meio');
         }
     }
 

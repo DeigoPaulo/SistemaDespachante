@@ -79,8 +79,8 @@ class PerfilUsuario(models.Model):
 class Cliente(models.Model):
     despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
 
-    nome = models.CharField(max_length=255)
-    cpf_cnpj = models.CharField(max_length=18)
+    nome = models.CharField(max_length=255, db_index=True)
+    cpf_cnpj = models.CharField(max_length=18, db_index=True)
 
     rg = models.CharField(max_length=20, blank=True, null=True)
     orgao_expedidor = models.CharField(max_length=20, blank=True, null=True)

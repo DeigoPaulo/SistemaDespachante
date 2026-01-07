@@ -14,18 +14,27 @@
     </a>
 </div>
 
-<div class="card shadow-sm border-0 mb-4">
+<form method="GET" action="." class="card shadow-sm border-0 mb-4">
     <div class="card-body p-2">
         <div class="input-group">
-            <span class="input-group-text bg-white border-0"><i class="fas fa-search text-muted"></i></span>
-            <input type="text" id="filtroClientes" class="form-control border-0 shadow-none" placeholder="Digite o nome, CPF ou telefone para filtrar...">
+            <button type="submit" class="input-group-text bg-white border-0" style="cursor: pointer;">
+                <i class="fas fa-search text-muted"></i>
+            </button>
+            
+            <input type="text" name="q" value="{{ request.GET.q|default:'' }}" class="form-control border-0 shadow-none" placeholder="Digite nome, CPF ou telefone e pressione ENTER...">
+            
+            {% if request.GET.q %}
+                <a href="{% url 'lista_clientes' %}" class="btn btn-link text-muted text-decoration-none fw-bold" style="font-size: 0.9rem;">
+                    <i class="fas fa-times"></i> Limpar
+                </a>
+            {% endif %}
         </div>
     </div>
-</div>
+</form>
 
 <div class="card shadow-sm border-0">
     <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0" id="tabelaClientes">
+        <table class="table table-hover align-middle mb-0">
             <thead class="table-light">
                 <tr>
                     <th class="ps-4 text-uppercase text-muted small fw-bold">Nome / Razão Social</th>
@@ -71,9 +80,14 @@
                 {% empty %}
                 <tr>
                     <td colspan="5" class="text-center py-5">
-                        <div class="opacity-25 mb-3"><i class="fas fa-users-slash fa-3x"></i></div>
-                        <h5 class="text-muted">Nenhum cliente encontrado</h5>
-                        <p class="mb-0 text-muted small">Comece cadastrando seu primeiro cliente.</p>
+                        <div class="opacity-25 mb-3"><i class="fas fa-search fa-3x"></i></div>
+                        {% if request.GET.q %}
+                            <h5 class="text-muted">Nenhum resultado para "{{ request.GET.q }}"</h5>
+                            <a href="{% url 'lista_clientes' %}" class="btn btn-sm btn-primary mt-2">Limpar Pesquisa</a>
+                        {% else %}
+                            <h5 class="text-muted">Nenhum cliente cadastrado ainda.</h5>
+                            <p class="mb-0 text-muted small">Clique em "Novo Cliente" para começar.</p>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -85,16 +99,4 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-    // Filtro Rápido via JS (Sem recarregar a página)
-    document.getElementById('filtroClientes').addEventListener('keyup', function() {
-        let valor = this.value.toLowerCase();
-        let linhas = document.querySelectorAll('#tabelaClientes tbody tr');
-        
-        linhas.forEach(linha => {
-            let texto = linha.textContent.toLowerCase();
-            linha.style.display = texto.includes(valor) ? '' : 'none';
-        });
-    });
-</script>
 {% endblock %}
