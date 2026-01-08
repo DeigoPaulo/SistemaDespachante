@@ -7,7 +7,6 @@ from django.utils import timezone
 # ==============================================================================
 
 class Despachante(models.Model):
-    # --- SEUS CAMPOS ORIGINAIS (MANTIDOS) ---
     nome_fantasia = models.CharField(max_length=255)
     razao_social = models.CharField(max_length=255)
     cnpj = models.CharField(max_length=18, unique=True)
@@ -27,6 +26,16 @@ class Despachante(models.Model):
         max_digits=10, decimal_places=2, default=100.00, 
         help_text="Valor da assinatura mensal deste despachante."
     )
+    
+    # ===> NOVO CAMPO: DIA DE VENCIMENTO <===
+    # Cria opções do dia 1 ao 28 (para evitar problemas com Fevereiro)
+    DIA_VENCIMENTO_CHOICES = [(i, f'Dia {i}') for i in range(1, 29)]
+    dia_vencimento = models.IntegerField(
+        choices=DIA_VENCIMENTO_CHOICES, 
+        default=10, 
+        verbose_name="Dia de Vencimento Preferencial"
+    )
+
     asaas_customer_id = models.CharField(
         max_length=50, blank=True, null=True, 
         verbose_name="ID Asaas",
@@ -151,9 +160,18 @@ class Atendimento(models.Model):
     cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE)
     veiculo = models.ForeignKey('Veiculo', on_delete=models.CASCADE)
 
+    # --- NOVO CAMPO: Responsável Técnico ---
+    # Armazena quem é o responsável pelo processo (pode ser diferente de quem digitou)
+    responsavel = models.ForeignKey(
+        User, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='atendimentos_responsaveis',
+        verbose_name="Responsável Técnico"
+    )
+
     numero_atendimento = models.CharField(max_length=50, blank=True, null=True)
-    
-    # Mantivemos como CharField para não quebrar o histórico antigo
     servico = models.CharField(max_length=100) 
 
     status = models.CharField(
@@ -162,11 +180,7 @@ class Atendimento(models.Model):
 
     observacoes_internas = models.TextField(blank=True, null=True)
     
-    # --- ALTERAÇÃO AQUI ---
-    # Mudamos de auto_now_add=True para default=timezone.now
-    # Isso permite que o campo apareça no formulário e seja editável.
     data_solicitacao = models.DateField(default=timezone.now)
-    
     data_entrega = models.DateField(null=True, blank=True, verbose_name="Prazo de Entrega")
 
     def __str__(self):

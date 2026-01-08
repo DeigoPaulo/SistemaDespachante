@@ -72,9 +72,40 @@
                         <span class="text-muted small">{{ cliente.cidade }}/{{ cliente.uf }}</span>
                     </td>
                     <td class="text-end pe-4" style="position: relative; z-index: 2;">
-                        <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-sm btn-outline-secondary" title="Editar">
-                            <i class="fas fa-pen"></i>
-                        </a>
+                        <div class="btn-group">
+                            <a href="{% url 'editar_cliente' cliente.id %}" class="btn btn-sm btn-outline-secondary" title="Editar">
+                                <i class="fas fa-pen"></i>
+                            </a>
+
+                            {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+                                <button type="button" class="btn btn-sm btn-outline-danger" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#modalExcluirRapido{{ cliente.id }}" 
+                                        title="Excluir">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            {% endif %}
+                        </div>
+
+                        {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+                        <div class="modal fade" id="modalExcluirRapido{{ cliente.id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-sm modal-dialog-centered">
+                                <div class="modal-content">
+                                    <div class="modal-body text-center p-4">
+                                        <i class="fas fa-exclamation-circle text-danger fa-3x mb-3"></i>
+                                        <p class="mb-0">Tem certeza que deseja excluir <strong>{{ cliente.nome }}</strong>?</p>
+                                    </div>
+                                    <div class="modal-footer justify-content-center p-2 border-0">
+                                        <button type="button" class="btn btn-light btn-sm px-3" data-bs-dismiss="modal">Cancelar</button>
+                                        <form action="{% url 'excluir_cliente' cliente.id %}" method="post" style="display:inline;">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-danger btn-sm px-3">Sim, Excluir</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
                     </td>
                 </tr>
                 {% empty %}
@@ -96,7 +127,4 @@
     </div>
 </div>
 
-{% endblock %}
-
-{% block extra_js %}
 {% endblock %}

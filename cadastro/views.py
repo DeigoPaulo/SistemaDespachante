@@ -21,6 +21,7 @@ from django.contrib.sessions.models import Session
 from .models import PerfilUsuario  # Importe seu modelo de perfil criado
 from .asaas import gerar_boleto_asaas
 from django.contrib.auth.models import User
+from .forms import UsuarioMasterEditForm 
 
 from django.http import FileResponse
 from .forms import CompressaoPDFForm
@@ -28,61 +29,90 @@ from .utils import comprimir_pdf_memoria
 from django.urls import reverse
 import base64
 
-
+from django.contrib.auth.decorators import user_passes_test
+from django.db.models import Sum
+from .models import Despachante, PerfilUsuario
+from .asaas import gerar_boleto_asaas
+from datetime import timedelta
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.hashers import make_password
+from django.db import transaction
+from .forms import AtendimentoForm, ClienteForm, VeiculoForm, CompressaoPDFForm, DespachanteForm, UsuarioMasterForm
 
 # ==============================================================================
-# 1. VIEW DE LOGIN (Com suporte a E-mail e Usuário)
+# 1. VIEW DE LOGIN (Com Bloqueio de Validade + E-mail + Single Session)
 # ==============================================================================
 def minha_view_de_login(request):
     contexto = {'erro_login': False}
 
     if request.method == 'POST':
         # 1. Pega dados do form
-        # O campo HTML chama 'username', mas o usuário pode ter digitado um e-mail
         login_input = request.POST.get('username') 
         password_form = request.POST.get('password')
         
-        # Variável que vamos passar para o authenticate
         username_para_autenticar = login_input
 
-        # --- LÓGICA NOVA: Verificar se é E-mail ---
-        # Se tiver '@', assumimos que é um email e buscamos o username correspondente
+        # --- LÓGICA: Verificar se é E-mail ---
         if '@' in login_input:
             try:
                 user_obj = User.objects.get(email=login_input)
                 username_para_autenticar = user_obj.username
             except User.DoesNotExist:
-                # Se não achar o email, deixa como está (o authenticate vai falhar depois)
+                # Se não achar, segue com o texto original (o authenticate vai falhar)
                 pass
         # ------------------------------------------
 
-        # 2. Autentica (usando o username descoberto ou o digitado)
+        # 2. Autentica
         user = authenticate(request, username=username_para_autenticar, password=password_form)
 
         if user is not None:
-            # Faz o login (cria sessão em memória)
+            # =================================================================
+            # ⛔ BLOQUEIO FINANCEIRO (NOVO)
+            # Verifica se a assinatura venceu antes de deixar entrar
+            # =================================================================
+            try:
+                # Tenta pegar o perfil (Superusuários podem não ter perfil, por isso o try)
+                perfil_check = user.perfilusuario
+                
+                # Se tiver data definida E a data for menor que hoje (passado)
+                if perfil_check.data_expiracao and perfil_check.data_expiracao < timezone.now().date():
+                    
+                    # Formata a data para mostrar na mensagem (Ex: 05/01/2026)
+                    data_venc = perfil_check.data_expiracao.strftime('%d/%m/%Y')
+                    
+                    # Mensagem de erro para o usuário
+                    messages.error(request, f"🔒 Acesso Bloqueado: Sua assinatura venceu em {data_venc}. Entre em contato com o suporte para regularizar.")
+                    
+                    # Impede o login e devolve para a tela
+                    contexto['erro_login'] = True
+                    return render(request, 'login.html', context=contexto)
+            
+            except AttributeError:
+                # Se for um superuser sem perfil cadastrado, deixa passar (ou trate como preferir)
+                pass
+            # =================================================================
+
+            # 3. Se passou pelo bloqueio, faz o login oficial
             login(request, user)
 
-            # GARANTIA: Se a sessão não tiver chave ainda, força criar e salvar agora
+            # GARANTIA: Se a sessão não tiver chave ainda, força criar
             if not request.session.session_key:
                 request.session.create()
 
             nova_chave = request.session.session_key
 
-            # 3. Lógica de Single Session (Um dispositivo por vez)
-            # Usa get_or_create para evitar erro se o perfil ainda não existir
+            # 4. Lógica de Single Session (Um dispositivo por vez)
             perfil, created = PerfilUsuario.objects.get_or_create(user=user)
             chave_antiga = perfil.ultimo_session_key
 
             if chave_antiga and chave_antiga != nova_chave:
                 try:
-                    # Tenta apagar a sessão anterior do banco
+                    # Tenta apagar a sessão anterior do banco (derruba o outro PC)
                     Session.objects.get(session_key=chave_antiga).delete()
                 except Session.DoesNotExist:
-                    # Se já não existia, segue o jogo
                     pass
 
-            # 4. Atualiza o perfil com a chave atual
+            # Atualiza o perfil com a chave atual
             perfil.ultimo_session_key = nova_chave
             perfil.save()
 
@@ -91,6 +121,8 @@ def minha_view_de_login(request):
         else:
             # Senha incorreta ou usuário não encontrado
             contexto['erro_login'] = True
+            # Adiciona mensagem visual se seu template suportar
+            messages.error(request, "Usuário ou senha incorretos.")
 
     return render(request, 'login.html', context=contexto)
 
@@ -270,7 +302,7 @@ def detalhe_cliente(request, id):
         despachante=perfil.despachante
     ).order_by('-id')
     
-    return render(request, 'detalhe_cliente.html', {
+    return render(request, 'clientes/detalhe_cliente.html', {
         'cliente': cliente,
         'veiculos': veiculos
     })
@@ -279,23 +311,42 @@ def detalhe_cliente(request, id):
 
 @login_required
 def excluir_cliente(request, id):
-    # 1. Identifica o usuário logado
+    # 1. Pega o perfil com segurança
     try:
         perfil = request.user.perfilusuario
     except:
-        return redirect('dashboard') # Segurança extra se o user estiver bugado
+        return redirect('dashboard')
 
-    # 2. Busca Segura: Só acha se pertencer ao despachante logado
+    # 2. Busca o cliente (Garante isolamento do escritório)
     cliente = get_object_or_404(Cliente, id=id, despachante=perfil.despachante)
 
-    # 3. Só deleta se for uma requisição POST (vinda do Modal/Formulário)
+    # 3. VERIFICAÇÃO DUPLA (O Pulo do Gato)
+    # Se NÃO for superusuário E TAMBÉM NÃO for Admin, bloqueia.
+    if not request.user.is_superuser and perfil.tipo_usuario != 'ADMIN':
+        messages.error(request, "⛔ Apenas Administradores podem excluir clientes.")
+        return redirect('lista_clientes')
+
+    # 4. Executa a exclusão
     if request.method == 'POST':
-        nome = cliente.nome
-        cliente.delete()
-        messages.success(request, f"Cliente '{nome}' excluído com sucesso.")
+        try:
+            cliente.delete()
+            messages.success(request, "Cliente excluído com sucesso.")
+        except Exception:
+            messages.error(request, "Erro: Este cliente tem processos vinculados.")
         return redirect('lista_clientes')
     
-    # Se tentar acessar via URL direta (GET), apenas redireciona sem apagar
+    return redirect('lista_clientes')
+
+    # 4. Executa a exclusão
+    if request.method == 'POST':
+        nome = cliente.nome
+        try:
+            cliente.delete()
+            messages.success(request, f"Cliente '{nome}' excluído com sucesso.")
+        except Exception as e:
+            messages.error(request, "Não é possível excluir este cliente pois ele possui registros vinculados.")
+        return redirect('lista_clientes')
+    
     return redirect('lista_clientes')
 
 @login_required
@@ -316,25 +367,62 @@ def lista_clientes(request):
             Q(telefone__icontains=search_term)
         )
 
-    return render(request, 'lista_clientes.html', {'clientes': clientes})
+    return render(request, 'clientes/lista_clientes.html', {'clientes': clientes})
 
 @login_required
 def excluir_veiculo(request, id):
-    perfil = request.user.perfilusuario
+    try:
+        perfil = request.user.perfilusuario
+    except:
+        return redirect('dashboard')
+
     veiculo = get_object_or_404(Veiculo, id=id, despachante=perfil.despachante)
 
+    # TRAVA DE SEGURANÇA
+    if not request.user.is_superuser and perfil.tipo_usuario != 'ADMIN':
+        messages.error(request, "⛔ Apenas Administradores podem excluir veículos.")
+        return redirect('lista_clientes')
+
     if request.method == 'POST':
-        placa = veiculo.placa
         veiculo.delete()
-        messages.success(request, f"Veículo {placa} excluído.")
-        return redirect('lista_clientes') # Geralmente voltamos pra lista de clientes ou dashboard
+        messages.success(request, "Veículo excluído.")
+        return redirect('lista_clientes')
 
     return redirect('lista_clientes')
 
 @login_required
 def excluir_atendimento(request, id):
-    perfil = request.user.perfilusuario
+    try:
+        perfil = request.user.perfilusuario
+    except:
+        return redirect('dashboard')
+
+    # Busca o atendimento garantindo que pertence ao escritório do usuário (SaaS)
     atendimento = get_object_or_404(Atendimento, id=id, despachante=perfil.despachante)
+
+    # --- TRAVA REMOVIDA: Agora qualquer funcionário do escritório pode excluir ---
+    
+    if request.method == 'POST':
+        atendimento.delete()
+        messages.success(request, "Processo removido com sucesso.")
+        return redirect('dashboard')
+
+    return redirect('dashboard')
+
+
+@login_required
+def excluir_atendimento(request, id):
+    try:
+        perfil = request.user.perfilusuario
+    except:
+        return redirect('dashboard')
+
+    atendimento = get_object_or_404(Atendimento, id=id, despachante=perfil.despachante)
+
+    # TRAVA DE SEGURANÇA
+    if perfil.tipo_usuario != 'ADMIN' and not request.user.is_superuser:
+        messages.error(request, "⛔ Permissão Negada: Apenas Administradores podem excluir processos.")
+        return redirect('dashboard')
 
     if request.method == 'POST':
         atendimento.delete()
@@ -459,7 +547,7 @@ def novo_cliente(request):
             pass
 
     # Mantive exatamente o nome do template que você usava
-    return render(request, 'cadastro_cliente.html')
+    return render(request, 'clientes/cadastro_cliente.html')
 
 @login_required
 def novo_veiculo(request):
@@ -481,19 +569,35 @@ def novo_veiculo(request):
 def cadastro_rapido(request):
     """
     Tela de lançamento ágil: Busca cliente + Adiciona Veículos + Cria Processos em lote
-    Agora carrega os serviços cadastrados no banco para o select.
+    Agora suporta a escolha de um Responsável Técnico.
     """
     perfil = getattr(request.user, 'perfilusuario', None)
     if not perfil:
         return redirect('logout')
 
-    # --- NOVO: Carrega serviços para o dropdown dinâmico ---
+    # --- CARREGAMENTOS (GET) ---
     servicos_db = TipoServico.objects.filter(despachante=perfil.despachante, ativo=True)
+    
+    # --- NOVO: Busca a equipe do despachante para preencher o Select de responsáveis ---
+    equipe = PerfilUsuario.objects.filter(
+        despachante=perfil.despachante
+    ).select_related('user')
 
     if request.method == 'POST':
         try:
             with transaction.atomic():
                 despachante = perfil.despachante
+
+                # --- NOVO: Define quem é o responsável ---
+                responsavel_id = request.POST.get('responsavel_id')
+                responsavel_obj = request.user # Padrão: Usuário logado
+                
+                if responsavel_id:
+                    # Tenta buscar o usuário selecionado
+                    try:
+                        responsavel_obj = User.objects.get(id=responsavel_id)
+                    except User.DoesNotExist:
+                        pass # Se der erro, mantém o usuário logado como fallback
 
                 # 1. VERIFICA SE UM CLIENTE FOI SELECIONADO
                 cliente_id = request.POST.get('cliente_id')
@@ -504,12 +608,11 @@ def cadastro_rapido(request):
                 cliente = get_object_or_404(Cliente, id=cliente_id, despachante=despachante)
 
                 # 2. CAPTURA AS LISTAS DE DADOS
-                # Arrays vindos do formulário dinâmico
                 placas = request.POST.getlist('veiculo_placa[]')
                 renavams = request.POST.getlist('veiculo_renavam[]')
                 modelos = request.POST.getlist('veiculo_modelo[]')
                 cores = request.POST.getlist('veiculo_cor[]')
-                anos = request.POST.getlist('veiculo_ano[]') # Usamos um campo só para ano no modal
+                anos = request.POST.getlist('veiculo_ano[]')
                 marcas = request.POST.getlist('veiculo_marca[]')
                 chassis = request.POST.getlist('veiculo_chassi[]')
                 tipos = request.POST.getlist('veiculo_tipo[]')
@@ -518,7 +621,6 @@ def cadastro_rapido(request):
                 atendimentos = request.POST.getlist('numero_atendimento[]')
                 obs_geral = request.POST.get('observacoes', '')
                 
-                # --- NOVO: Captura a data de entrega manual ---
                 prazo_input = request.POST.get('prazo_entrega')
 
                 # 3. LOOP PARA SALVAR VEÍCULOS E CRIAR PROCESSOS
@@ -528,7 +630,7 @@ def cadastro_rapido(request):
                     if not placa_limpa: continue
                     if len(placa_limpa) > 7: placa_limpa = placa_limpa[:7]
 
-                    # Tratamento de ano (evita erro se vier vazio)
+                    # Tratamento de ano
                     af = anos[i] if (i < len(anos) and anos[i] and anos[i].isdigit()) else 2000
                     
                     # Cria ou Atualiza o Veículo
@@ -557,9 +659,12 @@ def cadastro_rapido(request):
                         cliente=cliente,
                         veiculo=veiculo,
                         servico=servico_atual,
+                        
+                        # --- GRAVA O RESPONSÁVEL AQUI ---
+                        responsavel=responsavel_obj,
+                        
                         numero_atendimento=num_atend_atual,
                         observacoes_internas=obs_geral,
-                        # --- Salva a data manual se ela existir ---
                         data_entrega=prazo_input if prazo_input else None,
                         status='SOLICITADO'
                     )
@@ -570,9 +675,10 @@ def cadastro_rapido(request):
             print(f"❌ Erro Crítico no Cadastro Rápido: {e}")
             pass
 
-    # Renderiza o template passando os serviços do banco
+    # Renderiza o template passando serviços e a equipe
     return render(request, 'processos/cadastro_rapido.html', {
-        'servicos_db': servicos_db
+        'servicos_db': servicos_db,
+        'equipe': equipe  # Variável nova disponível no template
     })
 
 # --- API DE BUSCA DE CLIENTES (AUTOCOMPLETE) ---
@@ -663,7 +769,7 @@ def editar_cliente(request, id):
         form = ClienteForm(instance=cliente)
 
     # CORREÇÃO AQUI: Apontando para o template novo de colunas
-    return render(request, 'editar_cliente.html', {
+    return render(request, 'clientes/editar_cliente.html', {
         'form': form
     })
 
@@ -682,7 +788,7 @@ def editar_veiculo(request, id):
         form = VeiculoForm(request.user, instance=veiculo)
 
     # CORREÇÃO AQUI: Apontando para o template novo de veículo
-    return render(request, 'editar_veiculo.html', {
+    return render(request, 'veiculos/editar_veiculo.html', {
         'form': form
     })
 
@@ -710,10 +816,21 @@ def gerenciar_servicos(request):
 
 @login_required
 def excluir_servico(request, id):
-    perfil = request.user.perfilusuario
+    try:
+        perfil = request.user.perfilusuario
+    except:
+        return redirect('dashboard')
+
     servico = get_object_or_404(TipoServico, id=id, despachante=perfil.despachante)
-    servico.ativo = False # Soft delete para não quebrar histórico
+    
+    # TRAVA DE SEGURANÇA
+    if perfil.tipo_usuario != 'ADMIN' and not request.user.is_superuser:
+        messages.error(request, "⛔ Permissão Negada: Apenas Administradores podem gerenciar serviços.")
+        return redirect('gerenciar_servicos')
+
+    servico.ativo = False # Soft delete
     servico.save()
+    messages.success(request, "Serviço removido da lista.")
     return redirect('gerenciar_servicos')
 
 # --- ORÇAMENTOS ---
@@ -852,16 +969,25 @@ def listar_orcamentos(request):
 
 @login_required
 def excluir_orcamento(request, id):
-    # 1. Busca Segura (Só acha se for do despachante logado)
-    orcamento = get_object_or_404(Orcamento, id=id, despachante=request.user.perfilusuario.despachante)
+    try:
+        perfil = request.user.perfilusuario
+    except:
+        return redirect('dashboard')
+
+    orcamento = get_object_or_404(Orcamento, id=id, despachante=perfil.despachante)
     
-    # 2. Executa a exclusão apenas se for POST
+    # --- NOVA TRAVA DE SEGURANÇA ---
+    # Se o usuário NÃO for Admin/Dono, verificamos o status.
+    if not request.user.is_superuser and perfil.tipo_usuario != 'ADMIN':
+        if orcamento.status == 'APROVADO':
+            messages.error(request, "⛔ Permissão Negada: Operadores não podem excluir orçamentos já APROVADOS.")
+            return redirect('listar_orcamentos')
+
     if request.method == 'POST':
         orcamento.delete()
         messages.success(request, f"Orçamento #{id} excluído com sucesso.")
         return redirect('listar_orcamentos')
     
-    # Se tentar acessar direto pela URL, volta para a lista
     return redirect('listar_orcamentos')
 
 @login_required
@@ -913,7 +1039,7 @@ def relatorio_mensal(request):
         'anos_lista': range(hoje.year - 2, hoje.year + 2), # Ex: 2023 a 2027
     }
 
-    return render(request, 'relatorio_mensal.html', context)
+    return render(request, 'relatorios/relatorio_mensal.html', context)
 
 
 @login_required
@@ -1002,7 +1128,7 @@ def relatorio_servicos(request):
         'filtros': request.GET
     }
 
-    return render(request, 'relatorio_servicos.html', context)
+    return render(request, 'relatorios/relatorio_servicos.html', context)
 
 @login_required
 def selecao_documento(request):
@@ -1259,3 +1385,246 @@ def ferramentas_compressao(request):
         form = CompressaoPDFForm()
 
     return render(request, 'ferramentas/compressao.html', {'form': form})
+
+# ==============================================================================
+#  ÁREA MASTER (Gestão SaaS - Exclusiva do Superusuário)
+# ==============================================================================
+
+def is_master(user):
+    """Verifica se o usuário é Superusuário (Dono do Sistema)"""
+    return user.is_superuser
+
+# ------------------------------------------------------------------------------
+# 1. PAINEL FINANCEIRO (Dashboard do Dono)
+# ------------------------------------------------------------------------------
+@login_required
+@user_passes_test(is_master)
+def financeiro_master(request):
+    """
+    Painel de Controle Financeiro exclusivo para o Dono do Software.
+    Mostra lista de clientes, status de pagamento e ações rápidas.
+    """
+    despachantes = Despachante.objects.all().order_by('nome_fantasia')
+    
+    lista_financeira = []
+    total_receita_mensal = 0
+    total_inadimplentes = 0
+    
+    for d in despachantes:
+        # Pega o usuário ADMIN deste despachante para checar validade
+        admin_user = d.funcionarios.filter(tipo_usuario='ADMIN').first()
+        dias_restantes = admin_user.get_dias_restantes() if admin_user else 0
+        
+        status_cor = 'success'
+        status_texto = 'Em Dia'
+        
+        if dias_restantes is None:
+            status_texto = 'Vitalício'
+            status_cor = 'primary'
+        elif dias_restantes < 0:
+            status_texto = f'VENCIDO ({abs(dias_restantes)} dias)'
+            status_cor = 'danger'
+            total_inadimplentes += 1
+        elif dias_restantes <= 5:
+            status_texto = f'Vence logo ({dias_restantes} dias)'
+            status_cor = 'warning'
+            
+        lista_financeira.append({
+            'obj': d,
+            'admin_nome': admin_user.user.first_name if (admin_user and admin_user.user.first_name) else 'Sem Nome',
+            'email_admin': admin_user.user.email if admin_user else '',
+            'validade': dias_restantes,
+            'status_html': status_texto,
+            'cor': status_cor,
+            'valor': d.valor_mensalidade
+        })
+        
+        total_receita_mensal += d.valor_mensalidade
+
+    context = {
+        'lista_clientes': lista_financeira,
+        'total_receita': total_receita_mensal,
+        'total_clientes': despachantes.count(),
+        'total_inadimplentes': total_inadimplentes,
+        'hoje': timezone.now().date()
+    }
+    
+    return render(request, 'financeiro/painel_master.html', context)
+
+# ------------------------------------------------------------------------------
+# 2. AÇÕES FINANCEIRAS RÁPIDAS
+# ------------------------------------------------------------------------------
+@login_required
+@user_passes_test(is_master)
+def acao_cobrar_cliente(request, despachante_id):
+    """Gera boleto no Asaas imediatamente."""
+    despachante = get_object_or_404(Despachante, id=despachante_id)
+    resultado = gerar_boleto_asaas(despachante)
+    
+    if resultado['sucesso']:
+        messages.success(request, f"Cobrança gerada para {despachante.nome_fantasia}. Link: {resultado['link_fatura']}")
+    else:
+        messages.error(request, f"Erro ao cobrar: {resultado.get('erro')}")
+        
+    return redirect('financeiro_master')
+
+@login_required
+@user_passes_test(is_master)
+def acao_liberar_acesso(request, despachante_id):
+    """Dá 20 dias de acesso extra (Cortesia/Desbloqueio)."""
+    despachante = get_object_or_404(Despachante, id=despachante_id)
+    funcionarios = PerfilUsuario.objects.filter(despachante=despachante)
+    hoje = timezone.now().date()
+    
+    count = 0
+    for perfil in funcionarios:
+        if not perfil.data_expiracao or perfil.data_expiracao < hoje:
+            perfil.data_expiracao = hoje + timedelta(days=20)
+        else:
+            perfil.data_expiracao = perfil.data_expiracao + timedelta(days=20)
+        perfil.save()
+        count += 1
+        
+    messages.success(request, f"Acesso liberado por +20 dias para {despachante.nome_fantasia} ({count} usuários).")
+    return redirect('financeiro_master')
+
+# ------------------------------------------------------------------------------
+# 3. GESTÃO DE DESPACHANTES (CRUD SEM ADMIN)
+# ------------------------------------------------------------------------------
+@login_required
+@user_passes_test(is_master)
+def master_listar_despachantes(request):
+    despachantes = Despachante.objects.all().order_by('nome_fantasia')
+    return render(request, 'master/lista_despachantes.html', {'despachantes': despachantes})
+
+@login_required
+@user_passes_test(is_master)
+def master_editar_despachante(request, id=None):
+    if id:
+        despachante = get_object_or_404(Despachante, id=id)
+        titulo = f"Editar: {despachante.nome_fantasia}"
+    else:
+        despachante = None
+        titulo = "Novo Despachante"
+
+    if request.method == 'POST':
+        form = DespachanteForm(request.POST, instance=despachante)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Dados do despachante salvos com sucesso!")
+            return redirect('master_listar_despachantes')
+    else:
+        form = DespachanteForm(instance=despachante)
+
+    return render(request, 'master/form_despachante.html', {'form': form, 'titulo': titulo})
+
+# ------------------------------------------------------------------------------
+# 4. GESTÃO DE USUÁRIOS (CRUD SEM ADMIN)
+# ------------------------------------------------------------------------------
+@login_required
+@user_passes_test(is_master)
+def master_listar_usuarios(request):
+    # Lista usuários que têm perfil vinculado a despachante
+    usuarios = User.objects.filter(perfilusuario__isnull=False).select_related('perfilusuario__despachante')
+    return render(request, 'master/lista_usuarios.html', {'usuarios': usuarios})
+
+@login_required
+@user_passes_test(is_master)
+def master_criar_usuario(request):
+    if request.method == 'POST':
+        form = UsuarioMasterForm(request.POST)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # --- LÓGICA DE LOGIN (NOVO) ---
+                    # Pega o que foi digitado no campo 'username' e 'email'
+                    login_digitado = form.cleaned_data.get('username')
+                    email_digitado = form.cleaned_data['email']
+                    
+                    # Se digitou login, usa ele. Se deixou em branco, usa o e-mail como login.
+                    username_final = login_digitado if login_digitado else email_digitado
+
+                    # 1. Cria User (Auth)
+                    novo_user = User.objects.create(
+                        username=username_final,  # <--- AQUI ESTÁ A MUDANÇA
+                        email=email_digitado,
+                        first_name=form.cleaned_data['first_name'],
+                        last_name=form.cleaned_data['last_name'],
+                        password=make_password(form.cleaned_data['password'])
+                    )
+                    
+                    # 2. Cria Perfil (Vínculo) - Mantido igual
+                    PerfilUsuario.objects.create(
+                        user=novo_user,
+                        despachante=form.cleaned_data['despachante'],
+                        tipo_usuario=form.cleaned_data['tipo_usuario'],
+                        pode_fazer_upload=True
+                    )
+                    
+                messages.success(request, f"Usuário criado com sucesso! Login de acesso: {username_final}")
+                return redirect('master_listar_usuarios')
+            
+            except Exception as e:
+                # O erro mais comum aqui será "UNIQUE constraint failed" se o login já existir
+                messages.error(request, f"Erro ao criar usuário: O Login ou E-mail já está em uso.")
+    else:
+        form = UsuarioMasterForm()
+
+    return render(request, 'master/form_usuario.html', {'form': form})
+
+
+@login_required
+@user_passes_test(is_master)
+def master_editar_usuario(request, id):
+    user_edit = get_object_or_404(User, id=id)
+    
+    # Tenta pegar o perfil, se não existir (ex: superuser antigo), cria um temporário na memória
+    try:
+        perfil = user_edit.perfilusuario
+    except PerfilUsuario.DoesNotExist:
+        perfil = None
+
+    if request.method == 'POST':
+        form = UsuarioMasterEditForm(request.POST)
+        if form.is_valid():
+            try:
+                with transaction.atomic():
+                    # 1. Atualiza dados básicos do User
+                    user_edit.first_name = form.cleaned_data['first_name']
+                    user_edit.last_name = form.cleaned_data['last_name']
+                    
+                    # 2. Se digitou senha nova, atualiza
+                    nova_senha = form.cleaned_data['password']
+                    if nova_senha:
+                        user_edit.password = make_password(nova_senha)
+                    
+                    user_edit.save()
+
+                    # 3. Atualiza o Perfil (Vínculo e Permissão)
+                    # Se o usuário não tinha perfil, cria agora
+                    if not perfil:
+                        perfil = PerfilUsuario(user=user_edit)
+                    
+                    perfil.despachante = form.cleaned_data['despachante']
+                    perfil.tipo_usuario = form.cleaned_data['tipo_usuario']
+                    perfil.save()
+
+                messages.success(request, f"Usuário {user_edit.email} atualizado com sucesso!")
+                return redirect('master_listar_usuarios')
+            except Exception as e:
+                messages.error(request, f"Erro ao atualizar: {e}")
+    else:
+        # Preenche o formulário com os dados atuais
+        initial_data = {
+            'first_name': user_edit.first_name,
+            'last_name': user_edit.last_name,
+            'email': user_edit.email,
+            'despachante': perfil.despachante if perfil else None,
+            'tipo_usuario': perfil.tipo_usuario if perfil else 'OPERAR',
+        }
+        form = UsuarioMasterEditForm(initial=initial_data)
+
+    return render(request, 'master/form_usuario.html', {
+        'form': form, 
+        'titulo': f"Editar Usuário: {user_edit.first_name}"
+    })

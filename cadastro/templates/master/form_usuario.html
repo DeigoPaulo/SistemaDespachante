@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Novo Usuário{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            
+            <div class="card border-0 shadow-lg mt-4">
+                <div class="card-header bg-dark text-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i> Criar Acesso (Login)</h5>
+                </div>
+                <div class="card-body p-4">
+                    
+                    {% if form.errors %}
+                        <div class="alert alert-danger">
+                            <ul class="mb-0">
+                            {% for field in form %}
+                                {% for error in field.errors %}
+                                    <li><strong>{{ field.label }}:</strong> {{ error }}</li>
+                                {% endfor %}
+                            {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Nome</label>
+                                {{ form.first_name }}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Sobrenome</label>
+                                {{ form.last_name }}
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold text-primary">Login (Usuário)</label>
+                                {{ form.username }}
+                                <div class="form-text" style="font-size: 0.75rem;">Usado para entrar no sistema.</div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">E-mail</label>
+                                {{ form.email }}
+                                <div class="form-text" style="font-size: 0.75rem;">Para recuperação de senha.</div>
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Senha de Acesso</label>
+                                {{ form.password }}
+                            </div>
+
+                            <div class="col-12">
+                                <hr class="my-3">
+                                <h6 class="text-secondary fw-bold small text-uppercase">
+                                    <i class="fas fa-building me-1"></i> Vínculo e Permissões
+                                </h6>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Vincular a qual Empresa?</label>
+                                {{ form.despachante }}
+                            </div>
+                            
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Nível de Acesso</label>
+                                {{ form.tipo_usuario }}
+                                <div class="alert alert-light border mt-2 py-2 small">
+                                    <i class="fas fa-info-circle me-1 text-primary"></i> 
+                                    <strong>Administrador:</strong> Acesso total ao financeiro da empresa.<br>
+                                    <strong>Operador:</strong> Apenas cadastra e edita processos.
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-success py-2 fw-bold shadow-sm">
+                                <i class="fas fa-check me-2"></i> Confirmar Cadastro
+                            </button>
+                            <a href="{% url 'master_listar_usuarios' %}" class="btn btn-outline-secondary">Cancelar</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

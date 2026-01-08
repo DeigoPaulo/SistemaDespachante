@@ -26,13 +26,12 @@
         .form-control:focus {
             box-shadow: none;
             border-color: #0d6efd;
-            z-index: 1; /* Garante que a borda fique bonita */
+            z-index: 1; 
         }
         .input-group-text {
             background-color: #f8f9fa;
             border-right: none;
         }
-        /* Ajuste para o campo de senha se unir ao botão do olho */
         .campo-senha {
             border-left: none;
             border-right: none;
@@ -61,6 +60,15 @@
                 <p class="text-muted small">Gestão Inteligente de Veículos</p>
             </div>
 
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-danger d-flex align-items-center shadow-sm border-0 mb-4 py-2" role="alert">
+                        <i class="fas fa-exclamation-circle me-2"></i>
+                        <div class="small">{{ message }}</div>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
             <form method="post">
                 {% csrf_token %}
                 
@@ -68,7 +76,9 @@
                     <label class="form-label fw-bold small text-muted text-uppercase">Usuário ou E-mail</label>
                     <div class="input-group">
                         <span class="input-group-text"><i class="fas fa-user text-muted"></i></span>
-                        <input type="text" name="username" class="form-control" style="border-left: none;" placeholder="Usuário ou E-mail" required>
+                        <input type="text" name="username" class="form-control" style="border-left: none;" 
+                               placeholder="Usuário ou E-mail" required 
+                               value="{{ request.POST.username|default:'' }}">
                     </div>
                 </div>
 
@@ -97,12 +107,6 @@
                     <i class="fas fa-sign-in-alt me-2"></i> Entrar no Sistema
                 </button>
             </form>
-
-            {% if erro_login %}
-            <div class="alert alert-danger mt-4 text-center py-2 small shadow-sm border-0 bg-danger-subtle text-danger">
-                <i class="fas fa-exclamation-circle me-1"></i> Usuário/E-mail ou senha incorretos.
-            </div>
-            {% endif %}
             
         </div>
         <div class="card-footer bg-light text-center py-3 border-0 rounded-bottom-4">

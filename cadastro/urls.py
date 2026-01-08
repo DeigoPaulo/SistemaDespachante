@@ -3,65 +3,86 @@ from django.contrib.auth import views as auth_views
 from . import views 
 
 urlpatterns = [
-    # --- Autenticação (Login/Logout) ---
+    # ==========================================================================
+    # 1. AUTENTICAÇÃO E CONTA
+    # ==========================================================================
     path('login/', views.minha_view_de_login, name='login'),
     path('logout/', auth_views.LogoutView.as_view(), name='logout'),
 
-    # --- RECUPERAÇÃO DE SENHA (CORRIGIDO) ---
-    # Agora apontando para a pasta 'registration' e os arquivos corretos
-    
-    # 1. Solicitar a troca
+    # Recuperação de Senha
     path('reset-password/', auth_views.PasswordResetView.as_view(template_name='registration/password_reset_form.html'), name='password_reset'),
-    
-    # 2. Aviso de email enviado
     path('reset-password/done/', auth_views.PasswordResetDoneView.as_view(template_name='registration/password_reset_done.html'), name='password_reset_done'),
-    
-    # 3. Link seguro para definir nova senha
     path('reset-password/confirm/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='registration/password_reset_confirm.html'), name='password_reset_confirm'),
-    
-    # 4. Sucesso (Senha alterada)
     path('reset-password/complete/', auth_views.PasswordResetCompleteView.as_view(template_name='registration/password_reset_complete.html'), name='password_reset_complete'),
 
-    # --- Dashboard (Página Inicial) ---
+    # ==========================================================================
+    # 2. DASHBOARD E OPERACIONAL
+    # ==========================================================================
     path('', views.dashboard, name='dashboard'),
-
-    # --- Gestão de Atendimentos (Processos) ---
+    
+    # Processos / Atendimentos
     path('atendimento/novo/', views.novo_atendimento, name='novo_atendimento'),
     path('atendimento/editar/<int:id>/', views.editar_atendimento, name='editar_atendimento'),
-    
-    # --- Processo Rápido e APIs ---
-    path('novo-processo-rapido/', views.cadastro_rapido, name='cadastro_rapido'),
-    path('api/buscar-clientes/', views.buscar_clientes, name='buscar_clientes'),
-    path('api/veiculos-cliente/<int:cliente_id>/', views.api_veiculos_cliente, name='api_veiculos_cliente'),
-    path('cliente/<int:id>/detalhes/', views.detalhe_cliente, name='detalhe_cliente'),
-    path('clientes/', views.lista_clientes, name='lista_clientes'),
-    path('relatorios/servicos/', views.relatorio_servicos, name='relatorio_servicos'),
-
-    # --- Cadastros de Base ---
-    path('cliente/novo/', views.novo_cliente, name='novo_cliente'),
-    path('veiculo/novo/', views.novo_veiculo, name='novo_veiculo'),
-    path('cliente/editar/<int:id>/', views.editar_cliente, name='editar_cliente'),
-    path('veiculo/editar/<int:id>/', views.editar_veiculo, name='editar_veiculo'),
-
-    # --- Exclusão (Admin) ---
-    path('cliente/excluir/<int:id>/', views.excluir_cliente, name='excluir_cliente'),
-    path('veiculo/excluir/<int:id>/', views.excluir_veiculo, name='excluir_veiculo'),
     path('atendimento/excluir/<int:id>/', views.excluir_atendimento, name='excluir_atendimento'),
+    path('novo-processo-rapido/', views.cadastro_rapido, name='cadastro_rapido'),
+
+    # ==========================================================================
+    # 3. CADASTROS DE BASE (Clientes, Veículos, Serviços)
+    # ==========================================================================
+    path('clientes/', views.lista_clientes, name='lista_clientes'),
+    path('cliente/novo/', views.novo_cliente, name='novo_cliente'),
+    path('cliente/editar/<int:id>/', views.editar_cliente, name='editar_cliente'),
+    path('cliente/excluir/<int:id>/', views.excluir_cliente, name='excluir_cliente'),
+    path('cliente/<int:id>/detalhes/', views.detalhe_cliente, name='detalhe_cliente'),
+
+    path('veiculo/novo/', views.novo_veiculo, name='novo_veiculo'),
+    path('veiculo/editar/<int:id>/', views.editar_veiculo, name='editar_veiculo'),
+    path('veiculo/excluir/<int:id>/', views.excluir_veiculo, name='excluir_veiculo'),
 
     path('servicos/', views.gerenciar_servicos, name='gerenciar_servicos'),
     path('servicos/excluir/<int:id>/', views.excluir_servico, name='excluir_servico'),
+
+    # ==========================================================================
+    # 4. ORÇAMENTOS E COMERCIAL
+    # ==========================================================================
+    path('orcamentos/', views.listar_orcamentos, name='listar_orcamentos'),
     path('orcamento/', views.novo_orcamento, name='novo_orcamento'),
     path('orcamento/<int:id>/', views.detalhe_orcamento, name='detalhe_orcamento'),
     path('orcamento/<int:id>/aprovar/', views.aprovar_orcamento, name='aprovar_orcamento'),
-    path('orcamentos/', views.listar_orcamentos, name='listar_orcamentos'),
     path('orcamento/<int:id>/excluir/', views.excluir_orcamento, name='excluir_orcamento'),
 
+    # ==========================================================================
+    # 5. FERRAMENTAS E UTILITÁRIOS
+    # ==========================================================================
+    path('api/buscar-clientes/', views.buscar_clientes, name='buscar_clientes'),
+    path('api/veiculos-cliente/<int:cliente_id>/', views.api_veiculos_cliente, name='api_veiculos_cliente'),
+    
     path('documentos/gerar/', views.selecao_documento, name='selecao_documento'),
     path('documentos/imprimir/', views.imprimir_documento, name='imprimir_documento'),
+    path('ferramentas/comprimir-pdf/', views.ferramentas_compressao, name='ferramentas_compressao'),
 
+    path('relatorios/servicos/', views.relatorio_servicos, name='relatorio_servicos'),
     path('relatorios/mensal/', views.relatorio_mensal, name='relatorio_mensal'),
 
+    # Financeiro (Usuário Comum pagando o próprio boleto)
     path('financeiro/pagar/', views.pagar_mensalidade, name='pagar_mensalidade'),
 
-    path('ferramentas/comprimir-pdf/', views.ferramentas_compressao, name='ferramentas_compressao'),
+    # ==========================================================================
+    # 6. ÁREA MASTER (Exclusiva Superusuário / Dono do SaaS)
+    # ==========================================================================
+    
+    # Painel Financeiro Geral
+    path('financeiro/master/', views.financeiro_master, name='financeiro_master'),
+    path('financeiro/cobrar/<int:despachante_id>/', views.acao_cobrar_cliente, name='acao_cobrar_cliente'),
+    path('financeiro/liberar/<int:despachante_id>/', views.acao_liberar_acesso, name='acao_liberar_acesso'),
+
+    # Gestão de Despachantes (Empresas)
+    path('master/despachantes/', views.master_listar_despachantes, name='master_listar_despachantes'),
+    path('master/despachantes/novo/', views.master_editar_despachante, name='master_criar_despachante'),
+    path('master/despachantes/<int:id>/', views.master_editar_despachante, name='master_editar_despachante'),
+
+    # Gestão de Usuários (Equipe)
+    path('master/usuarios/', views.master_listar_usuarios, name='master_listar_usuarios'),
+    path('master/usuarios/novo/', views.master_criar_usuario, name='master_criar_usuario'),
+    path('master/usuarios/<int:id>/', views.master_editar_usuario, name='master_editar_usuario'),
 ]

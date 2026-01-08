@@ -4,6 +4,22 @@
 
 {% block content %}
 
+{% if aviso_assinatura %}
+<div class="alert alert-{{ cor_aviso }} border-0 shadow-sm d-flex justify-content-between align-items-center mb-4 animate__animated animate__fadeInDown">
+    <div>
+        {% if cor_aviso == 'danger' %}
+            <i class="fas fa-ban me-2 fa-lg"></i>
+        {% else %}
+            <i class="fas fa-bullhorn me-2 fa-lg"></i>
+        {% endif %}
+        <strong>Financeiro:</strong> {{ aviso_assinatura }}
+    </div>
+    
+    <a href="{% url 'pagar_mensalidade' %}" class="btn btn-dark btn-sm fw-bold shadow-sm">
+        <i class="fas fa-barcode me-1"></i> Pagar Agora
+    </a>
+</div>
+{% endif %}
 <div class="row align-items-center mb-4">
     <div class="col-md-6">
         <h2 class="fw-bold mb-0">Visão Geral</h2>

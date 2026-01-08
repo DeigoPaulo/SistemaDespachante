@@ -12,10 +12,10 @@
                     <i class="fas fa-user-edit me-2"></i> Editando: {{ form.instance.nome }}
                 </h5>
                 
-                {% if user.is_superuser %}
-                <a href="{% url 'excluir_cliente' form.instance.id %}" class="btn btn-danger btn-sm border-white" onclick="return confirm('ATENÇÃO: Excluir este cliente apagará também todos os veículos e processos dele. Tem certeza?');">
-                    <i class="fas fa-trash-alt me-1"></i> Excluir
-                </a>
+                {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+                    <button type="button" class="btn btn-danger btn-sm border-white" data-bs-toggle="modal" data-bs-target="#modalExcluirCliente">
+                        <i class="fas fa-trash-alt me-1"></i> Excluir Cliente
+                    </button>
                 {% endif %}
             </div>
 
@@ -112,7 +112,7 @@
                     </div>
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4 border-top pt-3">
-                        <a href="{% url 'dashboard' %}" class="btn btn-secondary me-md-2">
+                        <a href="{% url 'lista_clientes' %}" class="btn btn-secondary me-md-2">
                             <i class="fas fa-arrow-left me-1"></i> Cancelar
                         </a>
                         <button type="submit" class="btn btn-success px-4 shadow">
@@ -124,4 +124,38 @@
         </div>
     </div>
 </div>
+
+{% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+<div class="modal fade" id="modalExcluirCliente" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title"><i class="fas fa-exclamation-triangle me-2"></i> Confirmar Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="fs-5 text-center">Tem certeza que deseja excluir o cliente <strong class="text-danger">{{ form.instance.nome }}</strong>?</p>
+                
+                <div class="alert alert-warning d-flex align-items-center mt-3" role="alert">
+                    <i class="fas fa-radiation me-3 fa-2x"></i>
+                    <div>
+                        <strong>Cuidado:</strong> Isso apagará também todos os <u>veículos</u> e <u>processos</u> vinculados a este cliente. Essa ação é irreversível.
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer justify-content-center">
+                <button type="button" class="btn btn-secondary px-4" data-bs-dismiss="modal">Cancelar</button>
+                
+                <form action="{% url 'excluir_cliente' form.instance.id %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger px-4 fw-bold">
+                        Sim, Excluir Tudo
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}

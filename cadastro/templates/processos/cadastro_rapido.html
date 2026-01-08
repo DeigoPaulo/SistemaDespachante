@@ -94,7 +94,20 @@
                     <label class="form-label fw-bold text-danger">📅 Prazo de Entrega</label>
                     <input type="date" name="prazo_entrega" class="form-control">
                 </div>
-                <div class="col-md-9">
+
+                <div class="col-md-3">
+                    <label class="form-label fw-bold text-primary">👤 Responsável</label>
+                    <select name="responsavel_id" class="form-select">
+                        {% for membro in equipe %}
+                            <option value="{{ membro.user.id }}" 
+                                {% if membro.user.id == user.id %}selected{% endif %}>
+                                {{ membro.user.first_name|default:membro.user.username|upper }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-6">
                     <label class="form-label">Observações Gerais</label>
                     <input type="text" name="observacoes" class="form-control" placeholder="Obs para todos os processos...">
                 </div>
@@ -185,7 +198,7 @@
             ajax: {
                 url: "{% url 'buscar_clientes' %}", 
                 dataType: 'json',
-                delay: 300, // 300ms de delay para não sobrecarregar
+                delay: 300,
                 data: function (params) {
                     return { term: params.term };
                 },
@@ -209,13 +222,11 @@
 
             $('#lbl-nome').text(nomeDisplay);
             $('#lbl-cpf').text(docDisplay);
-            $('#lbl-telefone').text(''); // O select2 básico não traz telefone, mas não tem problema
+            $('#lbl-telefone').text(''); 
 
-            // Troca visualização
             $('#area-busca').addClass('d-none'); 
             $('#cliente-selecionado').removeClass('d-none');
             
-            // Busca Veículos deste cliente
             buscarVeiculosDoCliente(data.id);
         });
 
@@ -241,7 +252,6 @@
 
             var rowId = 'row_' + Math.floor(Math.random() * 100000);
             var listaServicos = Array.isArray(v.servicos) ? v.servicos : [v.servicos];
-            // Garante que é array
             if(!Array.isArray(listaServicos)) listaServicos = [v.servicos];
 
             // Renderiza Linha
@@ -298,7 +308,6 @@
                     `);
                     containerBadges.append(badge);
                 });
-                // Atualiza o input hidden (ex: "Licenciamento + Transferência")
                 hiddenDiv.find('.input-servico-final').val(listaServicos.join(' + '));
             }
 
@@ -343,7 +352,6 @@
                     lista.empty();
                     if(data.length > 0) {
                         data.forEach(function(v) {
-                            // Salva dados no data attribute para usar no clique
                             var dadosJson = JSON.stringify(v).replace(/"/g, '&quot;');
                             var html = `
                                 <div class="col-md-3">
@@ -372,7 +380,6 @@
         // --- CLIQUE NO VEÍCULO EXISTENTE ---
         $(document).on('click', '.veiculo-card-opcao', function() {
             var dados = $(this).data('veiculo');
-            // Pega o primeiro serviço da lista como padrão ou Licenciamento
             var servicoPadrao = $('#modelo-opcoes-servicos option:nth-child(2)').val() || "Licenciamento";
 
             adicionarNaTabela({
@@ -381,11 +388,10 @@
                 modelo: dados.modelo,
                 cor: dados.cor,
                 ano: dados.ano_fab,
-                servicos: [servicoPadrao], // Array
+                servicos: [servicoPadrao],
                 atendimento: ''
             });
             
-            // Efeito visual de clique
             $(this).fadeOut(150).fadeIn(150);
         });
 
@@ -409,7 +415,6 @@
 
             adicionarNaTabela(dados);
 
-            // Limpa Modal
             $('#pop_placa').val('');
             $('#pop_renavam').val('');
             $('#pop_modelo').val('');

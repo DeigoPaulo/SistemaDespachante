@@ -78,12 +78,15 @@
                                 <i class="fas fa-eye"></i>
                             </a>
                             
-                            <button type="button" class="btn btn-sm btn-outline-danger btn-excluir ms-1" 
-                                    data-url="{% url 'excluir_orcamento' item.id %}" 
-                                    data-bs-toggle="modal" 
-                                    data-bs-target="#modalExcluirOrcamento">
-                                <i class="fas fa-trash"></i>
-                            </button>
+                            {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' or item.status != 'APROVADO' %}
+                                <button type="button" class="btn btn-sm btn-outline-danger btn-excluir ms-1" 
+                                        data-url="{% url 'excluir_orcamento' item.id %}" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#modalExcluirOrcamento"
+                                        title="Excluir Orçamento">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            {% endif %}
                         </td>
                     </tr>
                     {% empty %}

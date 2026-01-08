@@ -1,5 +1,10 @@
 from django import forms
-from .models import Atendimento, Cliente, Veiculo
+from django.contrib.auth.models import User
+from .models import Atendimento, Cliente, Veiculo, Despachante, PerfilUsuario
+
+# ==============================================================================
+# FORMULÁRIOS OPERACIONAIS (Seu código original mantido)
+# ==============================================================================
 
 class AtendimentoForm(forms.ModelForm):
     class Meta:
@@ -10,8 +15,8 @@ class AtendimentoForm(forms.ModelForm):
             'veiculo',
             'servico',
             'status',
-            'data_entrega',      # Adicionado
-            'data_solicitacao',  # Adicionado (caso precise corrigir a data de entrada)
+            'data_entrega',
+            'data_solicitacao',
             'observacoes_internas'
         ]
         widgets = {
@@ -20,27 +25,13 @@ class AtendimentoForm(forms.ModelForm):
             'veiculo': forms.Select(attrs={'class': 'form-select'}),
             'servico': forms.TextInput(attrs={'class': 'form-control'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
-            
-            # --- Configuração dos Campos de Data ---
-            'data_entrega': forms.DateInput(
-                format='%Y-%m-%d',  # Importante para a data aparecer ao editar
-                attrs={'type': 'date', 'class': 'form-control'}
-            ),
-            'data_solicitacao': forms.DateInput(
-                format='%Y-%m-%d',
-                attrs={'type': 'date', 'class': 'form-control'}
-            ),
-            # ---------------------------------------
-
-            'observacoes_internas': forms.Textarea(attrs={
-                'class': 'form-control',
-                'rows': 3
-            }),
+            'data_entrega': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'data_solicitacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
+            'observacoes_internas': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
         if user and hasattr(user, 'perfilusuario'):
             despachante = user.perfilusuario.despachante
             self.fields['cliente'].queryset = Cliente.objects.filter(despachante=despachante)
@@ -51,43 +42,31 @@ class ClienteForm(forms.ModelForm):
     class Meta:
         model = Cliente
         exclude = ['despachante']
-        
-        # Lista de estados para o campo UF do RG
-        # Você pode adicionar mais estados aqui se precisar
         UF_CHOICES = [
             ('', 'UF'), ('GO', 'GO'), ('DF', 'DF'), ('SP', 'SP'), ('MG', 'MG'), 
             ('TO', 'TO'), ('MT', 'MT'), ('MS', 'MS'), ('BA', 'BA'), ('RJ', 'RJ'),
             ('PR', 'PR'), ('RS', 'RS'), ('SC', 'SC'), ('ES', 'ES')
         ]
-
         widgets = {
-            # --- DADOS PESSOAIS ---
             'nome': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'nome'}),
             'cpf_cnpj': forms.TextInput(attrs={'class': 'form-control mask-cpf-cnpj', 'id': 'cpf_cnpj'}),
             'rg': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'rg'}),
             'orgao_expedidor': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'orgao_expedidor'}),
             'profissao': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'profissao'}),
-            
-            # --- NOVOS CAMPOS ---
             'uf_rg': forms.Select(choices=UF_CHOICES, attrs={'class': 'form-select', 'id': 'uf_rg'}),
             'filiacao': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'filiacao', 'placeholder': 'Nome da Mãe'}),
-
-            # --- ENDEREÇO ---
             'cep': forms.TextInput(attrs={'class': 'form-control mask-cep', 'id': 'cep'}),
             'rua': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'rua'}),
             'numero': forms.TextInput(attrs={'class': 'form-control', 'id': 'numero'}),
             'bairro': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'bairro'}),
             'cidade': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'cidade'}),
-            'uf': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'uf'}), # UF do Endereço
+            'uf': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'uf'}),
             'complemento': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'id': 'complemento'}),
-
-            # --- CONTATO ---
             'telefone': forms.TextInput(attrs={'class': 'form-control mask-phone', 'id': 'telefone'}),
             'email': forms.EmailInput(attrs={'class': 'form-control lowercase', 'id': 'email'}),
         }
 
 
-        
 class VeiculoForm(forms.ModelForm):
     class Meta:
         model = Veiculo
@@ -107,22 +86,22 @@ class VeiculoForm(forms.ModelForm):
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        despachante = user.perfilusuario.despachante
-        self.despachante = despachante
-        self.fields['cliente'].queryset = Cliente.objects.filter(despachante=despachante)
+        # Verifica se o usuario existe antes de tentar acessar o perfil
+        if user and hasattr(user, 'perfilusuario'):
+            self.despachante = user.perfilusuario.despachante
+            self.fields['cliente'].queryset = Cliente.objects.filter(despachante=self.despachante)
+        else:
+            self.despachante = None
 
     def clean_placa(self):
+        if not self.despachante:
+            return self.cleaned_data['placa'] # Retorna sem validar se for superuser sem perfil
+
         placa = self.cleaned_data['placa'].upper().replace('-', '').replace(' ', '')
-
-        if Veiculo.objects.filter(
-            despachante=self.despachante,
-            placa=placa
-        ).exclude(pk=self.instance.pk).exists():
-            raise forms.ValidationError(
-                "Esta placa já está cadastrada para este despachante."
-            )
-
+        if Veiculo.objects.filter(despachante=self.despachante, placa=placa).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError("Esta placa já está cadastrada para este despachante.")
         return placa
+
 
 class CompressaoPDFForm(forms.Form):
     arquivo_pdf = forms.FileField(
@@ -132,4 +111,76 @@ class CompressaoPDFForm(forms.Form):
             'class': 'form-control form-control-lg', 
             'accept': 'application/pdf'
         })
+    )
+
+# ==============================================================================
+# NOVOS FORMULÁRIOS: PAINEL MASTER (SaaS)
+# ==============================================================================
+
+class DespachanteForm(forms.ModelForm):
+    class Meta:
+        model = Despachante
+        fields = '__all__'
+        exclude = ['asaas_customer_id', 'data_cadastro', 'ativo']
+        widgets = {
+            'nome_fantasia': forms.TextInput(attrs={'class': 'form-control'}),
+            'razao_social': forms.TextInput(attrs={'class': 'form-control'}),
+            'cnpj': forms.TextInput(attrs={'class': 'form-control mask-cnpj'}),
+            'codigo_sindego': forms.TextInput(attrs={'class': 'form-control'}),
+            'telefone': forms.TextInput(attrs={'class': 'form-control mask-phone'}),
+            'email': forms.EmailInput(attrs={'class': 'form-control'}),
+            'endereco_completo': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
+            
+            # Campos Financeiros
+            'dia_vencimento': forms.Select(attrs={'class': 'form-select'}),
+            'valor_mensalidade': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'email_fatura': forms.EmailInput(attrs={'class': 'form-control'}),
+        }
+
+# ==============================================================================
+# ATUALIZAÇÃO AQUI: Formulário de Usuário com campo 'username'
+# ==============================================================================
+
+class UsuarioMasterForm(forms.Form):
+    """Formulário manual para criar usuários com senha já criptografada na View"""
+    first_name = forms.CharField(label="Nome", widget=forms.TextInput(attrs={'class': 'form-control'}))
+    last_name = forms.CharField(label="Sobrenome", widget=forms.TextInput(attrs={'class': 'form-control'}))
+    
+    # --- NOVO CAMPO: Login (Username) ---
+    username = forms.CharField(
+        label="Nome de Usuário (Login)", 
+        required=False,
+        help_text="Opcional. Se deixar vazio, o login será igual ao e-mail.",
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: joao.silva'})
+    )
+    # ------------------------------------
+
+    email = forms.EmailField(label="E-mail", widget=forms.EmailInput(attrs={'class': 'form-control'}))
+    password = forms.CharField(label="Senha", widget=forms.PasswordInput(attrs={'class': 'form-control'}))
+    
+    despachante = forms.ModelChoiceField(
+        queryset=Despachante.objects.all(),
+        label="Vincular a Empresa",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    tipo_usuario = forms.ChoiceField(
+        choices=PerfilUsuario.TIPO_CHOICES,
+        label="Permissão",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+
+class UsuarioMasterEditForm(UsuarioMasterForm):
+    """
+    Herda do formulário de criação, mas torna a senha opcional,
+    exibe o username como readonly e remove validação de duplicidade.
+    """
+    # Username e Email como apenas leitura na edição para evitar quebra de acesso
+    username = forms.CharField(label="Login", widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
+    email = forms.EmailField(label="E-mail", widget=forms.EmailInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
+    
+    password = forms.CharField(
+        label="Nova Senha", 
+        required=False, 
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Deixe em branco para manter a atual'})
     )

@@ -2,76 +2,108 @@
 
 {% block title %}Tabela de Serviços{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+{% endblock %}
+
 {% block content %}
-<div class="row">
-    <div class="col-md-4">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-primary text-white">
-                <h6 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2"></i> Novo Serviço</h6>
-            </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Nome do Serviço</label>
-                        <input type="text" name="nome" class="form-control" placeholder="Ex: Transferência" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Custo Base (Detran)</label>
-                        <div class="input-group">
-                            <span class="input-group-text">R$</span>
-                            <input type="text" name="valor_base" class="form-control mask-money" required>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label small fw-bold">Honorários (Lucro)</label>
-                        <div class="input-group">
-                            <span class="input-group-text bg-success text-white">R$</span>
-                            <input type="text" name="honorarios" class="form-control mask-money fw-bold" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn btn-success w-100">Salvar Serviço</button>
-                </form>
-            </div>
-        </div>
+<div class="container-fluid mt-3">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-dark"><i class="fas fa-tags text-primary me-2"></i> Tabela de Preços e Serviços</h2>
     </div>
 
-    <div class="col-md-8">
-        <div class="card shadow-sm border-0">
-            <div class="card-header bg-white py-3">
-                <h6 class="mb-0 fw-bold"><i class="fas fa-list me-2"></i> Tabela de Preços</h6>
+    <div class="row">
+        {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+        <div class="col-md-4 mb-4">
+            <div class="card shadow border-0">
+                <div class="card-header bg-dark text-white">
+                    <h6 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2"></i> Adicionar Novo Serviço</h6>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-uppercase text-muted">Nome do Serviço</label>
+                            <input type="text" name="nome" class="form-control" placeholder="Ex: Transferência de Propriedade" required>
+                        </div>
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label class="form-label fw-bold small text-uppercase text-muted">Custo (Taxas)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0">R$</span>
+                                    <input type="text" name="valor_base" class="form-control mask-money border-start-0" placeholder="0,00">
+                                </div>
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label class="form-label fw-bold small text-uppercase text-muted">Honorários</label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-success text-white border-success">R$</span>
+                                    <input type="text" name="honorarios" class="form-control mask-money border-success" placeholder="0,00" required>
+                                </div>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm">
+                            <i class="fas fa-save me-2"></i> Salvar na Tabela
+                        </button>
+                    </form>
+                </div>
             </div>
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light small">
-                        <tr>
-                            <th>Serviço</th>
-                            <th>Custo</th>
-                            <th>Honorários</th>
-                            <th>Total</th>
-                            <th class="text-end">Ação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for servico in servicos %}
-                        <tr>
-                            <td class="fw-bold">{{ servico.nome }}</td>
-                            <td class="text-muted">R$ {{ servico.valor_base }}</td>
-                            <td class="text-success fw-bold">R$ {{ servico.honorarios }}</td>
-                            <td class="fw-bold fs-6">R$ {{ servico.valor_total }}</td>
-                            <td class="text-end">
-                                <a href="{% url 'excluir_servico' servico.id %}" class="btn btn-sm btn-outline-danger border-0" onclick="return confirm('Remover este serviço?')">
-                                    <i class="fas fa-trash"></i>
-                                </a>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr>
-                            <td colspan="5" class="text-center py-4 text-muted">Nenhum serviço cadastrado.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            
+            <div class="alert alert-info d-flex align-items-center mt-3 shadow-sm" role="alert">
+                <i class="fas fa-info-circle me-3 fa-lg"></i>
+                <div class="small">
+                    Novos serviços aparecem automaticamente nas telas de Orçamento e Processo Rápido.
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="{% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}col-md-8{% else %}col-12{% endif %}">
+            <div class="card shadow border-0">
+                <div class="card-header bg-white py-3 border-bottom-0">
+                    <h6 class="mb-0 fw-bold text-muted text-uppercase">Lista de Serviços Ativos</h6>
+                </div>
+                <div class="card-body pt-0">
+                    <div class="table-responsive">
+                        <table id="tabelaServicos" class="table table-hover align-middle mb-0 w-100">
+                            <thead class="table-light small text-uppercase">
+                                <tr>
+                                    <th class="ps-3">Nome do Serviço</th>
+                                    <th>Custo (Taxas)</th>
+                                    <th>Honorários</th>
+                                    <th>Preço Final</th>
+                                    <th class="text-end pe-3">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for servico in servicos %}
+                                <tr>
+                                    <td class="ps-3 fw-bold text-dark">{{ servico.nome }}</td>
+                                    <td class="text-muted">R$ {{ servico.valor_base }}</td>
+                                    <td class="text-success fw-bold">R$ {{ servico.honorarios }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border px-3 py-2 fs-6">
+                                            R$ {{ servico.valor_total }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end pe-3">
+                                        {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+                                            <a href="{% url 'excluir_servico' servico.id %}" 
+                                               class="btn btn-sm btn-outline-danger border-0" 
+                                               onclick="return confirm('Tem certeza que deseja desativar o serviço {{ servico.nome }}?')"
+                                               title="Excluir Serviço">
+                                                <i class="fas fa-trash-alt"></i>
+                                            </a>
+                                        {% else %}
+                                            <i class="fas fa-lock text-muted opacity-25" title="Apenas leitura"></i>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -81,9 +113,45 @@
 {% block extra_js %}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+
 <script>
     $(document).ready(function(){
+        // 1. Máscara de Moeda (Padrão Brasileiro)
         $('.mask-money').mask('000.000.000,00', {reverse: true});
+
+        // 2. Ativa o DataTables (Pesquisa e Ordenação Inteligente)
+        $('#tabelaServicos').DataTable({
+            "language": {
+                "sEmptyTable": "Nenhum registro encontrado",
+                "sInfo": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
+                "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
+                "sInfoFiltered": "(Filtrados de _MAX_ registros)",
+                "sInfoPostFix": "",
+                "sInfoThousands": ".",
+                "sLengthMenu": "_MENU_ resultados por página",
+                "sLoadingRecords": "Carregando...",
+                "sProcessing": "Processando...",
+                "sZeroRecords": "Nenhum registro encontrado",
+                "sSearch": "Pesquisar Serviço:", // Label da caixa de busca
+                "oPaginate": {
+                    "sNext": "Próximo",
+                    "sPrevious": "Anterior",
+                    "sFirst": "Primeiro",
+                    "sLast": "Último"
+                },
+                "oAria": {
+                    "sSortAscending": ": Ordenar colunas de forma ascendente",
+                    "sSortDescending": ": Ordenar colunas de forma descendente"
+                }
+            },
+            "pageLength": 10, // Itens por página
+            "order": [[ 0, "asc" ]], // Ordena por Nome (Coluna 0) A-Z
+            "columnDefs": [
+                { "orderable": false, "targets": 4 } // Desabilita ordenação na coluna "Ação"
+            ]
+        });
     });
 </script>
 {% endblock %}
