@@ -82,7 +82,7 @@
             </tr>
         </thead>
         <tbody>
-            {% for item in orcamento.itemorcamento_set.all %}
+            {% for item in orcamento.itens.all %}
             <tr>
                 <td class="ps-3 fw-bold text-dark">{{ item.servico_nome }}</td>
                 <td class="text-end pe-3">R$ {{ item.valor }}</td>
@@ -138,7 +138,7 @@
 
 {% block extra_css %}
 <style>
-    /* LÓGICA DE IMPRESSÃO UNIFICADA (Igual ao Relatório) */
+    /* LÓGICA DE IMPRESSÃO UNIFICADA */
     @media print {
         /* 1. Esconde tudo na página */
         body * {

@@ -3,7 +3,7 @@ from django.contrib.auth.models import User
 from .models import Atendimento, Cliente, Veiculo, Despachante, PerfilUsuario
 
 # ==============================================================================
-# FORMULÁRIOS OPERACIONAIS (Seu código original mantido)
+# FORMULÁRIOS OPERACIONAIS
 # ==============================================================================
 
 class AtendimentoForm(forms.ModelForm):
@@ -14,6 +14,7 @@ class AtendimentoForm(forms.ModelForm):
             'cliente',
             'veiculo',
             'servico',
+            'responsavel',  # <-- CAMPO ADICIONADO
             'status',
             'data_entrega',
             'data_solicitacao',
@@ -24,6 +25,7 @@ class AtendimentoForm(forms.ModelForm):
             'cliente': forms.Select(attrs={'class': 'form-select'}),
             'veiculo': forms.Select(attrs={'class': 'form-select'}),
             'servico': forms.TextInput(attrs={'class': 'form-control'}),
+            'responsavel': forms.Select(attrs={'class': 'form-select'}),  # <-- WIDGET ADICIONADO
             'status': forms.Select(attrs={'class': 'form-select'}),
             'data_entrega': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'data_solicitacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
@@ -36,6 +38,15 @@ class AtendimentoForm(forms.ModelForm):
             despachante = user.perfilusuario.despachante
             self.fields['cliente'].queryset = Cliente.objects.filter(despachante=despachante)
             self.fields['veiculo'].queryset = Veiculo.objects.filter(despachante=despachante)
+            
+            # FILTRO DO RESPONSÁVEL: Mostra apenas usuários que pertencem a este despachante
+            self.fields['responsavel'].queryset = User.objects.filter(
+                perfilusuario__despachante=despachante
+            ).order_by('first_name')
+            
+            # Melhora a exibição do nome no select (Nome Completo ou Username)
+            self.fields['responsavel'].label_from_instance = lambda obj: f"{obj.get_full_name() or obj.username}".upper()
+            self.fields['responsavel'].label = "Responsável Técnico"
 
 
 class ClienteForm(forms.ModelForm):
@@ -86,7 +97,6 @@ class VeiculoForm(forms.ModelForm):
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Verifica se o usuario existe antes de tentar acessar o perfil
         if user and hasattr(user, 'perfilusuario'):
             self.despachante = user.perfilusuario.despachante
             self.fields['cliente'].queryset = Cliente.objects.filter(despachante=self.despachante)
@@ -95,7 +105,7 @@ class VeiculoForm(forms.ModelForm):
 
     def clean_placa(self):
         if not self.despachante:
-            return self.cleaned_data['placa'] # Retorna sem validar se for superuser sem perfil
+            return self.cleaned_data['placa']
 
         placa = self.cleaned_data['placa'].upper().replace('-', '').replace(' ', '')
         if Veiculo.objects.filter(despachante=self.despachante, placa=placa).exclude(pk=self.instance.pk).exists():
@@ -130,30 +140,23 @@ class DespachanteForm(forms.ModelForm):
             'telefone': forms.TextInput(attrs={'class': 'form-control mask-phone'}),
             'email': forms.EmailInput(attrs={'class': 'form-control'}),
             'endereco_completo': forms.Textarea(attrs={'class': 'form-control', 'rows': 2}),
-            
-            # Campos Financeiros
             'dia_vencimento': forms.Select(attrs={'class': 'form-select'}),
             'valor_mensalidade': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'email_fatura': forms.EmailInput(attrs={'class': 'form-control'}),
         }
 
-# ==============================================================================
-# ATUALIZAÇÃO AQUI: Formulário de Usuário com campo 'username'
-# ==============================================================================
 
 class UsuarioMasterForm(forms.Form):
     """Formulário manual para criar usuários com senha já criptografada na View"""
     first_name = forms.CharField(label="Nome", widget=forms.TextInput(attrs={'class': 'form-control'}))
     last_name = forms.CharField(label="Sobrenome", widget=forms.TextInput(attrs={'class': 'form-control'}))
     
-    # --- NOVO CAMPO: Login (Username) ---
     username = forms.CharField(
         label="Nome de Usuário (Login)", 
         required=False,
         help_text="Opcional. Se deixar vazio, o login será igual ao e-mail.",
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: joao.silva'})
     )
-    # ------------------------------------
 
     email = forms.EmailField(label="E-mail", widget=forms.EmailInput(attrs={'class': 'form-control'}))
     password = forms.CharField(label="Senha", widget=forms.PasswordInput(attrs={'class': 'form-control'}))
@@ -175,7 +178,6 @@ class UsuarioMasterEditForm(UsuarioMasterForm):
     Herda do formulário de criação, mas torna a senha opcional,
     exibe o username como readonly e remove validação de duplicidade.
     """
-    # Username e Email como apenas leitura na edição para evitar quebra de acesso
     username = forms.CharField(label="Login", widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
     email = forms.EmailField(label="E-mail", widget=forms.EmailInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
     

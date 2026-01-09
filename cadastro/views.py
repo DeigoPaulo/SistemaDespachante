@@ -22,6 +22,7 @@ from .models import PerfilUsuario  # Importe seu modelo de perfil criado
 from .asaas import gerar_boleto_asaas
 from django.contrib.auth.models import User
 from .forms import UsuarioMasterEditForm 
+from django.core.cache import cache
 
 from django.http import FileResponse
 from .forms import CompressaoPDFForm
@@ -167,23 +168,59 @@ def dashboard(request):
     
     despachante = perfil.despachante
     
-    # --- 1. CAPTURA OS FILTROS (DATA E BUSCA) ---
+    # --- 1. CAPTURA OS FILTROS ---
     data_filtro = request.GET.get('data_filtro')
-    termo_busca = request.GET.get('busca') # <--- Novo: Captura o texto digitado
+    termo_busca = request.GET.get('busca')
 
-    # Fila de Processos Base
-    fila_processos = Atendimento.objects.filter(
+    # ==============================================================================
+    # 🚀 OTIMIZAÇÃO 1: CACHE DE ESTATÍSTICAS (Novo)
+    # ==============================================================================
+    # Cria uma chave única para este escritório
+    cache_key = f"dashboard_stats_{despachante.id}"
+    
+    # Tenta pegar os dados prontos da memória RAM
+    dados_stats = cache.get(cache_key)
+
+    if not dados_stats:
+        # SE NÃO TIVER NO CACHE, CALCULA NO BANCO (Isso só roda 1x a cada 5 min)
+        # ou quando o Signal limpar o cache.
+        hoje = timezone.now().date()
+        
+        total_abertos = Atendimento.objects.filter(
+            despachante=despachante
+        ).exclude(status__in=['APROVADO', 'CANCELADO']).count()
+        
+        total_mes = Atendimento.objects.filter(
+            despachante=despachante, 
+            data_solicitacao__month=hoje.month
+        ).count()
+        
+        # Guarda no dicionário
+        dados_stats = {
+            'total_abertos': total_abertos,
+            'total_mes': total_mes
+        }
+        
+        # Salva na memória por 300 segundos (5 minutos)
+        cache.set(cache_key, dados_stats, timeout=300)
+
+    # ==============================================================================
+    # 🚀 OTIMIZAÇÃO 2: select_related (Mantido)
+    # ==============================================================================
+    fila_processos = Atendimento.objects.select_related(
+        'cliente', 
+        'veiculo',
+        'responsavel' 
+    ).filter(
         despachante=despachante
     ).exclude(
         status__in=['APROVADO', 'CANCELADO']
     ).order_by('data_solicitacao')
     
-    # --- 2. APLICA O FILTRO DE DATA (Se existir) ---
+    # --- 2. FILTROS ---
     if data_filtro:
         fila_processos = fila_processos.filter(data_solicitacao=data_filtro)
 
-    # --- 3. APLICA A BUSCA DINÂMICA (Se existir texto) ---
-    # Isso procura em Nome, Placa, Protocolo ou Serviço ao mesmo tempo
     if termo_busca:
         fila_processos = fila_processos.filter(
             Q(cliente__nome__icontains=termo_busca) |
@@ -192,7 +229,7 @@ def dashboard(request):
             Q(servico__icontains=termo_busca)
         )
     
-    # Lógica de Alertas (Mantida EXATAMENTE igual a sua)
+    # --- 3. LÓGICA DE ALERTAS (Processamento Python) ---
     hoje = timezone.now().date()
     for processo in fila_processos:
         if processo.data_entrega:
@@ -214,20 +251,14 @@ def dashboard(request):
             else:
                 processo.alerta_cor = 'success'; processo.alerta_msg = 'Recente'
 
-    # Estatísticas (Mantidas iguais)
-    total_abertos = Atendimento.objects.filter(despachante=despachante).exclude(status__in=['APROVADO', 'CANCELADO']).count()
-    total_mes = Atendimento.objects.filter(
-        despachante=despachante, 
-        data_solicitacao__month=hoje.month
-    ).count()
-
     context = {
         'fila_processos': fila_processos,
-        'total_abertos': total_abertos,
-        'total_mes': total_mes,
+        # AQUI MUDOU: Pegamos os valores do dicionário cached
+        'total_abertos': dados_stats['total_abertos'], 
+        'total_mes': dados_stats['total_mes'],
         'perfil': perfil,
         'data_filtro': data_filtro,
-        'termo_busca': termo_busca, # <--- Devolvemos para o template para não sumir do input
+        'termo_busca': termo_busca,
     }
     
     return render(request, 'dashboard.html', context)
@@ -243,24 +274,31 @@ def novo_atendimento(request):
         return redirect('dashboard')
 
     if request.method == 'POST':
+        # Passamos request.user para o formulário filtrar clientes/veículos do despachante correto
         form = AtendimentoForm(request.user, request.POST)
         if form.is_valid():
             atendimento = form.save(commit=False)
+            
+            # 1. Atribui o despachante automaticamente baseado no perfil do usuário logado
             atendimento.despachante = perfil.despachante
+            
+            # 2. Lógica de Segurança para o Responsável:
+            # Se o campo 'responsavel' não estiver no formulário ou vier vazio, 
+            # podemos definir o usuário logado como responsável padrão.
+            if not atendimento.responsavel:
+                atendimento.responsavel = request.user
+            
             atendimento.save()
+            messages.success(request, "Processo criado com sucesso!")
             return redirect('dashboard')
     else:
-        form = AtendimentoForm(request.user)
+        # Inicializa o formulário com o usuário logado como responsável técnico sugerido
+        form = AtendimentoForm(request.user, initial={'responsavel': request.user})
 
     return render(request, 'form_generico.html', {
         'form': form,
         'titulo': 'Novo Processo DETRAN'
     })
-
-
-from django.urls import reverse  # <--- Adicione esse import no topo do arquivo
-
-# ... (seu código) ...
 
 @login_required
 def editar_atendimento(request, id):
@@ -277,15 +315,24 @@ def editar_atendimento(request, id):
     else:
         form = AtendimentoForm(request.user, instance=atendimento)
         
+    # --- CORREÇÃO DE SEGURANÇA ---
+    # Verifica se existe veículo antes de tentar ler a placa
+    if atendimento.veiculo:
+        info_veiculo = f"do veículo {atendimento.veiculo.placa}"
+    else:
+        info_veiculo = "(Sem veículo vinculado)"
+
     return render(request, 'form_generico.html', {
         'form': form, 
         'titulo': f'Editar Processo #{atendimento.numero_atendimento or "S/N"}',
         
-        # --- AQUI ESTÁ A CORREÇÃO ---
         # Enviamos para o template exatamente qual URL deve ser chamada para excluir
         'url_excluir': reverse('excluir_atendimento', args=[atendimento.id]),
-        'texto_modal': f"Tem certeza que deseja excluir o processo do veículo {atendimento.veiculo.placa}?",
-        'url_voltar': reverse('dashboard') # Botão voltar vai pro dashboard
+        
+        # Usamos a variável segura criada acima
+        'texto_modal': f"Tem certeza que deseja excluir o processo {info_veiculo}?",
+        
+        'url_voltar': reverse('dashboard')
     })
 
 @login_required
@@ -841,52 +888,79 @@ def novo_orcamento(request):
     servicos_disponiveis = TipoServico.objects.filter(despachante=perfil.despachante, ativo=True)
     
     if request.method == 'POST':
-        # 1. Dados Básicos
-        cliente_id = request.POST.get('cliente_id')
-        nome_avulso = request.POST.get('cliente_nome_avulso')
-        observacoes = request.POST.get('observacoes')
-        desconto = request.POST.get('desconto') or 0
-        valor_total_hidden = request.POST.get('valor_total_hidden') or 0
+        try:
+            with transaction.atomic():
+                # --- FUNÇÃO DE LIMPEZA DE VALOR ---
+                def limpar_valor(valor):
+                    if not valor: return 0.0
+                    v = str(valor).strip()
+                    if ',' in v:
+                        v = v.replace('.', '').replace(',', '.')
+                    return float(v)
 
-        # 2. Cria o Objeto Orçamento
-        orcamento = Orcamento.objects.create(
-            despachante=perfil.despachante,
-            observacoes=observacoes,
-            desconto=desconto,
-            valor_total=valor_total_hidden,
-            status='PENDENTE'
-        )
+                # 1. Captura e Limpa os Valores
+                desconto = limpar_valor(request.POST.get('desconto'))
+                valor_total = limpar_valor(request.POST.get('valor_total_hidden'))
+                
+                # 2. Dados Básicos (Incluindo VEÍCULO agora)
+                cliente_id = request.POST.get('cliente_id')
+                nome_avulso = request.POST.get('cliente_nome_avulso')
+                observacoes = request.POST.get('observacoes')
+                
+                # --- NOVO: Captura o Veículo ---
+                veiculo_id = request.POST.get('veiculo_id')
+                veiculo_obj = None
+                if veiculo_id:
+                    # Busca o veículo garantindo que ele existe
+                    veiculo_obj = Veiculo.objects.filter(id=veiculo_id).first()
 
-        # 3. Vincula Cliente (Ou nome avulso)
-        if cliente_id:
-            orcamento.cliente = Cliente.objects.filter(id=cliente_id).first()
-        elif nome_avulso:
-            orcamento.nome_cliente_avulso = nome_avulso
-        
-        orcamento.save()
+                # 3. Cria o Orçamento
+                orcamento = Orcamento.objects.create(
+                    despachante=perfil.despachante,
+                    observacoes=observacoes,
+                    desconto=desconto,
+                    valor_total=valor_total,
+                    status='PENDENTE',
+                    
+                    # --- NOVO: Salva o vínculo com o veículo ---
+                    veiculo=veiculo_obj 
+                )
 
-        # 4. Salva os Itens
-        ids_servicos = request.POST.getlist('servicos[]') 
-        precos_servicos = request.POST.getlist('precos[]')
-        
-        # Precisamos pegar o NOME do serviço de novo para garantir
-        for servico_id, preco in zip(ids_servicos, precos_servicos):
-            servico_obj = TipoServico.objects.filter(id=servico_id).first()
-            nome_servico = servico_obj.nome if servico_obj else "Serviço Removido"
-            
-            ItemOrcamento.objects.create(
-                orcamento=orcamento,
-                servico_nome=nome_servico,
-                valor=preco
-            )
+                # 4. Vincula Cliente
+                if cliente_id:
+                    orcamento.cliente = Cliente.objects.filter(id=cliente_id).first()
+                elif nome_avulso:
+                    orcamento.nome_cliente_avulso = nome_avulso.upper()
+                
+                orcamento.save()
 
-        messages.success(request, f"Orçamento #{orcamento.id} salvo com sucesso!")
-        
-        # Redireciona para a tela de visualização/impressão desse orçamento específico
-        return redirect('detalhe_orcamento', id=orcamento.id)
+                # 5. Salva os Itens
+                ids_servicos = request.POST.getlist('servicos[]') 
+                precos_servicos = request.POST.getlist('precos[]')
+                
+                if not ids_servicos:
+                    raise Exception("A lista de serviços está vazia.")
+
+                for servico_id, preco_raw in zip(ids_servicos, precos_servicos):
+                    servico_obj = TipoServico.objects.filter(id=servico_id).first()
+                    nome_servico = servico_obj.nome if servico_obj else "Serviço Avulso"
+                    
+                    valor_item = limpar_valor(preco_raw)
+
+                    ItemOrcamento.objects.create(
+                        orcamento=orcamento,
+                        servico_nome=nome_servico,
+                        valor=valor_item
+                    )
+
+                messages.success(request, f"Orçamento #{orcamento.id} gerado com sucesso!")
+                return redirect('detalhe_orcamento', id=orcamento.id)
+
+        except Exception as e:
+            messages.error(request, f"Erro ao criar orçamento: {e}")
+            return redirect('novo_orcamento')
 
     return render(request, 'financeiro/novo_orcamento.html', {'servicos': servicos_disponiveis})
-
 # views.py
 
 @login_required
@@ -900,29 +974,74 @@ def detalhe_orcamento(request, id):
 
 @login_required
 def aprovar_orcamento(request, id):
-    # 1. Busca o orçamento
+    # 1. Pega o orçamento
     orcamento = get_object_or_404(Orcamento, id=id, despachante=request.user.perfilusuario.despachante)
-    
-    # 2. Verifica se já não foi aprovado antes
-    if orcamento.status != 'PENDENTE':
-        messages.warning(request, "Este orçamento já foi finalizado anteriormente.")
-        return redirect('detalhe_orcamento', id=id)
-    
-    # 3. Atualiza o status
-    orcamento.status = 'APROVADO'
-    orcamento.save()
-    
-    messages.success(request, "Orçamento Aprovado! Selecione o veículo para concluir o cadastro.")
-    
-    # 4. Redireciona para o Cadastro Rápido
-    # Se tiver cliente cadastrado, passa o ID na URL para o JS capturar
-    if orcamento.cliente:
-        return redirect(f'/novo-processo-rapido/?cliente_id={orcamento.cliente.id}&orcamento_origem={orcamento.id}')
-    
-    # Se for cliente avulso, vai para a tela em branco (pois não tem cadastro de veículos ainda)
-    return redirect('cadastro_rapido')
 
-from django.db.models import Q # Importe o Q no topo do arquivo se não tiver
+    # 2. Verificações
+    if orcamento.status == 'APROVADO':
+        messages.warning(request, "Este orçamento já foi aprovado.")
+        return redirect('detalhe_orcamento', id=id)
+
+    # Lógica de Cliente Avulso
+    if not orcamento.cliente and orcamento.nome_cliente_avulso:
+        try:
+            novo_cliente = Cliente.objects.create(
+                despachante=orcamento.despachante,
+                nome=orcamento.nome_cliente_avulso.upper(),
+                observacoes="Criado automaticamente via Aprovação de Orçamento."
+            )
+            orcamento.cliente = novo_cliente
+            orcamento.save()
+        except Exception as e:
+            messages.error(request, f"Erro ao cadastrar cliente: {e}")
+            return redirect('detalhe_orcamento', id=id)
+
+    if not orcamento.cliente:
+        messages.error(request, "Erro: Cliente não vinculado.")
+        return redirect('detalhe_orcamento', id=id)
+
+    # 3. TRANSFORMAÇÃO (AGRUPADA)
+    try:
+        with transaction.atomic():
+            orcamento.status = 'APROVADO'
+            orcamento.save()
+
+            # 1. Pega todos os nomes dos serviços
+            # Usa .itens.all() por causa do related_name='itens'
+            lista_nomes = [item.servico_nome for item in orcamento.itens.all()]
+            
+            # 2. Cria uma string única (limitada a 100 chars para caber no banco)
+            nome_servico_agrupado = " + ".join(lista_nomes)[:100]
+
+            # 3. Detalhes para observação
+            detalhes = []
+            for item in orcamento.itens.all():
+                detalhes.append(f"- {item.servico_nome}: R$ {item.valor}")
+            
+            texto_obs = "\n".join(detalhes)
+            obs_final = f"Gerado via Orçamento #{orcamento.id}.\nItens:\n{texto_obs}\n\nObs Originais: {orcamento.observacoes or ''}"
+
+            # 4. Cria UM ÚNICO Atendimento (Agora com Veículo!)
+            Atendimento.objects.create(
+                despachante=orcamento.despachante,
+                cliente=orcamento.cliente,
+                
+                # --- CORREÇÃO AQUI: Passamos o veículo do orçamento ---
+                veiculo=orcamento.veiculo, 
+                
+                servico=nome_servico_agrupado,
+                status='SOLICITADO',
+                data_solicitacao=timezone.now().date(),
+                observacoes_internas=obs_final
+            )
+
+        messages.success(request, "Orçamento Aprovado! Processo gerado com sucesso.")
+        return redirect('dashboard')
+
+    except Exception as e:
+        messages.error(request, f"Erro ao gerar processo: {e}")
+        return redirect('detalhe_orcamento', id=id)
+
 
 @login_required
 def listar_orcamentos(request):
@@ -935,27 +1054,27 @@ def listar_orcamentos(request):
     if not perfil:
         return redirect('logout')
 
-    # 3. Query Base
-    # CORREÇÃO: Removi 'veiculo' do select_related pois o campo não existe no Orcamento
+    # 3. Query Base Otimizada
+    # Adicionamos 'veiculo' no select_related e 'itens' no prefetch_related
     orcamentos = Orcamento.objects.filter(
         despachante=perfil.despachante
-    ).select_related('cliente').order_by('-data_criacao')
+    ).select_related('cliente', 'veiculo').prefetch_related('itens').order_by('-data_criacao')
     
-    # 4. Filtro de Busca
+    # 4. Filtro de Busca (Agora busca Placa também!)
     if termo:
-        # Busca Textual (Nome, CPF, Nome Avulso)
-        # CORREÇÃO: Removi a busca por placa/modelo pois o Orcamento não tem link direto com veículo
         filtros = (
-            Q(cliente__nome__icontains=termo) |              # Nome do Cliente Cadastrado
-            Q(cliente__cpf_cnpj__icontains=termo) |          # CPF/CNPJ
-            Q(nome_cliente_avulso__icontains=termo)          # Nome Avulso
+            Q(cliente__nome__icontains=termo) |          # Nome do Cliente
+            Q(cliente__cpf_cnpj__icontains=termo) |      # CPF/CNPJ
+            Q(nome_cliente_avulso__icontains=termo) |    # Nome Avulso
+            
+            # --- NOVO: Busca por Veículo ---
+            Q(veiculo__placa__icontains=termo) |         # Placa
+            Q(veiculo__modelo__icontains=termo)          # Modelo do carro
         )
 
-        # Se for número, inclui busca pelo ID do orçamento
         if termo.isdigit():
             filtros |= Q(id=termo)
 
-        # Aplica o filtro
         orcamentos = orcamentos.filter(filtros)
     
     # 5. Filtro de Status
@@ -965,7 +1084,7 @@ def listar_orcamentos(request):
     return render(request, 'financeiro/lista_orcamentos.html', {
         'orcamentos': orcamentos,
         'filters': request.GET 
-})
+    })
 
 @login_required
 def excluir_orcamento(request, id):

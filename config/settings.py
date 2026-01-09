@@ -231,6 +231,13 @@ UNFOLD = {
     },
 }
 
+# Configuração de Cache (Memória Local - Ideal para Dev e Servidores Simples)
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+        'LOCATION': 'unique-snowflake', # Um nome único para sua instância
+    }
+}
 
 
 

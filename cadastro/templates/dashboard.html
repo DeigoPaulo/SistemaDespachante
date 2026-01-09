@@ -20,6 +20,7 @@
     </a>
 </div>
 {% endif %}
+
 <div class="row align-items-center mb-4">
     <div class="col-md-6">
         <h2 class="fw-bold mb-0">Visão Geral</h2>
@@ -136,10 +137,21 @@
                     </td>
 
                     <td>
-                        <a href="{% url 'editar_veiculo' processo.veiculo.id %}" class="text-decoration-none" title="Editar Veículo">
-                            <span class="badge bg-dark font-monospace px-2 py-1 mb-1">{{ processo.veiculo.placa }}</span>
-                            <div class="smaller text-muted text-uppercase fw-bold">{{ processo.veiculo.modelo }}</div>
-                        </a>
+                        {% if processo.veiculo %}
+                            <a href="{% url 'editar_veiculo' processo.veiculo.id %}" class="text-decoration-none" title="Editar Veículo">
+                                <span class="badge bg-dark font-monospace px-2 py-1 mb-1">{{ processo.veiculo.placa }}</span>
+                                <div class="smaller text-muted text-uppercase fw-bold">{{ processo.veiculo.modelo }}</div>
+                            </a>
+                        {% else %}
+                            <a href="{% url 'editar_atendimento' processo.id %}" class="text-decoration-none" title="Clique para vincular um veículo">
+                                <span class="badge bg-light text-dark border border-warning">
+                                    <i class="fas fa-exclamation-triangle text-warning me-1"></i> Sem Veículo
+                                </span>
+                                <div class="smaller text-primary fw-bold mt-1">
+                                    <i class="fas fa-plus-circle"></i> Vincular
+                                </div>
+                            </a>
+                        {% endif %}
                     </td>
 
                     <td>

@@ -22,8 +22,7 @@
             </div>
 
             <div class="card-body p-4">
-                <form method="post">
-                    {% csrf_token %}
+                <form method="post" enctype="multipart/form-data"> {% csrf_token %}
 
                     {% for field in form %}
                         <div class="mb-3">
@@ -32,10 +31,19 @@
                                 {% if field.field.required %} <span class="text-danger">*</span> {% endif %}
                             </label>
                             
-                            {{ field }}
+                            {# Garante que campos não especificados nos widgets do forms.py ainda tenham estilo #}
+                            {% if field.field.widget.attrs.class %}
+                                {{ field }}
+                            {% elif "Select" in field.field.widget.constructor_name %}
+                                <div class="input-group">
+                                    {{ field }}
+                                </div>
+                            {% else %}
+                                {{ field }}
+                            {% endif %}
 
                             {% if field.help_text %}
-                                <div class="form-text text-muted">{{ field.help_text }}</div>
+                                <div class="form-text text-muted small">{{ field.help_text|safe }}</div>
                             {% endif %}
                             
                             {% if field.errors %}
@@ -90,5 +98,4 @@
         </div>
     {% endif %}
 {% endif %}
-
 {% endblock %}

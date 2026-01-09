@@ -158,10 +158,13 @@ class Atendimento(models.Model):
 
     despachante = models.ForeignKey('Despachante', on_delete=models.CASCADE)
     cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE)
-    veiculo = models.ForeignKey('Veiculo', on_delete=models.CASCADE)
+    
+    # --- ATUALIZAÇÃO AQUI ---
+    # Agora aceita ficar vazio (null=True) para permitir processos vindos de orçamento.
+    # Se apagar o carro, o processo continua existindo (SET_NULL).
+    veiculo = models.ForeignKey('Veiculo', on_delete=models.SET_NULL, null=True, blank=True)
 
-    # --- NOVO CAMPO: Responsável Técnico ---
-    # Armazena quem é o responsável pelo processo (pode ser diferente de quem digitou)
+    # Responsável Técnico
     responsavel = models.ForeignKey(
         User, 
         on_delete=models.SET_NULL, 
@@ -227,7 +230,7 @@ class Orcamento(models.Model):
     # --- MUDANÇA 1: Cliente agora é opcional (null=True) e usamos SET_NULL ---
     # Motivo: Se você excluir o cliente do cadastro, não queremos apagar o histórico de orçamentos dele.
     cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True)
-    
+    veiculo = models.ForeignKey(Veiculo, on_delete=models.SET_NULL, null=True, blank=True)
     # --- MUDANÇA 2: Novo campo para armazenar o nome de quem não tem cadastro ---
     nome_cliente_avulso = models.CharField(max_length=200, blank=True, null=True)
 

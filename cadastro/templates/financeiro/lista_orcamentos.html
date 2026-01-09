@@ -14,13 +14,11 @@
     <div class="card-body py-3">
         <form method="GET" class="row g-2 align-items-center">
             <div class="col-md-6">
-                <label class="visually-hidden">Buscar</label>
                 <input type="text" name="termo" class="form-control" 
                        placeholder="Buscar por Cliente, CPF ou Nº..." 
                        value="{{ filters.termo|default:'' }}">
             </div>
             <div class="col-md-4">
-                <label class="visually-hidden">Status</label>
                 <select name="status" class="form-select">
                     <option value="">Todos os Status</option>
                     <option value="PENDENTE" {% if filters.status == 'PENDENTE' %}selected{% endif %}>Pendente</option>
@@ -43,6 +41,7 @@
                     <tr>
                         <th class="ps-4">Nº</th>
                         <th>Cliente</th>
+                        <th>Serviços</th>
                         <th>Data</th>
                         <th>Valor Total</th>
                         <th class="text-center">Status</th>
@@ -53,6 +52,7 @@
                     {% for item in orcamentos %}
                     <tr>
                         <td class="ps-4 fw-bold text-muted">#{{ item.id }}</td>
+                        
                         <td>
                             {% if item.cliente %}
                                 <div class="fw-bold text-dark">{{ item.cliente.nome }}</div>
@@ -62,8 +62,28 @@
                                 <small class="text-muted fst-italic"><i class="fas fa-user me-1"></i> Avulso</small>
                             {% endif %}
                         </td>
+
+                        <td>
+                            <div class="d-flex flex-wrap gap-1" style="max-width: 300px;">
+                                {% for servico in item.itens.all|slice:":2" %}
+                                    <span class="badge bg-white text-secondary border shadow-sm">
+                                        {{ servico.servico_nome }}
+                                    </span>
+                                {% empty %}
+                                    <span class="text-muted small fst-italic">--</span>
+                                {% endfor %}
+                                
+                                {% if item.itens.count > 2 %}
+                                    <span class="badge bg-light text-muted border" title="Mais itens...">
+                                        +{{ item.itens.count|add:"-2" }}
+                                    </span>
+                                {% endif %}
+                            </div>
+                        </td>
+
                         <td>{{ item.data_criacao|date:"d/m/Y" }}</td>
                         <td class="fw-bold text-primary">R$ {{ item.valor_total }}</td>
+                        
                         <td class="text-center">
                             {% if item.status == 'PENDENTE' %}
                                 <span class="badge bg-warning text-dark">Pendente</span>
@@ -73,8 +93,9 @@
                                 <span class="badge bg-danger">Cancelado</span>
                             {% endif %}
                         </td>
+                        
                         <td class="text-end pe-4">
-                            <a href="{% url 'detalhe_orcamento' item.id %}" class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                            <a href="{% url 'detalhe_orcamento' item.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="Ver Detalhes">
                                 <i class="fas fa-eye"></i>
                             </a>
                             
@@ -82,8 +103,7 @@
                                 <button type="button" class="btn btn-sm btn-outline-danger btn-excluir ms-1" 
                                         data-url="{% url 'excluir_orcamento' item.id %}" 
                                         data-bs-toggle="modal" 
-                                        data-bs-target="#modalExcluirOrcamento"
-                                        title="Excluir Orçamento">
+                                        data-bs-target="#modalExcluirOrcamento">
                                     <i class="fas fa-trash"></i>
                                 </button>
                             {% endif %}
@@ -91,7 +111,7 @@
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center py-5 text-muted">
+                        <td colspan="7" class="text-center py-5 text-muted">
                             <i class="fas fa-folder-open fa-3x mb-3 opacity-25"></i>
                             <h5>Nenhum orçamento encontrado.</h5>
                         </td>
@@ -117,7 +137,6 @@
             </div>
             <div class="modal-footer justify-content-center border-0 pb-4">
                 <button type="button" class="btn btn-light px-4" data-bs-dismiss="modal">Cancelar</button>
-                
                 <form id="form-excluir" method="POST">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger px-4">Sim, Excluir</button>
@@ -126,23 +145,15 @@
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block extra_js %}
 <script>
-    // Script Robusto para passar a URL correta ao Modal
     const modalExcluir = document.getElementById('modalExcluirOrcamento');
-    
     if (modalExcluir) {
         modalExcluir.addEventListener('show.bs.modal', function (event) {
-            // Botão que acionou o modal
             const button = event.relatedTarget;
-            
-            // Extrai a URL gerada pelo Django no atributo data-url
             const urlExclusao = button.getAttribute('data-url');
-            
-            // Atualiza o Action do formulário
             const form = document.getElementById('form-excluir');
             form.action = urlExclusao;
         });
