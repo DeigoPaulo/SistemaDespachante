@@ -14,6 +14,8 @@ import datetime
 from django.contrib import messages # Importante para avisar o erro na tela
 from .models import TipoServico, Cliente, Atendimento
 from .models import Orcamento, ItemOrcamento
+import json
+from django.db.models.functions import ExtractMonth
 
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login
@@ -300,39 +302,60 @@ def novo_atendimento(request):
         'titulo': 'Novo Processo DETRAN'
     })
 
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.urls import reverse
+# Certifique-se de importar o Atendimento e o Form
+from .models import Atendimento
+from .forms import AtendimentoForm
+
 @login_required
 def editar_atendimento(request, id):
     perfil = request.user.perfilusuario
+    despachante = perfil.despachante
     
-    # Busca o atendimento
-    atendimento = get_object_or_404(Atendimento, id=id, despachante=perfil.despachante)
+    # 1. Busca o atendimento (Garante que só edita o que for da própria empresa)
+    atendimento = get_object_or_404(Atendimento, id=id, despachante=despachante)
     
     if request.method == 'POST':
+        # Passamos request.user conforme seu AtendimentoForm exige no __init__
         form = AtendimentoForm(request.user, request.POST, instance=atendimento)
+        
         if form.is_valid():
-            form.save()
-            return redirect('dashboard')
+            # Interceptamos o save para garantir os cálculos de custo
+            atendimento_obj = form.save(commit=False)
+            
+            # --- LÓGICA DE RECALCULO AUTOMÁTICO ---
+            # Pegamos o honorário atual (digitado ou vindo do banco)
+            h_bruto = atendimento_obj.valor_honorarios or 0
+            
+            # Aplicamos as alíquotas fixas do Despachante logado
+            aliq_imp = despachante.aliquota_imposto / 100
+            aliq_ban = despachante.taxa_bancaria_padrao / 100
+            
+            # Gravamos os custos calculados (proteção contra edição manual)
+            atendimento_obj.custo_impostos = h_bruto * aliq_imp
+            atendimento_obj.custo_taxa_bancaria = h_bruto * aliq_ban
+            
+            atendimento_obj.save()
+            
+            messages.success(request, f"Valores do processo {atendimento_obj.numero_atendimento or id} atualizados!")
+            
+            # Sugestão: Voltar para o Fluxo de Caixa, que é de onde veio o clique
+            return redirect('fluxo_caixa')
     else:
         form = AtendimentoForm(request.user, instance=atendimento)
         
-    # --- CORREÇÃO DE SEGURANÇA ---
-    # Verifica se existe veículo antes de tentar ler a placa
-    if atendimento.veiculo:
-        info_veiculo = f"do veículo {atendimento.veiculo.placa}"
-    else:
-        info_veiculo = "(Sem veículo vinculado)"
+    # --- CORREÇÃO DE SEGURANÇA (MENSAGEM DO MODAL) ---
+    info_veiculo = f"do veículo {atendimento.veiculo.placa}" if atendimento.veiculo else "(Sem veículo vinculado)"
 
     return render(request, 'form_generico.html', {
         'form': form, 
-        'titulo': f'Editar Processo #{atendimento.numero_atendimento or "S/N"}',
-        
-        # Enviamos para o template exatamente qual URL deve ser chamada para excluir
+        'titulo': f'Ajustar Valores - Processo {atendimento.numero_atendimento or "S/N"}',
         'url_excluir': reverse('excluir_atendimento', args=[atendimento.id]),
-        
-        # Usamos a variável segura criada acima
         'texto_modal': f"Tem certeza que deseja excluir o processo {info_veiculo}?",
-        
-        'url_voltar': reverse('dashboard')
+        'url_voltar': reverse('fluxo_caixa') # Botão voltar leva ao financeiro
     })
 
 @login_required
@@ -616,116 +639,111 @@ def novo_veiculo(request):
 def cadastro_rapido(request):
     """
     Tela de lançamento ágil: Busca cliente + Adiciona Veículos + Cria Processos em lote
-    Agora suporta a escolha de um Responsável Técnico.
+    Atualizado: Agora calcula lucros e impostos automaticamente via alíquotas do Despachante.
     """
     perfil = getattr(request.user, 'perfilusuario', None)
     if not perfil:
         return redirect('logout')
 
-    # --- CARREGAMENTOS (GET) ---
-    servicos_db = TipoServico.objects.filter(despachante=perfil.despachante, ativo=True)
-    
-    # --- NOVO: Busca a equipe do despachante para preencher o Select de responsáveis ---
-    equipe = PerfilUsuario.objects.filter(
-        despachante=perfil.despachante
-    ).select_related('user')
+    despachante = perfil.despachante
+    servicos_db = TipoServico.objects.filter(despachante=despachante, ativo=True)
+    equipe = PerfilUsuario.objects.filter(despachante=despachante).select_related('user')
 
     if request.method == 'POST':
         try:
             with transaction.atomic():
-                despachante = perfil.despachante
-
-                # --- NOVO: Define quem é o responsável ---
+                # 1. Responsável Técnico
                 responsavel_id = request.POST.get('responsavel_id')
-                responsavel_obj = request.user # Padrão: Usuário logado
-                
+                responsavel_obj = request.user
                 if responsavel_id:
-                    # Tenta buscar o usuário selecionado
                     try:
                         responsavel_obj = User.objects.get(id=responsavel_id)
                     except User.DoesNotExist:
-                        pass # Se der erro, mantém o usuário logado como fallback
+                        pass
 
-                # 1. VERIFICA SE UM CLIENTE FOI SELECIONADO
+                # 2. Cliente
                 cliente_id = request.POST.get('cliente_id')
                 if not cliente_id:
-                    print("❌ Erro: Nenhum cliente selecionado.")
+                    messages.error(request, "Nenhum cliente selecionado.")
                     return redirect('cadastro_rapido')
                 
                 cliente = get_object_or_404(Cliente, id=cliente_id, despachante=despachante)
 
-                # 2. CAPTURA AS LISTAS DE DADOS
+                # 3. Captura Listas (Lote)
                 placas = request.POST.getlist('veiculo_placa[]')
-                renavams = request.POST.getlist('veiculo_renavam[]')
                 modelos = request.POST.getlist('veiculo_modelo[]')
-                cores = request.POST.getlist('veiculo_cor[]')
-                anos = request.POST.getlist('veiculo_ano[]')
-                marcas = request.POST.getlist('veiculo_marca[]')
-                chassis = request.POST.getlist('veiculo_chassi[]')
-                tipos = request.POST.getlist('veiculo_tipo[]')
-                
-                servicos = request.POST.getlist('servico[]')
+                servicos_str_lista = request.POST.getlist('servico[]') # Vem como "Serviço A + Serviço B"
                 atendimentos = request.POST.getlist('numero_atendimento[]')
-                obs_geral = request.POST.get('observacoes', '')
                 
+                obs_geral = request.POST.get('observacoes', '')
                 prazo_input = request.POST.get('prazo_entrega')
 
-                # 3. LOOP PARA SALVAR VEÍCULOS E CRIAR PROCESSOS
+                # 4. Loop de Criação
                 for i in range(len(placas)):
-                    # Limpeza básica da placa
                     placa_limpa = placas[i].replace('-', '').replace(' ', '').upper()
                     if not placa_limpa: continue
-                    if len(placa_limpa) > 7: placa_limpa = placa_limpa[:7]
 
-                    # Tratamento de ano
-                    af = anos[i] if (i < len(anos) and anos[i] and anos[i].isdigit()) else 2000
-                    
-                    # Cria ou Atualiza o Veículo
+                    # Garante existência do Veículo
                     veiculo, _ = Veiculo.objects.get_or_create(
                         placa=placa_limpa,
                         despachante=despachante,
-                        defaults={
-                            'cliente': cliente,
-                            'renavam': renavams[i] if i < len(renavams) else '',
-                            'modelo': modelos[i] if i < len(modelos) else '',
-                            'cor': cores[i] if i < len(cores) else '',
-                            'ano_fabricacao': af,
-                            'ano_modelo': af, 
-                            'marca': marcas[i] if i < len(marcas) else '',
-                            'chassi': chassis[i] if i < len(chassis) else '',
-                            'tipo': tipos[i] if i < len(tipos) else 'CARRO'
-                        }
+                        defaults={'cliente': cliente, 'modelo': modelos[i].upper()}
                     )
 
-                    # Cria o Processo (Atendimento)
-                    servico_atual = servicos[i] if i < len(servicos) else 'Desconhecido'
-                    num_atend_atual = atendimentos[i] if i < len(atendimentos) else ''
+                    # --- LÓGICA FINANCEIRA AUTOMATIZADA ---
+                    # Quebra a string de serviços para calcular os valores individuais
+                    nomes_selecionados = [s.strip() for s in servicos_str_lista[i].split('+')]
+                    
+                    total_taxas = 0
+                    total_honorarios = 0
 
+                    for nome_s in nomes_selecionados:
+                        # Busca na tabela de preços do despachante
+                        s_base = servicos_db.filter(nome__iexact=nome_s).first()
+                        if s_base:
+                            total_taxas += s_base.valor_base
+                            total_honorarios += s_base.honorarios
+                        else:
+                            # Se for um serviço digitado manualmente que não está na tabela
+                            # (Opcional: você pode definir um valor padrão ou deixar zerado)
+                            pass
+
+                    # Aplica as alíquotas fixas do Despachante sobre o total de honorários
+                    custo_imp = total_honorarios * (despachante.aliquota_imposto / 100)
+                    custo_ban = total_honorarios * (despachante.taxa_bancaria_padrao / 100)
+
+                    # 5. Cria o Atendimento
                     Atendimento.objects.create(
                         despachante=despachante,
                         cliente=cliente,
                         veiculo=veiculo,
-                        servico=servico_atual,
-                        
-                        # --- GRAVA O RESPONSÁVEL AQUI ---
+                        servico=servicos_str_lista[i],
                         responsavel=responsavel_obj,
+                        numero_atendimento=atendimentos[i] if i < len(atendimentos) else '',
                         
-                        numero_atendimento=num_atend_atual,
-                        observacoes_internas=obs_geral,
+                        # Valores Financeiros Provisionados
+                        valor_taxas_detran=total_taxas,
+                        valor_honorarios=total_honorarios,
+                        custo_impostos=custo_imp,
+                        custo_taxa_bancaria=custo_ban,
+                        status_financeiro='ABERTO',
+                        
+                        status='SOLICITADO',
+                        data_solicitacao=timezone.now().date(),
                         data_entrega=prazo_input if prazo_input else None,
-                        status='SOLICITADO'
+                        observacoes_internas=f"{obs_geral}\nGerado via Cadastro Rápido."
                     )
 
+            messages.success(request, f"{len(placas)} processos criados com cálculos financeiros automáticos!")
             return redirect('dashboard')
 
         except Exception as e:
-            print(f"❌ Erro Crítico no Cadastro Rápido: {e}")
-            pass
+            messages.error(request, f"Erro ao processar lote: {e}")
+            return redirect('cadastro_rapido')
 
-    # Renderiza o template passando serviços e a equipe
     return render(request, 'processos/cadastro_rapido.html', {
         'servicos_db': servicos_db,
-        'equipe': equipe  # Variável nova disponível no template
+        'equipe': equipe
     })
 
 # --- API DE BUSCA DE CLIENTES (AUTOCOMPLETE) ---
@@ -848,9 +866,24 @@ def gerenciar_servicos(request):
     
     if request.method == 'POST':
         nome = request.POST.get('nome')
-        v_base = request.POST.get('valor_base').replace(',', '.')
-        v_hon = request.POST.get('honorarios').replace(',', '.')
         
+        # Captura os valores brutos do formulário
+        raw_base = request.POST.get('valor_base')
+        raw_hon = request.POST.get('honorarios')
+
+        # 1. Tratamento do Valor Base (Taxas)
+        if raw_base:
+            v_base = raw_base.replace(',', '.')
+        else:
+            v_base = 0  # Se estiver vazio, salva 0.00
+
+        # 2. Tratamento dos Honorários
+        if raw_hon:
+            v_hon = raw_hon.replace(',', '.')
+        else:
+            v_hon = 0   # Se estiver vazio, salva 0.00
+        
+        # Criação segura no banco
         TipoServico.objects.create(
             despachante=perfil.despachante,
             nome=nome,
@@ -974,15 +1007,16 @@ def detalhe_orcamento(request, id):
 
 @login_required
 def aprovar_orcamento(request, id):
-    # 1. Pega o orçamento
+    # 1. Busca o orçamento e os dados do despachante (alíquotas)
     orcamento = get_object_or_404(Orcamento, id=id, despachante=request.user.perfilusuario.despachante)
+    despachante = request.user.perfilusuario.despachante
 
-    # 2. Verificações
+    # 2. Verificações de segurança
     if orcamento.status == 'APROVADO':
         messages.warning(request, "Este orçamento já foi aprovado.")
         return redirect('detalhe_orcamento', id=id)
 
-    # Lógica de Cliente Avulso
+    # Lógica de Cliente Avulso (Cria cadastro se não existir - Mantido)
     if not orcamento.cliente and orcamento.nome_cliente_avulso:
         try:
             novo_cliente = Cliente.objects.create(
@@ -993,55 +1027,74 @@ def aprovar_orcamento(request, id):
             orcamento.cliente = novo_cliente
             orcamento.save()
         except Exception as e:
-            messages.error(request, f"Erro ao cadastrar cliente: {e}")
+            messages.error(request, f"Erro ao cadastrar cliente avulso: {e}")
             return redirect('detalhe_orcamento', id=id)
 
     if not orcamento.cliente:
         messages.error(request, "Erro: Cliente não vinculado.")
         return redirect('detalhe_orcamento', id=id)
 
-    # 3. TRANSFORMAÇÃO (AGRUPADA)
+    # 3. TRANSFORMAÇÃO (COM CÁLCULOS AUTOMÁTICOS DE ALÍQUOTAS)
     try:
         with transaction.atomic():
             orcamento.status = 'APROVADO'
             orcamento.save()
 
-            # 1. Pega todos os nomes dos serviços
-            # Usa .itens.all() por causa do related_name='itens'
-            lista_nomes = [item.servico_nome for item in orcamento.itens.all()]
-            
-            # 2. Cria uma string única (limitada a 100 chars para caber no banco)
-            nome_servico_agrupado = " + ".join(lista_nomes)[:100]
+            total_taxas_detran = 0
+            total_honorarios_brutos = 0
+            lista_nomes_servicos = []
+            detalhes_itens = []
 
-            # 3. Detalhes para observação
-            detalhes = []
             for item in orcamento.itens.all():
-                detalhes.append(f"- {item.servico_nome}: R$ {item.valor}")
-            
-            texto_obs = "\n".join(detalhes)
-            obs_final = f"Gerado via Orçamento #{orcamento.id}.\nItens:\n{texto_obs}\n\nObs Originais: {orcamento.observacoes or ''}"
+                lista_nomes_servicos.append(item.servico_nome)
+                detalhes_itens.append(f"- {item.servico_nome}: R$ {item.valor}")
+                
+                servico_base = TipoServico.objects.filter(
+                    despachante=orcamento.despachante, 
+                    nome=item.servico_nome
+                ).first()
 
-            # 4. Cria UM ÚNICO Atendimento (Agora com Veículo!)
+                if servico_base:
+                    total_taxas_detran += servico_base.valor_base
+                    total_honorarios_brutos += servico_base.honorarios
+                else:
+                    total_honorarios_brutos += item.valor
+
+            # --- CÁLCULO AUTOMÁTICO VIA CONFIGURAÇÃO DO DESPACHANTE ---
+            # Aqui usamos as alíquotas que adicionamos no modelo Despachante
+            valor_impostos = total_honorarios_brutos * (despachante.aliquota_imposto / 100)
+            valor_taxa_bancaria = total_honorarios_brutos * (despachante.taxa_bancaria_padrao / 100)
+
+            nome_servico_agrupado = " + ".join(lista_nomes_servicos)[:100]
+            obs_final = f"Gerado via Orçamento #{orcamento.id}.\nItens:\n" + "\n".join(detalhes_itens) + f"\n\nObs: {orcamento.observacoes or ''}"
+
+            # 4. Cria o Atendimento
             Atendimento.objects.create(
                 despachante=orcamento.despachante,
                 cliente=orcamento.cliente,
-                
-                # --- CORREÇÃO AQUI: Passamos o veículo do orçamento ---
-                veiculo=orcamento.veiculo, 
-                
+                veiculo=orcamento.veiculo,
                 servico=nome_servico_agrupado,
+                
+                # --- FINANCEIRO AUTOMATIZADO ---
+                valor_taxas_detran=total_taxas_detran,
+                valor_honorarios=total_honorarios_brutos,
+                custo_impostos=valor_impostos,         # Preenchido via alíquota configurada
+                custo_taxa_bancaria=valor_taxa_bancaria, # Preenchido via alíquota configurada
+                status_financeiro='ABERTO', 
+                quem_pagou_detran='DESPACHANTE',
+                # --------------------------------
+                
                 status='SOLICITADO',
                 data_solicitacao=timezone.now().date(),
                 observacoes_internas=obs_final
             )
 
-        messages.success(request, "Orçamento Aprovado! Processo gerado com sucesso.")
+        messages.success(request, f"Orçamento Aprovado! Custos operacionais ({despachante.aliquota_imposto}% imposto) calculados automaticamente.")
         return redirect('dashboard')
 
     except Exception as e:
         messages.error(request, f"Erro ao gerar processo: {e}")
         return redirect('detalhe_orcamento', id=id)
-
 
 @login_required
 def listar_orcamentos(request):
@@ -1109,144 +1162,194 @@ def excluir_orcamento(request, id):
     
     return redirect('listar_orcamentos')
 
+
 @login_required
 def relatorio_mensal(request):
-    try:
-        perfil = request.user.perfilusuario
-    except PerfilUsuario.DoesNotExist:
-        return render(request, 'erro_perfil.html')
-
-    # 1. Descobrir Mês e Ano (Do filtro ou do Atual)
+    """
+    Relatório de Produção: Filtra processos por intervalo de datas, 
+    cliente/placa e operador responsável.
+    """
+    despachante = request.user.perfilusuario.despachante
+    
+    # 1. CAPTURA DOS NOVOS FILTROS DE DATA
+    # Padrão: Se não informar datas, traz o mês atual (do dia 01 até hoje)
     hoje = timezone.now().date()
-    mes_filtro = request.GET.get('mes', hoje.month)
-    ano_filtro = request.GET.get('ano', hoje.year)
-    
-    try:
-        mes_filtro = int(mes_filtro)
-        ano_filtro = int(ano_filtro)
-    except ValueError:
-        mes_filtro = hoje.month
-        ano_filtro = hoje.year
+    data_inicio_padrao = hoje.replace(day=1).strftime('%Y-%m-%d')
+    data_fim_padrao = hoje.strftime('%Y-%m-%d')
 
-    # 2. Filtrar os atendimentos do mês selecionado
+    data_inicio = request.GET.get('data_inicio', data_inicio_padrao)
+    data_fim = request.GET.get('data_fim', data_fim_padrao)
+    cliente_placa = request.GET.get('cliente_placa')
+    responsavel_id = request.GET.get('responsavel')
+
+    # 2. QUERY BASE
     processos = Atendimento.objects.filter(
-        despachante=perfil.despachante,
-        data_solicitacao__month=mes_filtro,
-        data_solicitacao__year=ano_filtro
-    ).order_by('data_solicitacao')
+        despachante=despachante
+    ).select_related('cliente', 'veiculo', 'responsavel').order_by('-data_solicitacao')
 
-    # 3. Pequeno resumo estatístico para o cabeçalho do relatório
-    total_qtd = processos.count()
+    # 3. APLICAÇÃO DINÂMICA DOS FILTROS
+    if data_inicio and data_fim:
+        processos = processos.filter(data_solicitacao__range=[data_inicio, data_fim])
     
-    # Agrupamento por status (Ex: Quantos aprovados, quantos cancelados)
-    resumo_status = processos.values('status').annotate(total=Count('status'))
+    if cliente_placa:
+        processos = processos.filter(
+            Q(cliente__nome__icontains=cliente_placa) | 
+            Q(veiculo__placa__icontains=cliente_placa)
+        )
+    
+    if responsavel_id:
+        processos = processos.filter(responsavel_id=responsavel_id)
 
-    # Lista de meses para o dropdown do filtro
-    meses_ano = [
-        (1, 'Janeiro'), (2, 'Fevereiro'), (3, 'Março'), (4, 'Abril'),
-        (5, 'Maio'), (6, 'Junho'), (7, 'Julho'), (8, 'Agosto'),
-        (9, 'Setembro'), (10, 'Outubro'), (11, 'Novembro'), (12, 'Dezembro')
-    ]
+    # 4. RESUMO POR STATUS (Agrupamento limpo para evitar duplicados)
+    resumo_raw = processos.values('status').annotate(total=Count('id'))
+    status_dict = dict(Atendimento.STATUS_CHOICES)
+    
+    resumo_status = []
+    for item in resumo_raw:
+        resumo_status.append({
+            'status': status_dict.get(item['status'], item['status']),
+            'total': item['total']
+        })
+
+    # 5. DADOS COMPLEMENTARES
+    equipe = PerfilUsuario.objects.filter(despachante=despachante).select_related('user')
 
     context = {
         'processos': processos,
-        'total_qtd': total_qtd,
+        'equipe': equipe,
         'resumo_status': resumo_status,
-        'mes_atual': mes_filtro,
-        'ano_atual': ano_filtro,
-        'meses_lista': meses_ano,
-        'anos_lista': range(hoje.year - 2, hoje.year + 2), # Ex: 2023 a 2027
+        'total_qtd': processos.count(),
+        'filtros': {
+            'data_inicio': data_inicio,
+            'data_fim': data_fim,
+            'cliente_placa': cliente_placa,
+            'responsavel': responsavel_id
+        }
     }
-
-    return render(request, 'relatorios/relatorio_mensal.html', context)
+    
+    return render(request, 'cadastro/relatorio_mensal.html', context)
 
 
 @login_required
 def relatorio_servicos(request):
-    # --- 1. Filtros (Mantido igual) ---
+    """
+    Gera o extrato de serviços por cliente.
+    Otimizado para carregar dados apenas sob demanda.
+    """
+    # 1. Captura de Filtros
     data_inicio = request.GET.get('data_inicio')
     data_fim = request.GET.get('data_fim')
     cliente_placa = request.GET.get('cliente_placa')
-    status_filtro = request.GET.get('status')
+    status_fin = request.GET.get('status_financeiro')
 
-    atendimentos = Atendimento.objects.filter(despachante=request.user.perfilusuario.despachante)
+    # Iniciamos as variáveis de retorno vazias
+    relatorio_agrupado = None
+    total_geral_taxas = 0
+    total_geral_honorarios = 0
+    total_geral_valor = 0
 
-    if data_inicio:
-        atendimentos = atendimentos.filter(data_solicitacao__gte=data_inicio)
-    if data_fim:
-        atendimentos = atendimentos.filter(data_solicitacao__lte=data_fim)
-    if status_filtro:
-        atendimentos = atendimentos.filter(status=status_filtro)
+    # 2. LÓGICA DE PERFORMANCE: Só acessa o banco se houver busca
     if cliente_placa:
+        # Busca base: Mantido 'APROVADO' (Serviços prontos/entregues)
+        atendimentos = Atendimento.objects.filter(
+            despachante=request.user.perfilusuario.despachante,
+            status='APROVADO' 
+        ).select_related('cliente', 'veiculo').order_by('cliente__nome', '-data_solicitacao')
+
+        # Filtros Opcionais
+        if data_inicio:
+            atendimentos = atendimentos.filter(data_solicitacao__gte=data_inicio)
+        if data_fim:
+            atendimentos = atendimentos.filter(data_solicitacao__lte=data_fim)
+        if status_fin:
+            atendimentos = atendimentos.filter(status_financeiro=status_fin)
+
+        # Filtro de Texto (Nome, Placa)
         atendimentos = atendimentos.filter(
             Q(cliente__nome__icontains=cliente_placa) |
             Q(veiculo__placa__icontains=cliente_placa)
         )
 
-    # Ordena por cliente primeiro (para agrupar visualmente) e depois por data
-    atendimentos = atendimentos.order_by('cliente__nome', '-data_solicitacao')
-
-    # --- 2. Lógica de Agrupamento e Cálculo ---
-    relatorio_agrupado = {} # Dicionário principal
-    total_geral_honorarios = 0
-    total_geral_valor = 0
-
-    # Carrega tabela de preços para consulta rápida
-    todos_servicos = {s.nome.upper(): s for s in TipoServico.objects.filter(despachante=request.user.perfilusuario.despachante)}
-
-    for item in atendimentos:
-        # A. Lógica de Preço (Quebra string 'Serviço A + Serviço B')
-        nome_completo = item.servico
-        nomes_individuais = nome_completo.split(' + ')
+        # 3. Agrupamento e Construção de Dados
+        relatorio_agrupado = {}
         
-        honorario_item = 0
-        valor_total_item = 0
-        
-        for nome in nomes_individuais:
-            nome_limpo = nome.strip().upper()
-            servico_obj = todos_servicos.get(nome_limpo)
-            if servico_obj:
-                honorario_item += servico_obj.honorarios
-                valor_total_item += servico_obj.valor_total
+        for item in atendimentos:
+            taxas = item.valor_taxas_detran or 0
+            honorarios = item.valor_honorarios or 0
+            valor_total_item = taxas + honorarios
+            
+            # Dados auxiliares
+            placa = item.veiculo.placa if item.veiculo else "S/P"
+            modelo = item.veiculo.modelo if item.veiculo else "---"
 
-        # B. Lógica de Agrupamento por Cliente
-        cliente_id = item.cliente.id
-        
-        # Se o cliente ainda não está no dicionário, cria a estrutura dele
-        if cliente_id not in relatorio_agrupado:
-            relatorio_agrupado[cliente_id] = {
-                'dados_cliente': item.cliente, # Objeto cliente completo
-                'itens': [],
-                'subtotal_honorarios': 0,
-                'subtotal_valor': 0
-            }
+            cliente_id = item.cliente.id
+            if cliente_id not in relatorio_agrupado:
+                # --- LIMPEZA DE TELEFONE (Evita Erro 404 no WhatsApp) ---
+                tel_bruto = item.cliente.telefone or ""
+                tel_limpo = "".join([c for c in tel_bruto if c.isdigit()])
 
-        # Adiciona o item na lista deste cliente
-        relatorio_agrupado[cliente_id]['itens'].append({
-            'data': item.data_solicitacao,
-            'placa': item.veiculo.placa,
-            'modelo': item.veiculo.modelo, # Útil para exibir no relatório
-            'servico_nome': item.servico,
-            'honorario': honorario_item,
-            'valor_total': valor_total_item,
-            'status': item.get_status_display()
-        })
+                relatorio_agrupado[cliente_id] = {
+                    'dados_cliente': item.cliente,
+                    'telefone_limpo': tel_limpo, # Vai para o botão do template
+                    'itens': [],      
+                    'linhas_zap': [], 
+                    'texto_whatsapp': '', 
+                    'subtotal_taxas': 0,
+                    'subtotal_honorarios': 0,
+                    'subtotal_valor': 0
+                }
 
-        # Atualiza Subtotais do Cliente
-        relatorio_agrupado[cliente_id]['subtotal_honorarios'] += honorario_item
-        relatorio_agrupado[cliente_id]['subtotal_valor'] += valor_total_item
+            # --- ADICIONA DADOS PARA A TABELA ---
+            relatorio_agrupado[cliente_id]['itens'].append({
+                'id': item.id, # <--- IMPORTANTE: Necessário para o botão de Imprimir Recibo
+                'data': item.data_solicitacao,
+                'placa': placa,
+                'modelo': modelo,
+                'numero_atendimento': item.numero_atendimento,
+                'servico_nome': item.servico,
+                'taxas': taxas,
+                'honorario': honorarios,
+                'valor_total': valor_total_item,
+                'status_fin': item.get_status_financeiro_display()
+            })
 
-        # Atualiza Totais Gerais do Relatório
-        total_geral_honorarios += honorario_item
-        total_geral_valor += valor_total_item
+            # --- MONTA LINHA PARA O WHATSAPP ---
+            # Ex: "• Transferência (ABC-1234) - R$ 500,00"
+            linha_formatada = f"• {item.servico} ({placa}) - R$ {valor_total_item:.2f}"
+            relatorio_agrupado[cliente_id]['linhas_zap'].append(linha_formatada)
+
+            # --- ATUALIZA TOTAIS ---
+            relatorio_agrupado[cliente_id]['subtotal_taxas'] += taxas
+            relatorio_agrupado[cliente_id]['subtotal_honorarios'] += honorarios
+            relatorio_agrupado[cliente_id]['subtotal_valor'] += valor_total_item
+
+            total_geral_taxas += taxas
+            total_geral_honorarios += honorarios
+            total_geral_valor += valor_total_item
+
+        # 4. Pós-Processamento: Finalizar texto do WhatsApp
+        for c_id, dados in relatorio_agrupado.items():
+            nome_cliente = dados['dados_cliente'].nome.split()[0] if dados['dados_cliente'].nome else "Cliente"
+            total_formatado = f"{dados['subtotal_valor']:.2f}"
+            
+            lista_servicos = "\n".join(dados['linhas_zap'])
+            
+            msg = (
+                f"Olá {nome_cliente}, segue o extrato dos seus serviços:\n\n"
+                f"{lista_servicos}\n\n"
+                f"*TOTAL A PAGAR: R$ {total_formatado}*"
+            )
+            
+            dados['texto_whatsapp'] = msg
 
     context = {
-        'relatorio_agrupado': relatorio_agrupado, # Passamos o dicionário agrupado
+        'relatorio_agrupado': relatorio_agrupado,
+        'total_geral_taxas': total_geral_taxas,
         'total_geral_honorarios': total_geral_honorarios,
         'total_geral_valor': total_geral_valor,
         'filtros': request.GET
     }
-
+    # Caminho corrigido para o template
     return render(request, 'relatorios/relatorio_servicos.html', context)
 
 @login_required
@@ -1747,3 +1850,250 @@ def master_editar_usuario(request, id):
         'form': form, 
         'titulo': f"Editar Usuário: {user_edit.first_name}"
     })
+
+# ------------------------------------------------------------------------------
+# 5 FLUXO DE CAIXA SIMPLIFICADO
+# ------------------------------------------------------------------------------
+
+@login_required
+def fluxo_caixa(request):
+    despachante = request.user.perfilusuario.despachante
+    
+    # 1. CAPTURA DE PARÂMETROS DE BUSCA
+    data_inicio = request.GET.get('data_inicio')
+    data_fim = request.GET.get('data_fim')
+    cliente_nome = request.GET.get('cliente')
+    status_fin = request.GET.get('status_financeiro')
+
+    # 2. QUERY BASE: Apenas processos APROVADOS (operacionalmente finalizados)
+    processos = Atendimento.objects.filter(
+        despachante=despachante,
+        status='APROVADO'
+    ).select_related('cliente', 'veiculo').order_by('-data_solicitacao')
+
+    # 3. LÓGICA DE FILTRAGEM DINÂMICA
+    # Se não houver nenhum filtro ativo, mostramos o mês atual por padrão (Reset mensal visual)
+    if not any([data_inicio, data_fim, cliente_nome, status_fin]):
+        hoje = timezone.now().date()
+        processos = processos.filter(
+            data_solicitacao__month=hoje.month, 
+            data_solicitacao__year=hoje.year
+        )
+    else:
+        # Filtro por período
+        if data_inicio:
+            processos = processos.filter(data_solicitacao__gte=data_inicio)
+        if data_fim:
+            processos = processos.filter(data_solicitacao__lte=data_fim)
+        
+        # Filtro por nome do cliente ou placa
+        if cliente_nome:
+            processos = processos.filter(
+                Q(cliente__nome__icontains=cliente_nome) | 
+                Q(veiculo__placa__icontains=cliente_nome)
+            )
+        
+        # Filtro por status de pagamento
+        if status_fin:
+            processos = processos.filter(status_financeiro=status_fin)
+
+    # 4. AGREGANDO VALORES (Baseado na lista já filtrada)
+    dados_financeiros = processos.aggregate(
+        total_taxas=Sum('valor_taxas_detran'),
+        total_honorarios=Sum('valor_honorarios'),
+        total_impostos=Sum('custo_impostos'),
+        total_bancario=Sum('custo_taxa_bancaria')
+    )
+
+    # 5. MONTAGEM DO RESUMO PARA OS CARDS
+    resumo = {
+        'total_pendentes': processos.filter(status_financeiro='ABERTO').count(),
+        'valor_taxas': dados_financeiros['total_taxas'] or 0,
+        'valor_honorarios_bruto': dados_financeiros['total_honorarios'] or 0,
+        'valor_impostos': dados_financeiros['total_impostos'] or 0,
+        'valor_bancario': dados_financeiros['total_bancario'] or 0,
+    }
+    
+    # Cálculos de Performance do Período Filtrado
+    resumo['faturamento_total'] = resumo['valor_taxas'] + resumo['valor_honorarios_bruto']
+    resumo['total_custos_operacionais'] = resumo['valor_impostos'] + resumo['valor_bancario']
+    resumo['lucro_liquido_total'] = resumo['valor_honorarios_bruto'] - resumo['total_custos_operacionais']
+
+    return render(request, 'cadastro/fluxo_caixa.html', {
+        'processos': processos,
+        'resumo': resumo,
+        'filtros': request.GET # Enviamos de volta para manter os campos do form preenchidos
+    })
+
+@login_required
+def dar_baixa_pagamento(request, id):
+    """View rápida para confirmar recebimento"""
+    processo = get_object_or_404(Atendimento, id=id, despachante=request.user.perfilusuario.despachante)
+    
+    processo.status_financeiro = 'PAGO'
+    processo.data_pagamento = timezone.now().date()
+    processo.save()
+    
+    messages.success(request, f"Recebimento de R$ {processo.valor_total_cliente} confirmado!")
+    return redirect('fluxo_caixa')
+
+@login_required
+def dashboard_financeiro(request):
+    despachante = request.user.perfilusuario.despachante
+    
+    # Dashboard reflete apenas processos finalizados tecnicamente
+    processos_fin = Atendimento.objects.filter(
+        despachante=despachante, 
+        status='APROVADO'
+    ).exclude(status='CANCELADO')
+
+    # 1. Totais Gerais
+    agregados = processos_fin.aggregate(
+        total_taxas=Sum('valor_taxas_detran'),
+        total_honorarios=Sum('valor_honorarios'),
+        total_impostos=Sum('custo_impostos'),
+        total_bancario=Sum('custo_taxa_bancaria')
+    )
+
+    h_bruto = agregados['total_honorarios'] or 0
+    impostos = agregados['total_impostos'] or 0
+    bancario = agregados['total_bancario'] or 0
+    lucro_liquido = h_bruto - (impostos + bancario)
+
+    # 2. Dados Gráfico Pizza (Composição do Honorário)
+    pie_data = [float(lucro_liquido), float(impostos), float(bancario)]
+
+    # 3. Evolução Mensal (Baseado na data de solicitação dos processos finalizados)
+    hoje = timezone.now()
+    meses_nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
+    
+    grafico_evolucao = processos_fin.filter(data_solicitacao__year=hoje.year)\
+        .annotate(mes=ExtractMonth('data_solicitacao'))\
+        .values('mes')\
+        .annotate(total=Sum('valor_honorarios'))\
+        .order_by('mes')
+
+    labels_meses = [meses_nomes[item['mes']-1] for item in grafico_evolucao]
+    valores_meses = [float(item['total']) for item in grafico_evolucao]
+
+    context = {
+        'resumo': {
+            'bruto': float((agregados['total_taxas'] or 0) + h_bruto),
+            'detran': float(agregados['total_taxas'] or 0),
+            'lucro': float(lucro_liquido),
+            'pendente': processos_fin.filter(status_financeiro='ABERTO').count()
+        },
+        'pie_data': json.dumps(pie_data),
+        'labels_meses': json.dumps(labels_meses),
+        'valores_meses': json.dumps(valores_meses),
+    }
+
+    return render(request, 'cadastro/dashboard_financeiro.html', context)
+
+@login_required
+def relatorio_inadimplencia(request):
+    despachante = request.user.perfilusuario.despachante
+    hoje = timezone.now().date()
+    
+    devedores_qs = Atendimento.objects.filter(
+        despachante=despachante,
+        status='APROVADO',
+        status_financeiro='ABERTO'
+    ).select_related('cliente', 'veiculo').order_by('data_solicitacao')
+
+    # Totais
+    agregados = devedores_qs.aggregate(
+        total_taxas=Sum('valor_taxas_detran'),
+        total_honorarios=Sum('valor_honorarios')
+    )
+    total_taxas = agregados['total_taxas'] or 0
+    total_honorarios = agregados['total_honorarios'] or 0
+
+    # Lista final que vai para o template
+    lista_devedores = []
+
+    for item in devedores_qs:
+        # Cálculos
+        dias_atraso = (hoje - item.data_solicitacao).days
+        valor_total_calc = (item.valor_taxas_detran or 0) + (item.valor_honorarios or 0)
+
+        # WhatsApp
+        tel_bruto = item.cliente.telefone or ""
+        telefone_limpo = "".join([c for c in tel_bruto if c.isdigit()])
+        
+        primeiro_nome = item.cliente.nome.split()[0] if item.cliente.nome else "Cliente"
+        placa = item.veiculo.placa if item.veiculo else "S/P"
+        
+        texto_whatsapp = (
+            f"Olá {primeiro_nome}, identificamos uma pendência referente ao serviço de "
+            f"{item.servico} (Placa: {placa}).\n"
+            f"Valor em aberto: R$ {valor_total_calc:.2f}.\n"
+            "Podemos agendar o pagamento?"
+        )
+
+        # Criamos um dicionário para não conflitar com propriedades do Model
+        lista_devedores.append({
+            'id': item.id,
+            'dias_atraso': dias_atraso,
+            'cliente': item.cliente,
+            'servico': item.servico,
+            'veiculo': item.veiculo,
+            'valor_taxas_detran': item.valor_taxas_detran,
+            'valor_honorarios': item.valor_honorarios,
+            'valor_total_cliente': valor_total_calc, # Nome chave que o template já usa
+            'telefone_limpo': telefone_limpo,
+            'texto_whatsapp': texto_whatsapp
+        })
+
+    context = {
+        'devedores': lista_devedores,
+        'total_taxas': total_taxas,
+        'total_honorarios': total_honorarios,
+        'total_geral': total_taxas + total_honorarios,
+        'quantidade': len(lista_devedores)
+    }
+    
+    return render(request, 'cadastro/relatorio_inadimplencia.html', context)
+
+@login_required
+def configuracoes_despachante(request):
+    despachante = request.user.perfilusuario.despachante
+    
+    if request.method == 'POST':
+        # Pegando os valores do formulário
+        aliquota_imp = request.POST.get('aliquota_imposto').replace(',', '.')
+        taxa_ban = request.POST.get('taxa_bancaria_padrao').replace(',', '.')
+        
+        try:
+            despachante.aliquota_imposto = aliquota_imp
+            despachante.taxa_bancaria_padrao = taxa_ban
+            despachante.save()
+            messages.success(request, "Configurações financeiras atualizadas com sucesso!")
+        except Exception as e:
+            messages.error(request, f"Erro ao salvar: {e}")
+        
+        return redirect('configuracoes_despachante')
+
+    return render(request, 'cadastro/configuracoes_despachante.html', {
+        'despachante': despachante
+    })
+
+@login_required
+def emitir_recibo(request, id):
+    # Garante que só o despachante dono do dado pode emitir
+    atendimento = get_object_or_404(Atendimento, id=id, despachante=request.user.perfilusuario.despachante)
+    
+    # Cálculos seguros
+    taxas = atendimento.valor_taxas_detran or 0
+    honorarios = atendimento.valor_honorarios or 0
+    total = taxas + honorarios
+    
+    context = {
+        'atendimento': atendimento,
+        'taxas': taxas,
+        'honorarios': honorarios,
+        'total': total,
+        'data_atual': timezone.now().date()
+    }
+    
+    return render(request, 'cadastro/recibo_impressao.html', context)

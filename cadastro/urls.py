@@ -25,6 +25,8 @@ urlpatterns = [
     path('atendimento/editar/<int:id>/', views.editar_atendimento, name='editar_atendimento'),
     path('atendimento/excluir/<int:id>/', views.excluir_atendimento, name='excluir_atendimento'),
     path('novo-processo-rapido/', views.cadastro_rapido, name='cadastro_rapido'),
+    path('configuracoes/', views.configuracoes_despachante, name='configuracoes_despachante'),
+    path('recibo/<int:id>/', views.emitir_recibo, name='emitir_recibo'),
 
     # ==========================================================================
     # 3. CADASTROS DE BASE (Clientes, Veículos, Serviços)
@@ -75,14 +77,21 @@ urlpatterns = [
     path('financeiro/master/', views.financeiro_master, name='financeiro_master'),
     path('financeiro/cobrar/<int:despachante_id>/', views.acao_cobrar_cliente, name='acao_cobrar_cliente'),
     path('financeiro/liberar/<int:despachante_id>/', views.acao_liberar_acesso, name='acao_liberar_acesso'),
+    path('financeiro/fluxo-caixa/', views.fluxo_caixa, name='fluxo_caixa'),
+    path('financeiro/baixa/<int:id>/', views.dar_baixa_pagamento, name='dar_baixa_pagamento'),
+    path('financeiro/dashboard/', views.dashboard_financeiro, name='dashboard_financeiro'),
+    path('financeiro/inadimplencia/', views.relatorio_inadimplencia, name='relatorio_inadimplencia'),
 
     # Gestão de Despachantes (Empresas)
     path('master/despachantes/', views.master_listar_despachantes, name='master_listar_despachantes'),
     path('master/despachantes/novo/', views.master_editar_despachante, name='master_criar_despachante'),
     path('master/despachantes/<int:id>/', views.master_editar_despachante, name='master_editar_despachante'),
+    
 
     # Gestão de Usuários (Equipe)
     path('master/usuarios/', views.master_listar_usuarios, name='master_listar_usuarios'),
     path('master/usuarios/novo/', views.master_criar_usuario, name='master_criar_usuario'),
     path('master/usuarios/<int:id>/', views.master_editar_usuario, name='master_editar_usuario'),
+
+
 ]

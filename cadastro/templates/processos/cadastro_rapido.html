@@ -6,13 +6,18 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<style>
+    /* Estilo limpo para as badges de serviço */
+    .badge-servico { font-size: 0.8rem; background-color: #e9ecef; color: #495057; border: 1px solid #dee2e6; padding: 5px 10px; }
+    .veiculo-card-opcao:hover { border-color: #0d6efd !important; background-color: #f8f9fa; }
+</style>
 {% endblock %}
 
 {% block content %}
 <div class="card shadow border-0 mb-5">
     <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center py-3">
-        <h5 class="mb-0"><i class="fas fa-bolt me-2"></i> Processo Rápido</h5>
-        <small class="opacity-75">Multi-serviços por Veículo</small>
+        <h5 class="mb-0"><i class="fas fa-bolt me-2"></i> Lançamento Operacional em Lote</h5>
+        <small class="opacity-75">O financeiro será gerado automaticamente pelo sistema</small>
     </div>
     
     <div class="card-body p-4">
@@ -23,65 +28,59 @@
                 <option value="" disabled selected>Add Serviço...</option>
                 {% for s in servicos_db %}
                     <option value="{{ s.nome }}">{{ s.nome }}</option>
-                {% empty %}
-                    <option value="Licenciamento">Licenciamento</option>
-                    <option value="Transferência">Transferência</option>
-                    <option value="Outros">Outros</option>
                 {% endfor %}
             </select>
 
-            <h6 class="text-primary fw-bold text-uppercase mb-3"><i class="fas fa-search me-2"></i> Localizar Cliente</h6>
+            <h6 class="text-primary fw-bold text-uppercase mb-3"><i class="fas fa-search me-2"></i> 1. Localizar Cliente</h6>
             
             <div class="mb-4" id="area-busca">
                 <select id="select_cliente_busca" class="form-select form-select-lg">
-                    <option value="">Digite Nome, CPF/CNPJ ou Placa...</option>
+                    <option value="">Digite Nome, CPF ou Placa...</option>
                 </select>
-                <div class="form-text">Pesquise pelo proprietário ou pela placa de um veículo vinculado.</div>
             </div>
 
             <div id="cliente-selecionado" class="card border-success mb-4 d-none bg-success bg-opacity-10">
                 <div class="card-body d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="card-title fw-bold text-success mb-1" id="lbl-nome">Nome do Cliente</h5>
+                        <h5 class="card-title fw-bold text-success mb-1" id="lbl-nome">---</h5>
                         <p class="card-text mb-0">
-                            <span class="badge bg-success me-2" id="lbl-cpf">CPF</span>
-                            <small class="text-muted"><i class="fas fa-phone me-1"></i> <span id="lbl-telefone"></span></small>
+                            <span class="badge bg-success me-2" id="lbl-cpf">---</span>
+                            <input type="hidden" name="cliente_id" id="input-cliente-id" required>
                         </p>
-                        <input type="hidden" name="cliente_id" id="input-cliente-id" required>
                     </div>
-                    <button type="button" class="btn btn-sm btn-outline-danger bg-white" id="btn-trocar-cliente">
-                        <i class="fas fa-times me-1"></i> Trocar
+                    <button type="button" class="btn btn-sm btn-outline-danger bg-white shadow-sm" id="btn-trocar-cliente">
+                        <i class="fas fa-times me-1"></i> Trocar Cliente
                     </button>
                 </div>
             </div>
 
             <div id="area-veiculos-existentes" class="mb-4 d-none">
-                <h6 class="text-muted small fw-bold text-uppercase mb-2">Veículos deste cliente:</h6>
+                <h6 class="text-muted small fw-bold text-uppercase mb-2">Veículos vinculados:</h6>
                 <div class="row g-2" id="lista-veiculos-existentes"></div>
-                <hr class="text-muted opacity-25 mt-3">
             </div>
 
+            <hr class="my-4 opacity-25">
+
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="text-success fw-bold text-uppercase mb-0"><i class="fas fa-list-ol me-2"></i> Lista de Processos</h6>
-                <button type="button" class="btn btn-sm btn-outline-success shadow-sm" data-bs-toggle="modal" data-bs-target="#modalVeiculo">
-                    <i class="fas fa-plus me-1"></i> Veículo Novo
+                <h6 class="text-primary fw-bold text-uppercase mb-0"><i class="fas fa-tasks me-2"></i> 2. Fila de Trabalho</h6>
+                <button type="button" class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#modalVeiculo">
+                    <i class="fas fa-plus me-1"></i> Adicionar Veículo Novo
                 </button>
             </div>
 
             <div class="table-responsive mb-4">
                 <table class="table table-bordered table-hover align-middle" id="tabela-veiculos-visual">
-                    <thead class="table-light small">
+                    <thead class="table-light small text-uppercase">
                         <tr>
-                            <th width="15%">Placa</th>
-                            <th width="20%">Modelo</th>
-                            <th width="40%">Serviços (Adicione Múltiplos)</th>
-                            <th width="10%">Nº Atend.</th>
+                            <th width="20%">Placa</th>
+                            <th width="25%">Veículo</th>
+                            <th width="50%">Serviços a Realizar</th>
                             <th width="5%"></th>
                         </tr>
                     </thead>
                     <tbody>
                         <tr id="linha-vazia">
-                            <td colspan="5" class="text-center text-muted small py-3">Nenhum veículo selecionado.</td>
+                            <td colspan="4" class="text-center text-muted small py-4">Nenhum item na fila de lançamento.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -89,34 +88,32 @@
 
             <div id="veiculos-inputs-container"></div>
 
-            <div class="row mt-3">
+            <div class="row g-3 bg-light p-3 rounded border">
                 <div class="col-md-3">
-                    <label class="form-label fw-bold text-danger">📅 Prazo de Entrega</label>
+                    <label class="form-label fw-bold small text-muted text-uppercase">Prazo Prometido</label>
                     <input type="date" name="prazo_entrega" class="form-control">
                 </div>
 
                 <div class="col-md-3">
-                    <label class="form-label fw-bold text-primary">👤 Responsável</label>
+                    <label class="form-label fw-bold small text-muted text-uppercase">Técnico Responsável</label>
                     <select name="responsavel_id" class="form-select">
                         {% for membro in equipe %}
-                            <option value="{{ membro.user.id }}" 
-                                {% if membro.user.id == user.id %}selected{% endif %}>
-                                {{ membro.user.first_name|default:membro.user.username|upper }}
+                            <option value="{{ membro.user.id }}" {% if membro.user.id == user.id %}selected{% endif %}>
+                                {{ membro.user.get_full_name|default:membro.user.username|upper }}
                             </option>
                         {% endfor %}
                     </select>
                 </div>
 
                 <div class="col-md-6">
-                    <label class="form-label">Observações Gerais</label>
-                    <input type="text" name="observacoes" class="form-control" placeholder="Obs para todos os processos...">
+                    <label class="form-label fw-bold small text-muted text-uppercase">Observações Gerais</label>
+                    <input type="text" name="observacoes" class="form-control" placeholder="Instruções para a equipe...">
                 </div>
             </div>
 
-            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-5">
-                <a href="{% url 'dashboard' %}" class="btn btn-secondary me-md-2">Cancelar</a>
-                <button type="submit" class="btn btn-success btn-lg px-5 shadow">
-                    <i class="fas fa-check-circle me-2"></i> Criar Processos
+            <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                <button type="submit" class="btn btn-success btn-lg px-5 shadow fw-bold">
+                    <i class="fas fa-check-circle me-2"></i> CRIAR PROCESSOS NO SISTEMA
                 </button>
             </div>
         </form>
@@ -124,53 +121,34 @@
 </div>
 
 <div class="modal fade" id="modalVeiculo" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog">
         <div class="modal-content">
-            <div class="modal-header bg-success text-white">
-                <h5 class="modal-title">Adicionar Novo Veículo</h5>
+            <div class="modal-header bg-dark text-white">
+                <h5 class="modal-title">Entrada de Veículo</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
                 <div class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label fw-bold">Placa <span class="text-danger">*</span></label>
-                        <input type="text" id="pop_placa" class="form-control mask-placa text-uppercase fw-bold text-center" maxlength="8">
+                    <div class="col-6">
+                        <label class="form-label fw-bold">Placa</label>
+                        <input type="text" id="pop_placa" class="form-control text-uppercase fw-bold text-center" maxlength="7" placeholder="AAA0A00">
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">RENAVAM</label>
-                        <input type="text" id="pop_renavam" class="form-control mask-number">
-                    </div>
-                    <div class="col-md-4">
+                    <div class="col-6">
                         <label class="form-label">Modelo</label>
-                        <input type="text" id="pop_modelo" class="form-control text-uppercase">
+                        <input type="text" id="pop_modelo" class="form-control text-uppercase" placeholder="EX: CIVIC">
                     </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Ano</label>
-                        <input type="text" id="pop_ano" class="form-control mask-year">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Cor</label>
-                        <input type="text" id="pop_cor" class="form-control text-uppercase">
-                    </div>
-                    
-                    <div class="col-md-5">
-                        <label class="form-label fw-bold">Serviço Inicial</label>
+                    <div class="col-12">
+                        <label class="form-label fw-bold">Serviço Principal</label>
                         <select id="pop_servico" class="form-select">
                             {% for s in servicos_db %}
                                 <option value="{{ s.nome }}">{{ s.nome }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Nº Atendimento</label>
-                        <input type="text" id="pop_atendimento" class="form-control">
-                    </div>
                 </div>
-                <div class="alert alert-danger mt-3 d-none" id="msg-erro-modal">Preencha a Placa corretamente.</div>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
-                <button type="button" class="btn btn-success" id="btn-add-modal">Incluir na Lista</button>
+                <button type="button" class="btn btn-success w-100 fw-bold" id="btn-add-modal">ADICIONAR À FILA</button>
             </div>
         </div>
     </div>
@@ -180,250 +158,150 @@
 {% block extra_js %}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
-<script src="{% static 'js/custom.js' %}"></script>
 
 <script>
     $(document).ready(function() {
-        // --- CONFIGURAÇÃO SELECT2 (SERVER-SIDE) ---
+        // --- BUSCA DE CLIENTE ---
         $('#select_cliente_busca').select2({
             theme: 'bootstrap-5',
-            width: '100%',
-            placeholder: 'Digite Nome, CPF/CNPJ ou Placa...',
-            allowClear: true,
-            language: {
-                inputTooShort: function() { return "Digite 3 caracteres para buscar..."; },
-                noResults: function() { return "Nenhum cliente encontrado."; },
-                searching: function() { return "Buscando..."; }
-            },
             ajax: {
-                url: "{% url 'buscar_clientes' %}", 
+                url: "{% url 'buscar_clientes' %}",
                 dataType: 'json',
-                delay: 300,
-                data: function (params) {
-                    return { term: params.term };
-                },
-                processResults: function (data) {
-                    return { results: data.results };
-                },
-                cache: true
+                data: function (params) { return { term: params.term }; },
+                processResults: function (data) { return { results: data.results }; }
             },
             minimumInputLength: 3
         });
 
-        // --- QUANDO SELECIONA O CLIENTE ---
         $('#select_cliente_busca').on('select2:select', function (e) {
             var data = e.params.data;
-            
             $('#input-cliente-id').val(data.id);
-            
-            // Tenta pegar o nome do texto retornado (ex: "JOÃO SILVA - 123.456...")
-            var nomeDisplay = data.text.split('-')[0].trim(); 
-            var docDisplay = data.text.split('-')[1] ? data.text.split('-')[1].trim() : '';
-
-            $('#lbl-nome').text(nomeDisplay);
-            $('#lbl-cpf').text(docDisplay);
-            $('#lbl-telefone').text(''); 
-
+            $('#lbl-nome').text(data.text.split('-')[0].trim());
+            $('#lbl-cpf').text(data.text.split('-')[1] ? data.text.split('-')[1].trim() : '');
             $('#area-busca').addClass('d-none'); 
             $('#cliente-selecionado').removeClass('d-none');
-            
             buscarVeiculosDoCliente(data.id);
         });
 
-        // --- TROCAR CLIENTE ---
-        $('#btn-trocar-cliente').click(function() {
-            $('#input-cliente-id').val('');
-            $('#select_cliente_busca').val(null).trigger('change'); 
-            
-            $('#cliente-selecionado').addClass('d-none');
-            $('#area-busca').removeClass('d-none'); 
-            
-            $('#area-veiculos-existentes').addClass('d-none');
-            $('#tabela-veiculos-visual tbody').html('<tr id="linha-vazia"><td colspan="5" class="text-center text-muted small py-3">Nenhum veículo selecionado.</td></tr>');
-            $('#veiculos-inputs-container').empty();
-            
-            $('#select_cliente_busca').select2('open');
-        });
+        $('#btn-trocar-cliente').click(function() { location.reload(); });
 
-        // --- FUNÇÃO PARA ADICIONAR NA TABELA ---
+        // --- MANIPULAÇÃO DA TABELA OPERACIONAL ---
         function adicionarNaTabela(v) {
             var tbody = $('#tabela-veiculos-visual tbody');
             $('#linha-vazia').remove();
 
             var rowId = 'row_' + Math.floor(Math.random() * 100000);
             var listaServicos = Array.isArray(v.servicos) ? v.servicos : [v.servicos];
-            if(!Array.isArray(listaServicos)) listaServicos = [v.servicos];
 
-            // Renderiza Linha
             var newRow = $(`
                 <tr id="${rowId}">
                     <td class="fw-bold text-primary align-middle">${v.placa}</td>
-                    <td class="align-middle small">${v.modelo}</td>
+                    <td class="align-middle small text-muted">${v.modelo}</td>
                     <td>
-                        <div class="d-flex flex-wrap gap-1 mb-1 container-badges"></div>
-                        <select class="form-select form-select-sm select-add-servico text-muted" style="width: auto; display: inline-block;">
-                            <option value="" selected>+ Add Serviço</option>
+                        <div class="d-flex flex-wrap gap-1 mb-2 container-badges"></div>
+                        <select class="form-select form-select-sm select-add-servico w-auto">
+                            <option value="" selected>+ Add Serviço Extra</option>
                             ${$('#modelo-opcoes-servicos').html()}
                         </select>
                     </td>
-                    <td>
-                        <input type="text" name="numero_atendimento[]" class="form-control form-control-sm" value="${v.atendimento || ''}" placeholder="Nº">
-                    </td>
                     <td class="text-center align-middle">
-                        <button type="button" class="btn btn-sm btn-danger btn-remove-row"><i class="fas fa-trash"></i></button>
+                        <button type="button" class="btn btn-sm text-danger btn-remove-row border-0"><i class="fas fa-trash-alt"></i></button>
                     </td>
                 </tr>
             `);
 
             tbody.append(newRow);
 
-            // Inputs Ocultos
+            // Inputs ocultos que o Django receberá
             var container = $('#veiculos-inputs-container');
             var hiddenDiv = $(`
                 <div id="hidden_${rowId}">
                     <input type="hidden" name="veiculo_placa[]" value="${v.placa}">
-                    <input type="hidden" name="veiculo_renavam[]" value="${v.renavam || ''}">
                     <input type="hidden" name="veiculo_modelo[]" value="${v.modelo || ''}">
-                    <input type="hidden" name="veiculo_cor[]" value="${v.cor || ''}">
-                    <input type="hidden" name="veiculo_ano[]" value="${v.ano || ''}">
-                    <input type="hidden" name="veiculo_marca[]" value="${v.marca || ''}">
-                    <input type="hidden" name="veiculo_chassi[]" value="${v.chassi || ''}">
-                    <input type="hidden" name="veiculo_tipo[]" value="${v.tipo || 'CARRO'}">
                     <input type="hidden" name="servico[]" class="input-servico-final" value="">
                 </div>
             `);
             container.append(hiddenDiv);
 
-            // Gerencia os Serviços (Badges)
-            function atualizarServicosRow() {
+            function atualizarBadges() {
                 var containerBadges = newRow.find('.container-badges');
                 containerBadges.empty();
                 
                 listaServicos.forEach(function(serv, index) {
                     var badge = $(`
-                        <span class="badge bg-primary bg-opacity-10 text-primary border border-primary d-flex align-items-center">
+                        <span class="badge badge-servico d-flex align-items-center">
                             ${serv}
-                            <i class="fas fa-times ms-2 text-danger cursor-pointer btn-rm-serv" data-index="${index}" style="cursor:pointer"></i>
+                            <i class="fas fa-times ms-2 text-danger btn-rm-serv" data-index="${index}" style="cursor:pointer"></i>
                         </span>
                     `);
                     containerBadges.append(badge);
                 });
+                
+                // Grava a string combinada (Ex: Licenciamento + Transferencia) para o backend processar os valores
                 hiddenDiv.find('.input-servico-final').val(listaServicos.join(' + '));
             }
 
-            atualizarServicosRow();
+            atualizarBadges();
 
-            // Evento: Adicionar Serviço extra
             newRow.find('.select-add-servico').change(function() {
-                var novoServico = $(this).val();
-                if(novoServico) {
-                    if(!listaServicos.includes(novoServico)) {
-                        listaServicos.push(novoServico);
-                        atualizarServicosRow();
-                    }
-                    $(this).val("");
+                var novo = $(this).val();
+                if(novo && !listaServicos.includes(novo)) {
+                    listaServicos.push(novo);
+                    atualizarBadges();
                 }
+                $(this).val("");
             });
 
-            // Evento: Remover Serviço
             newRow.on('click', '.btn-rm-serv', function() {
-                var idx = $(this).data('index');
-                listaServicos.splice(idx, 1);
-                atualizarServicosRow();
+                listaServicos.splice($(this).data('index'), 1);
+                atualizarBadges();
             });
 
-            // Evento: Remover Linha inteira
             newRow.find('.btn-remove-row').click(function() {
                 newRow.remove();
                 hiddenDiv.remove();
-                if(tbody.children().length === 0) {
-                    tbody.html('<tr id="linha-vazia"><td colspan="5" class="text-center text-muted small py-3">Nenhum veículo selecionado.</td></tr>');
-                }
             });
         }
 
-        // --- BUSCAR VEÍCULOS API ---
         function buscarVeiculosDoCliente(clienteId) {
-            $.ajax({
-                url: `/api/veiculos-cliente/${clienteId}/`,
-                dataType: 'json',
-                success: function(data) {
-                    var lista = $('#lista-veiculos-existentes');
-                    lista.empty();
-                    if(data.length > 0) {
-                        data.forEach(function(v) {
-                            var dadosJson = JSON.stringify(v).replace(/"/g, '&quot;');
-                            var html = `
-                                <div class="col-md-3">
-                                    <div class="card h-100 border-primary shadow-sm veiculo-card-opcao" style="cursor: pointer;" data-veiculo="${dadosJson}">
-                                        <div class="card-body p-2 d-flex align-items-center">
-                                            <div class="bg-primary text-white rounded p-2 me-2"><i class="fas fa-car"></i></div>
-                                            <div>
-                                                <h6 class="mb-0 fw-bold">${v.placa}</h6>
-                                                <small class="text-muted" style="font-size: 0.8rem">${v.modelo}</small>
-                                            </div>
-                                            <div class="ms-auto"><i class="fas fa-plus-circle text-success"></i></div>
-                                        </div>
+            $.getJSON(`/api/veiculos-cliente/${clienteId}/`, function(data) {
+                var lista = $('#lista-veiculos-existentes').empty();
+                if(data.length > 0) {
+                    data.forEach(function(v) {
+                        var html = `
+                            <div class="col-md-3">
+                                <div class="card h-100 border-primary shadow-sm veiculo-card-opcao" style="cursor: pointer;" 
+                                     data-placa="${v.placa}" data-modelo="${v.modelo}">
+                                    <div class="card-body p-2 d-flex align-items-center">
+                                        <div class="bg-primary text-white rounded p-2 me-2"><i class="fas fa-car"></i></div>
+                                        <div><h6 class="mb-0 fw-bold">${v.placa}</h6><small class="text-muted">${v.modelo}</small></div>
                                     </div>
                                 </div>
-                            `;
-                            lista.append(html);
-                        });
-                        $('#area-veiculos-existentes').removeClass('d-none');
-                    } else {
-                        $('#area-veiculos-existentes').addClass('d-none');
-                    }
+                            </div>`;
+                        lista.append(html);
+                    });
+                    $('#area-veiculos-existentes').removeClass('d-none');
                 }
             });
         }
 
-        // --- CLIQUE NO VEÍCULO EXISTENTE ---
         $(document).on('click', '.veiculo-card-opcao', function() {
-            var dados = $(this).data('veiculo');
-            var servicoPadrao = $('#modelo-opcoes-servicos option:nth-child(2)').val() || "Licenciamento";
-
             adicionarNaTabela({
-                placa: dados.placa,
-                renavam: dados.renavam,
-                modelo: dados.modelo,
-                cor: dados.cor,
-                ano: dados.ano_fab,
-                servicos: [servicoPadrao],
-                atendimento: ''
+                placa: $(this).data('placa'),
+                modelo: $(this).data('modelo'),
+                servicos: [$('#modelo-opcoes-servicos option:nth-child(2)').val()]
             });
-            
-            $(this).fadeOut(150).fadeIn(150);
         });
 
-        // --- MODAL: ADICIONAR NOVO VEÍCULO ---
         $('#btn-add-modal').click(function() {
-            var dados = {
-                placa: $('#pop_placa').val().toUpperCase(),
-                renavam: $('#pop_renavam').val(),
+            var placa = $('#pop_placa').val().toUpperCase();
+            if (placa.length < 7) return alert('Placa inválida');
+            adicionarNaTabela({
+                placa: placa,
                 modelo: $('#pop_modelo').val().toUpperCase(),
-                ano: $('#pop_ano').val(),
-                cor: $('#pop_cor').val().toUpperCase(),
-                servicos: [$('#pop_servico').val()],
-                atendimento: $('#pop_atendimento').val()
-            };
-
-            if (!dados.placa || dados.placa.length < 7) {
-                $('#msg-erro-modal').removeClass('d-none');
-                return;
-            }
-            $('#msg-erro-modal').addClass('d-none');
-
-            adicionarNaTabela(dados);
-
-            $('#pop_placa').val('');
-            $('#pop_renavam').val('');
-            $('#pop_modelo').val('');
-            $('#pop_ano').val('');
-            $('#pop_cor').val('');
-            
-            var modalEl = document.getElementById('modalVeiculo');
-            var modal = bootstrap.Modal.getInstance(modalEl);
-            modal.hide();
+                servicos: [$('#pop_servico').val()]
+            });
+            bootstrap.Modal.getInstance(document.getElementById('modalVeiculo')).hide();
         });
     });
 </script>

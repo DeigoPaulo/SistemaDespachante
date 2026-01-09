@@ -1,0 +1,101 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-danger"><i class="fas fa-exclamation-triangle me-2"></i> Inadimplência e Pendências</h2>
+        <span class="badge bg-danger fs-6 px-3 py-2 shadow-sm">{{ quantidade }} Processos Pendentes</span>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm bg-white border-start border-danger border-4">
+                <div class="card-body">
+                    <small class="text-muted fw-bold text-uppercase">Taxas Pagas (Seu prejuízo atual)</small>
+                    <h3 class="fw-bold text-danger">R$ {{ total_taxas|floatformat:2 }}</h3>
+                    <p class="mb-0 small text-muted">Valores desembolsados ao DETRAN e não reembolsados.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm bg-white border-start border-warning border-4">
+                <div class="card-body">
+                    <small class="text-muted fw-bold text-uppercase">Honorários a Receber</small>
+                    <h3 class="fw-bold text-warning">R$ {{ total_honorarios|floatformat:2 }}</h3>
+                    <p class="mb-0 small text-muted">Seu lucro que ainda não entrou no caixa.</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm bg-dark text-white">
+                <div class="card-body">
+                    <small class="text-white-50 fw-bold text-uppercase">Total em Aberto</small>
+                    <h3 class="fw-bold">R$ {{ total_geral|floatformat:2 }}</h3>
+                    <p class="mb-0 small text-white-50">Soma total de pendências financeiras.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Tempo</th>
+                            <th>Cliente</th>
+                            <th>Serviço / Veículo</th>
+                            <th class="text-end">Valor Taxas</th>
+                            <th class="text-end">Valor Honorários</th>
+                            <th class="text-end">Total Devido</th>
+                            <th class="text-end pe-4">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for p in devedores %}
+                        <tr class="{% if p.dias_atraso > 30 %}table-danger{% elif p.dias_atraso > 7 %}table-warning{% endif %}">
+                            <td class="ps-4">
+                                <span class="fw-bold">{{ p.dias_atraso }} dias</span>
+                            </td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ p.cliente.nome }}</div>
+                                <small class="text-muted">{{ p.cliente.telefone }}</small>
+                            </td>
+                            <td>
+                                <div class="small">{{ p.servico }}</div>
+                                <span class="badge bg-white text-dark border small">{{ p.veiculo.placa }}</span>
+                            </td>
+                            <td class="text-end text-danger">R$ {{ p.valor_taxas_detran|floatformat:2 }}</td>
+                            <td class="text-end">R$ {{ p.valor_honorarios|floatformat:2 }}</td>
+                            <td class="text-end fw-bold">R$ {{ p.valor_total_cliente|floatformat:2 }}</td>
+                            <td class="text-end pe-4">
+                                {% if p.telefone_limpo %}
+                                <a href="https://wa.me/55{{ p.telefone_limpo }}?text={{ p.texto_whatsapp|urlencode }}" 
+                                   target="_blank" 
+                                   class="btn btn-sm btn-success" 
+                                   title="Cobrar via WhatsApp">
+                                    <i class="fab fa-whatsapp"></i>
+                                </a>
+                                {% endif %}
+                                
+                                <a href="{% url 'dar_baixa_pagamento' p.id %}" class="btn btn-sm btn-outline-dark" title="Dar Baixa">
+                                    <i class="fas fa-check"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="fas fa-check-circle text-success fa-3x mb-3"></i>
+                                <h5>Parabéns! Não há inadimplência registrada.</h5>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

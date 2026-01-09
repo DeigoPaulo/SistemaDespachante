@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard Financeiro{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2 class="fw-bold text-dark"><i class="fas fa-chart-line text-primary me-2"></i> Dashboard de Resultados</h2>
+        <div class="btn-group shadow-sm">
+            <a href="{% url 'fluxo_caixa' %}" class="btn btn-primary">
+                <i class="fas fa-list me-1"></i> Fluxo de Caixa
+            </a>
+            <a href="{% url 'configuracoes_despachante' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-cog"></i>
+            </a>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 h-100 border-start border-primary border-4">
+                <small class="text-muted fw-bold text-uppercase">Faturamento Bruto</small>
+                <h3 class="fw-bold text-primary mb-0">R$ {{ resumo.bruto|floatformat:2 }}</h3>
+                <small class="text-muted">Taxas + Honorários</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card border-0 shadow-sm p-3 h-100 border-start border-danger border-4">
+                <small class="text-muted fw-bold text-uppercase">Repasse DETRAN</small>
+                <h3 class="fw-bold text-danger mb-0">R$ {{ resumo.detran|floatformat:2 }}</h3>
+                <small class="text-muted">Custos de Terceiros</small>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm p-3 h-100 border-start border-secondary border-4">
+                <small class="text-muted fw-bold text-uppercase">Custos de Operação</small>
+                <h3 class="fw-bold text-secondary mb-0">R$ {{ resumo.custos_operacionais|default:"0.00"|floatformat:2 }}</h3>
+                <small class="text-muted">Impostos e Taxas</small>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm p-3 h-100 border-start border-success border-4">
+                <small class="text-muted fw-bold text-uppercase">Lucro Líquido Real</small>
+                <h3 class="fw-bold text-success mb-0">R$ {{ resumo.lucro|floatformat:2 }}</h3>
+                <small class="text-muted">O que sobra de verdade</small>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card border-0 shadow-sm p-3 h-100 bg-warning bg-opacity-10">
+                <small class="text-muted fw-bold text-uppercase">Pendentes</small>
+                <h3 class="fw-bold text-warning mb-0">{{ resumo.pendente }}</h3>
+                <small class="text-muted">Aguardando Baixa</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-bold border-0 pt-3 pb-0">Evolução dos Honorários (Ano Atual)</div>
+                <div class="card-body">
+                    <canvas id="chartEvolucao"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4 mb-4">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-white fw-bold border-0 pt-3 pb-0">Saúde do Honorário</div>
+                <div class="card-body d-flex flex-column align-items-center justify-content-center">
+                    <div style="width: 100%; max-width: 250px;">
+                        <canvas id="chartComposicao"></canvas>
+                    </div>
+                    <div class="mt-4 small text-muted text-center px-3">
+                        <i class="fas fa-info-circle me-1 text-primary"></i> 
+                        Baseado na alíquota atual de <strong>{{ user.perfilusuario.despachante.aliquota_imposto }}%</strong> de imposto.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    // Configurações Globais do Chart.js
+    Chart.defaults.font.family = 'Segoe UI, system-ui, -apple-system, sans-serif';
+
+    // 1. Gráfico de Evolução (Barras)
+    const ctxEvolucao = document.getElementById('chartEvolucao').getContext('2d');
+    new Chart(ctxEvolucao, {
+        type: 'bar',
+        data: {
+            labels: {{ labels_meses|safe }},
+            datasets: [{
+                label: 'Honorários Brutos (R$)',
+                data: {{ valores_meses|safe }},
+                backgroundColor: '#0d6efd',
+                hoverBackgroundColor: '#0a58ca',
+                borderRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: { 
+                y: { 
+                    beginAtZero: true,
+                    grid: { drawBorder: false, color: '#f0f0f0' }
+                },
+                x: {
+                    grid: { display: false }
+                }
+            }
+        }
+    });
+
+    // 2. Gráfico de Composição (Pizza/Doughnut)
+    const ctxComposicao = document.getElementById('chartComposicao').getContext('2d');
+    new Chart(ctxComposicao, {
+        type: 'doughnut',
+        data: {
+            labels: ['Lucro Líquido', 'Impostos', 'Taxas Bancárias'],
+            datasets: [{
+                data: {{ pie_data|safe }},
+                backgroundColor: ['#198754', '#6c757d', '#ffc107'],
+                borderWidth: 0,
+                hoverOffset: 10
+            }]
+        },
+        options: {
+            responsive: true,
+            cutout: '70%',
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 20, usePointStyle: true } }
+            }
+        }
+    });
+</script>
+{% endblock %}

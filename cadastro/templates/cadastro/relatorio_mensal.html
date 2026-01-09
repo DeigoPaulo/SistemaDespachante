@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+
+{% block title %}Controle de Produção{% endblock %}
+
+{% block content %}
+<div class="d-print-none mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4 class="mb-0 fw-bold text-primary">
+            <i class="fas fa-clipboard-list me-2"></i> Controle de Produção Operacional
+        </h4>
+        <div>
+            <button onclick="window.print()" class="btn btn-primary shadow-sm">
+                <i class="fas fa-print me-2"></i> Imprimir Relatório
+            </button>
+        </div>
+    </div>
+    
+    <div class="card border-0 shadow-sm bg-light mb-4">
+        <div class="card-body py-3">
+            <form method="GET" class="row g-2 align-items-end">
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Data Início</label>
+                    <input type="date" name="data_inicio" class="form-control form-control-sm" value="{{ filtros.data_inicio }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Data Fim</label>
+                    <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ filtros.data_fim }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Cliente ou Placa</label>
+                    <input type="text" name="cliente_placa" class="form-control form-control-sm" placeholder="Buscar..." value="{{ filtros.cliente_placa }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-muted text-uppercase">Operador</label>
+                    <select name="responsavel" class="form-select form-select-sm">
+                        <option value="">Todos os operadores</option>
+                        {% for membro in equipe %}
+                            <option value="{{ membro.user.id }}" {% if filtros.responsavel == membro.user.id|stringformat:"i" %}selected{% endif %}>
+                                {{ membro.user.get_full_name|default:membro.user.username|upper }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2 d-grid gap-2 d-flex">
+                    <button type="submit" class="btn btn-primary btn-sm fw-bold w-100"><i class="fas fa-filter"></i></button>
+                    <a href="{% url 'relatorio_mensal' %}" class="btn btn-outline-secondary btn-sm"><i class="fas fa-eraser"></i></a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card border-0 shadow-lg p-5" id="folha-relatorio">
+    
+    <div class="text-center border-bottom pb-4 mb-4">
+        <h2 class="fw-bold text-uppercase mb-1 text-dark">
+            {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
+        </h2>
+        <p class="text-muted mb-0 small">
+            {{ user.perfilusuario.despachante.endereco_completo }} <br>
+            <i class="fas fa-phone-alt me-1"></i> {{ user.perfilusuario.despachante.telefone }} 
+            {% if user.perfilusuario.despachante.email %}
+                | <i class="fas fa-envelope me-1"></i> {{ user.perfilusuario.despachante.email }}
+            {% endif %}
+        </p>
+        <h4 class="mt-4 fw-bold text-uppercase">Relatório de Produção Operacional</h4>
+        <p class="text-muted small">
+            Período: <strong>{% if filtros.data_inicio %}{{ filtros.data_inicio|date:"d/m/Y" }}{% else %}Início{% endif %} até {% if filtros.data_fim %}{{ filtros.data_fim|date:"d/m/Y" }}{% else %}Hoje{% endif %}</strong>
+        </p>
+    </div>
+
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-sm table-bordered align-middle">
+                <thead class="table-light">
+                    <tr class="small text-uppercase">
+                        <th class="ps-3 py-2" width="10%">Data</th>
+                        <th width="20%">Cliente / Veículo</th>
+                        <th width="30%">Serviço Realizado</th>
+                        <th width="15%">Nº Atendimento</th>
+                        <th width="15%">Operador</th>
+                        <th class="text-center" width="10%">Status</th>
+                    </tr>
+                </thead>
+                <tbody style="font-size: 0.85rem;">
+                    {% for p in processos %}
+                    <tr>
+                        <td class="ps-3">{{ p.data_solicitacao|date:"d/m/Y" }}</td>
+                        <td>
+                            <div class="fw-bold text-dark">{{ p.cliente.nome|truncatechars:30 }}</div>
+                            <span class="text-muted small">Placa: {{ p.veiculo.placa }}</span>
+                        </td>
+                        <td>{{ p.servico }}</td>
+                        <td><code>{{ p.numero_atendimento|default:"---" }}</code></td>
+                        <td>
+                            <small class="text-muted">
+                                {% if p.responsavel %}
+                                    {{ p.responsavel.get_full_name|default:p.responsavel.username|upper }}
+                                {% else %}
+                                    NÃO DEFINIDO
+                                {% endif %}
+                            </small>
+                        </td>
+                        <td class="text-center">
+                            <span class="small fw-bold">{{ p.get_status_display|upper }}</span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">Nenhum processo encontrado.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="mt-4 p-3 bg-light rounded border border-secondary border-opacity-10">
+        <h6 class="fw-bold text-uppercase small text-muted mb-3 border-bottom pb-2">Resumo de Produção por Status</h6>
+        <div class="row g-2">
+            {% for item in resumo_status %}
+            <div class="col-auto">
+                <div class="bg-white border rounded p-2 px-3 text-center shadow-sm">
+                    <div class="fw-bold h5 mb-0">{{ item.total }}</div>
+                    <div class="small text-muted text-uppercase" style="font-size: 0.65rem;">{{ item.status }}</div>
+                </div>
+            </div>
+            {% endfor %}
+            <div class="col-auto ms-auto">
+                <div class="bg-dark text-white rounded p-2 px-4 text-center shadow-sm">
+                    <div class="fw-bold h5 mb-0">{{ total_qtd }}</div>
+                    <div class="small text-white-50 text-uppercase" style="font-size: 0.65rem;">Total Geral</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-5 pt-4 text-center text-muted small border-top d-none d-print-block">
+        <p>Documento gerado em {% now "d/m/Y H:i" %} por {{ user.username }}</p>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* LÓGICA DE IMPRESSÃO UNIFICADA (PAISAGEM) */
+    @media print {
+        @page { 
+            size: A4 landscape; 
+            margin: 10mm; 
+        }
+        
+        body * {
+            visibility: hidden;
+        }
+
+        #folha-relatorio, #folha-relatorio * {
+            visibility: visible;
+        }
+
+        #folha-relatorio {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            margin: 0 !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+
+        .d-print-none {
+            display: none !important;
+        }
+
+        .bg-light {
+            background-color: #f8f9fa !important;
+            -webkit-print-color-adjust: exact;
+        }
+        
+        .table-light {
+            background-color: #f8f9fa !important;
+        }
+        
+        .table {
+            width: 100% !important;
+            border-collapse: collapse !important;
+        }
+    }
+</style>
+{% endblock %}

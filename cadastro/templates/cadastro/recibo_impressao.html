@@ -1,0 +1,184 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Recibo #{{ atendimento.id }} - {{ atendimento.cliente.nome }}</title>
+    <style>
+        @page { size: A4; margin: 1cm; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #000; background: #eee; margin: 0; padding: 20px; }
+        
+        .recibo-container {
+            border: 2px solid #000;
+            padding: 20px;
+            margin-bottom: 30px;
+            background-color: #fff;
+            position: relative;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1); /* Sombra na tela */
+        }
+
+        /* CABEÇALHO DO RECIBO */
+        .header-recibo { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
+        .empresa-info h2 { margin: 0; font-size: 20px; text-transform: uppercase; color: #000; font-weight: bold; }
+        .empresa-info p { margin: 2px 0; font-size: 12px; color: #333; }
+        
+        .valor-box {
+            border: 2px solid #000;
+            background: #f8f9fa;
+            padding: 10px 25px;
+            border-radius: 4px;
+            text-align: center;
+            min-width: 150px;
+        }
+        .valor-box small { display: block; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+        .valor-box span { font-size: 22px; font-weight: bold; display: block; margin-top: 2px; }
+
+        /* CORPO */
+        .linha-texto { font-size: 14px; line-height: 2; text-align: justify; margin-bottom: 20px; }
+        .campo-preenchido { font-weight: bold; padding: 0 5px; text-transform: uppercase; }
+
+        /* RODAPÉ */
+        .rodape-recibo { 
+            display: flex; 
+            justify-content: space-between; 
+            margin-top: 60px;
+            align-items: flex-end; 
+        }
+        
+        .data-local { font-size: 14px; }
+        .assinatura { text-align: center; border-top: 1px solid #000; padding-top: 5px; width: 300px; font-size: 12px; }
+
+        /* Título da Via */
+        .via-tag { 
+            position: absolute; 
+            top: -10px; 
+            left: 50%; 
+            transform: translateX(-50%); 
+            background: #fff; 
+            padding: 0 15px; 
+            font-size: 11px; 
+            font-weight: bold; 
+            border: 1px solid #000;
+            border-radius: 10px;
+            text-transform: uppercase;
+        }
+        
+        .linha-corte { border-top: 2px dashed #999; margin: 40px 0; position: relative; }
+        .linha-corte::after { content: "✂️ Cortar aqui"; position: absolute; top: -12px; right: 0; background: #eee; font-size: 12px; color: #777; padding-left: 5px;}
+
+        /* BOTÕES DE TELA */
+        .toolbar {
+            position: fixed; top: 0; left: 0; right: 0;
+            background: #333; padding: 10px; text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+        .btn {
+            background-color: #0d6efd; color: white; border: none; padding: 10px 20px;
+            font-size: 14px; font-weight: bold; border-radius: 4px; cursor: pointer; margin: 0 5px; text-decoration: none;
+        }
+        .btn-close { background-color: #6c757d; }
+        .btn:hover { opacity: 0.9; }
+
+        /* IMPRESSÃO LIMPA */
+        @media print { 
+            body { background: white; padding: 0; margin: 0; }
+            .no-print, .toolbar { display: none !important; } 
+            .recibo-container { box-shadow: none; border: 2px solid #000; margin-bottom: 20px; page-break-inside: avoid; }
+            .linha-corte::after { background: white; }
+            @page { margin: 1cm; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar no-print">
+        <button onclick="window.print()" class="btn">🖨️ Imprimir Recibo</button>
+        <button onclick="window.close()" class="btn btn-close">❌ Fechar</button>
+    </div>
+
+    <div style="margin-top: 50px;"> <div class="recibo-container">
+            <div class="via-tag">1ª Via - Cliente</div>
+            
+            <div class="header-recibo">
+                <div class="empresa-info">
+                    <h2>{{ user.perfilusuario.despachante.nome_fantasia }}</h2>
+                    <p>{{ user.perfilusuario.despachante.razao_social }}</p>
+                    <p>CNPJ: {{ user.perfilusuario.despachante.cnpj|default:"Não informado" }}</p>
+                    <p>{{ user.perfilusuario.despachante.endereco|default:"Endereço não cadastrado" }}</p>
+                    <p>Tel: {{ user.perfilusuario.despachante.telefone|default:"(62) 0000-0000" }}</p>
+                </div>
+                <div class="valor-box">
+                    <small>RECIBO Nº {{ atendimento.id }}</small>
+                    <span>R$ {{ total|floatformat:2 }}</span>
+                </div>
+            </div>
+
+            <div class="linha-texto">
+                Recebemos de <span class="campo-preenchido">{{ atendimento.cliente.nome }}</span>, 
+                CPF/CNPJ <span class="campo-preenchido">{{ atendimento.cliente.cpf_cnpj|default:"N/I" }}</span>,
+                a importância supramencionada de <strong>R$ {{ total|floatformat:2 }}</strong>, 
+                referente aos serviços de despachante: 
+                <span class="campo-preenchido">{{ atendimento.servico }}</span>
+                
+                {% if atendimento.veiculo %}
+                    do veículo Placa: <span class="campo-preenchido">{{ atendimento.veiculo.placa }}</span>, 
+                    Modelo: <span class="campo-preenchido">{{ atendimento.veiculo.modelo }}</span>.
+                {% else %}
+                    (Veículo não vinculado).
+                {% endif %}
+                <br>
+                <small>(Ref. Atendimento Nº {{ atendimento.numero_atendimento|default:atendimento.id }})</small>
+            </div>
+
+            <div class="linha-texto">
+                Para maior clareza, firmamos o presente recibo dando plena e geral quitação.
+            </div>
+
+            <div class="rodape-recibo">
+                <div class="data-local">
+                    {{ user.perfilusuario.despachante.cidade|default:"Goiânia" }}, {% now "d" %} de {% now "F" %} de {% now "Y" %}
+                </div>
+                <div class="assinatura">
+                    {{ user.perfilusuario.despachante.nome_fantasia|upper }}<br>
+                    Assinatura do Responsável
+                </div>
+            </div>
+        </div>
+
+        <div class="linha-corte"></div>
+
+        <div class="recibo-container">
+            <div class="via-tag">2ª Via - Arquivo</div>
+            
+            <div class="header-recibo">
+                <div class="empresa-info">
+                    <h2>{{ user.perfilusuario.despachante.nome_fantasia }}</h2>
+                    <p>CNPJ: {{ user.perfilusuario.despachante.cnpj|default:"Não informado" }}</p>
+                </div>
+                <div class="valor-box">
+                    <small>RECIBO Nº {{ atendimento.id }}</small>
+                    <span>R$ {{ total|floatformat:2 }}</span>
+                </div>
+            </div>
+
+            <div class="linha-texto">
+                Recebemos de <span class="campo-preenchido">{{ atendimento.cliente.nome }}</span>, 
+                a importância de <strong>R$ {{ total|floatformat:2 }}</strong>, 
+                referente a: <span class="campo-preenchido">{{ atendimento.servico }}</span> - Placa: {{ atendimento.veiculo.placa|default:"--" }}
+            </div>
+
+            <div class="rodape-recibo">
+                <div class="data-local">
+                    Data: {% now "d/m/Y" %}
+                </div>
+                <div class="assinatura">
+                    Assinatura do Cliente / Responsável
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+</html>

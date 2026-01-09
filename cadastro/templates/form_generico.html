@@ -31,18 +31,38 @@
                                 {% if field.field.required %} <span class="text-danger">*</span> {% endif %}
                             </label>
                             
-                            {# Garante que campos não especificados nos widgets do forms.py ainda tenham estilo #}
-                            {% if field.field.widget.attrs.class %}
-                                {{ field }}
-                            {% elif "Select" in field.field.widget.constructor_name %}
+                            {# --- LÓGICA DE BLOQUEIO PARA CAMPOS FINANCEIROS AUTOMÁTICOS --- #}
+                            {% if field.name == 'custo_impostos' or field.name == 'custo_taxa_bancaria' %}
                                 <div class="input-group">
-                                    {{ field }}
+                                    <span class="input-group-text bg-light text-muted border-end-0">
+                                        <i class="fas fa-calculator small"></i>
+                                    </span>
+                                    <input type="text" 
+                                           class="form-control bg-light border-start-0 fw-bold text-secondary" 
+                                           value="R$ {{ field.value|default:'0,00' }}" 
+                                           readonly 
+                                           tabindex="-1">
                                 </div>
+                                <div class="form-text text-info small">
+                                    <i class="fas fa-info-circle me-1"></i> Provisionado automaticamente.
+                                </div>
+                                {# Campo oculto real para processamento do Django #}
+                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|stringformat:'s'|default:'0' }}">
+
                             {% else %}
-                                {{ field }}
+                                {# Renderização normal dos demais campos #}
+                                {% if field.field.widget.attrs.class %}
+                                    {{ field }}
+                                {% elif "Select" in field.field.widget.constructor_name %}
+                                    <div class="input-group">
+                                        {{ field }}
+                                    </div>
+                                {% else %}
+                                    {{ field }}
+                                {% endif %}
                             {% endif %}
 
-                            {% if field.help_text %}
+                            {% if field.help_text and field.name != 'custo_impostos' and field.name != 'custo_taxa_bancaria' %}
                                 <div class="form-text text-muted small">{{ field.help_text|safe }}</div>
                             {% endif %}
                             
@@ -58,7 +78,7 @@
                         <a href="{{ url_voltar|default:'javascript:history.back()' }}" class="btn btn-secondary me-md-2">
                             <i class="fas fa-arrow-left me-1"></i> Voltar
                         </a>
-                        <button type="submit" class="btn btn-success px-4 shadow">
+                        <button type="submit" class="btn btn-success px-4 shadow fw-bold">
                             <i class="fas fa-save me-1"></i> Salvar Alterações
                         </button>
                     </div>
@@ -69,6 +89,7 @@
     </div>
 </div>
 
+{# Modal de Exclusão (Mantido igual) #}
 {% if form.instance.pk and url_excluir %}
     {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
         <div class="modal fade" id="modalExcluir" tabindex="-1" aria-hidden="true">
@@ -80,14 +101,12 @@
                     </div>
                     <div class="modal-body">
                         <p>{{ texto_modal|default:"Tem certeza que deseja excluir este registro permanentemente?" }}</p>
-                        
                         <div class="alert alert-warning small mb-0">
                             <i class="fas fa-info-circle me-1"></i> <strong>Atenção:</strong> Esta ação não pode ser desfeita.
                         </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        
                         <form action="{{ url_excluir }}" method="POST">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-danger">Sim, Excluir</button>

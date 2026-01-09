@@ -14,39 +14,71 @@ class AtendimentoForm(forms.ModelForm):
             'cliente',
             'veiculo',
             'servico',
-            'responsavel',  # <-- CAMPO ADICIONADO
+            'responsavel',
             'status',
             'data_entrega',
             'data_solicitacao',
-            'observacoes_internas'
+            'observacoes_internas',
+            'valor_taxas_detran',
+            'valor_honorarios',
+            'quem_pagou_detran',
+            'custo_impostos',
+            'custo_taxa_bancaria',
+            'status_financeiro',
+            'data_pagamento',
         ]
         widgets = {
             'numero_atendimento': forms.TextInput(attrs={'class': 'form-control'}),
             'cliente': forms.Select(attrs={'class': 'form-select'}),
             'veiculo': forms.Select(attrs={'class': 'form-select'}),
             'servico': forms.TextInput(attrs={'class': 'form-control'}),
-            'responsavel': forms.Select(attrs={'class': 'form-select'}),  # <-- WIDGET ADICIONADO
+            'responsavel': forms.Select(attrs={'class': 'form-select'}),
             'status': forms.Select(attrs={'class': 'form-select'}),
             'data_entrega': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'data_solicitacao': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
             'observacoes_internas': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            
+            'valor_taxas_detran': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'valor_honorarios': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'quem_pagou_detran': forms.Select(attrs={'class': 'form-select'}),
+            
+            # ATUALIZADO: Widgets de Custo agora são protegidos (ReadOnly)
+            'custo_impostos': forms.NumberInput(attrs={
+                'class': 'form-control bg-light', 
+                'step': '0.01', 
+                'readonly': 'readonly'
+            }),
+            'custo_taxa_bancaria': forms.NumberInput(attrs={
+                'class': 'form-control bg-light', 
+                'step': '0.01', 
+                'readonly': 'readonly'
+            }),
+            
+            'status_financeiro': forms.Select(attrs={'class': 'form-select'}),
+            'data_pagamento': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'}),
         }
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if user and hasattr(user, 'perfilusuario'):
             despachante = user.perfilusuario.despachante
+            
+            # Filtros de Segurança por Despachante
             self.fields['cliente'].queryset = Cliente.objects.filter(despachante=despachante)
             self.fields['veiculo'].queryset = Veiculo.objects.filter(despachante=despachante)
             
-            # FILTRO DO RESPONSÁVEL: Mostra apenas usuários que pertencem a este despachante
+            # FILTRO DO RESPONSÁVEL
             self.fields['responsavel'].queryset = User.objects.filter(
                 perfilusuario__despachante=despachante
             ).order_by('first_name')
             
-            # Melhora a exibição do nome no select (Nome Completo ou Username)
+            # Labels e Estilização
             self.fields['responsavel'].label_from_instance = lambda obj: f"{obj.get_full_name() or obj.username}".upper()
             self.fields['responsavel'].label = "Responsável Técnico"
+
+            # Reforço visual de que impostos são calculados pelo sistema
+            self.fields['custo_impostos'].help_text = "Calculado automaticamente sobre o honorário."
+            self.fields['custo_taxa_bancaria'].help_text = "Taxa operacional provisionada pelo sistema."
 
 
 class ClienteForm(forms.ModelForm):
@@ -143,6 +175,9 @@ class DespachanteForm(forms.ModelForm):
             'dia_vencimento': forms.Select(attrs={'class': 'form-select'}),
             'valor_mensalidade': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'email_fatura': forms.EmailInput(attrs={'class': 'form-control'}),
+            # --- CAMPOS DE CONFIGURAÇÃO SaaS ADICIONADOS ---
+            'aliquota_imposto': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'taxa_bancaria_padrao': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }
 
 
@@ -174,10 +209,6 @@ class UsuarioMasterForm(forms.Form):
     )
 
 class UsuarioMasterEditForm(UsuarioMasterForm):
-    """
-    Herda do formulário de criação, mas torna a senha opcional,
-    exibe o username como readonly e remove validação de duplicidade.
-    """
     username = forms.CharField(label="Login", widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
     email = forms.EmailField(label="E-mail", widget=forms.EmailInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
     

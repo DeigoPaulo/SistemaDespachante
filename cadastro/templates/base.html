@@ -56,10 +56,9 @@
         <div class="collapse navbar-collapse" id="navbarNav">
             <ul class="navbar-nav me-auto align-items-center">
                 
-                
                 <li class="nav-item ms-lg-3 mt-2 mt-lg-0">
                     <a href="{% url 'lista_clientes' %}" class="btn btn-nav-dark btn-sm px-3">
-                        <i class="fas fa-users me-1 text-info"></i> Carteira de Clientes
+                        <i class="fas fa-users me-1 text-info"></i> Clientes
                     </a>
                 </li>
 
@@ -89,25 +88,54 @@
 
                 <li class="nav-item dropdown ms-lg-2 mt-2 mt-lg-0">
                     <a class="btn btn-nav-dark btn-sm px-3 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-wallet me-1 text-warning"></i> Financeiro
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark-custom shadow">
+                        <li>
+                            <a class="dropdown-item fw-bold text-info" href="{% url 'dashboard_financeiro' %}">
+                                <i class="fas fa-chart-line me-2"></i> Dashboard de Resultados
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider bg-secondary"></li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'fluxo_caixa' %}">
+                                <i class="fas fa-exchange-alt me-2"></i> Fluxo de Caixa (Baixas)
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'relatorio_servicos' %}">
+                                <i class="fas fa-file-invoice-dollar me-2"></i> Extrato por Cliente
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item text-danger fw-bold" href="{% url 'relatorio_inadimplencia' %}">
+                                <i class="fas fa-exclamation-triangle me-2"></i> Inadimplência
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider bg-secondary"></li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'configuracoes_despachante' %}">
+                                <i class="fas fa-cog me-2 text-secondary"></i> Parâmetros Financeiros
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <li class="nav-item dropdown ms-lg-2 mt-2 mt-lg-0">
+                    <a class="btn btn-nav-dark btn-sm px-3 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="fas fa-chart-pie me-1 text-danger"></i> Gestão
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark-custom shadow">
+                        <li>
+                            <a class="dropdown-item" href="{% url 'relatorio_mensal' %}">
+                                <i class="fas fa-clipboard-list me-2"></i> Controle de Produção
+                            </a>
+                        </li>
                         <li>
                             <a class="dropdown-item" href="{% url 'selecao_documento' %}">
                                 <i class="fas fa-file-contract me-2"></i> Gerador de Documentos
                             </a>
                         </li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'relatorio_mensal' %}">
-                                <i class="fas fa-calendar-alt me-2"></i> Relatório de Produção
-                            </a>
-                        </li>
-                        <li>
-                             <a class="dropdown-item" href="{% url 'relatorio_servicos' %}">
-                                <i class="fas fa-list-alt me-2"></i> Extrato de Serviços 
-                            </a>
-                        </li>
-                        
                         <li><hr class="dropdown-divider bg-secondary"></li>
                         <li>
                              <a class="dropdown-item" href="{% url 'ferramentas_compressao' %}">
@@ -142,6 +170,7 @@
                     </ul>
                 </li>
                 {% endif %}
+
                 <li class="nav-item ms-lg-2 mt-2 mt-lg-0">
                     <a href="{% url 'cadastro_rapido' %}" class="btn btn-nav-dark btn-sm px-3">
                         <i class="fas fa-bolt me-1 text-warning"></i> Processo Rápido
