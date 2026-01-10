@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
+from django.core.validators import FileExtensionValidator # <--- Importação necessária para validar o PNG
 
 # ==============================================================================
 # MODELOS EXISTENTES
@@ -16,6 +17,16 @@ class Despachante(models.Model):
     endereco_completo = models.TextField()
     data_cadastro = models.DateTimeField(auto_now_add=True)
     ativo = models.BooleanField(default=True)
+
+    # --- PERSONALIZAÇÃO VISUAL (NOVO) ---
+    logo = models.ImageField(
+        upload_to='logos_despachantes/', 
+        null=True, 
+        blank=True,
+        verbose_name="Logo do Escritório",
+        help_text="Formato obrigatório: PNG com fundo transparente. Tamanho ideal: 300x100px.",
+        validators=[FileExtensionValidator(['png'])] # <--- Trava para aceitar só PNG
+    )
 
     # --- CONFIGURAÇÕES DE CUSTOS PADRÃO (SaaS) ---
     # Para não precisar digitar toda vez, o sistema calcula automático baseado nisso:

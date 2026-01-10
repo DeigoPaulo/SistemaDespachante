@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block title %}Editar Serviço{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card shadow border-0">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0 fw-bold"><i class="fas fa-edit me-2"></i> Editar Serviço</h5>
+                <a href="{% url 'gerenciar_servicos' %}" class="btn btn-sm btn-light text-primary fw-bold">Voltar</a>
+            </div>
+            <div class="card-body p-4">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label fw-bold text-muted">Nome do Serviço</label>
+                        <input type="text" name="nome" class="form-control form-control-lg" 
+                               value="{{ servico.nome }}" required>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-6 mb-4">
+                            <label class="form-label fw-bold text-muted">Custo (Taxas)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">R$</span>
+                                <input type="text" name="valor_base" class="form-control mask-money" 
+                                       value="{{ servico.valor_base|floatformat:2 }}">
+                            </div>
+                            <div class="form-text small">Valor que paga ao DETRAN/Órgãos.</div>
+                        </div>
+                        <div class="col-6 mb-4">
+                            <label class="form-label fw-bold text-success">Honorários (Lucro)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-success text-white border-success">R$</span>
+                                <input type="text" name="honorarios" class="form-control mask-money border-success fw-bold text-success" 
+                                       value="{{ servico.honorarios|floatformat:2 }}">
+                            </div>
+                            <div class="form-text small">Valor do seu serviço.</div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow-sm">
+                        <i class="fas fa-check-circle me-2"></i> Salvar Alterações
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    $(document).ready(function(){
+        $('.mask-money').mask('000.000.000,00', {reverse: true});
+    });
+</script>
+{% endblock %}

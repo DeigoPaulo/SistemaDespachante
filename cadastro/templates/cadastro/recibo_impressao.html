@@ -19,8 +19,11 @@
 
         /* CABEÇALHO DO RECIBO */
         .header-recibo { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px; }
+        
+        /* Ajuste para a Logo */
+        .empresa-info img { max-height: 85px; max-width: 280px; margin-bottom: 5px; display: block; }
         .empresa-info h2 { margin: 0; font-size: 20px; text-transform: uppercase; color: #000; font-weight: bold; }
-        .empresa-info p { margin: 2px 0; font-size: 12px; color: #333; }
+        .empresa-info p { margin: 2px 0; font-size: 12px; color: #333; line-height: 1.3; }
         
         .valor-box {
             border: 2px solid #000;
@@ -97,15 +100,22 @@
         <button onclick="window.close()" class="btn btn-close">❌ Fechar</button>
     </div>
 
-    <div style="margin-top: 50px;"> <div class="recibo-container">
+    <div style="margin-top: 50px;"> 
+        
+        <div class="recibo-container">
             <div class="via-tag">1ª Via - Cliente</div>
             
             <div class="header-recibo">
                 <div class="empresa-info">
-                    <h2>{{ user.perfilusuario.despachante.nome_fantasia }}</h2>
+                    {% if user.perfilusuario.despachante.logo %}
+                        <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo">
+                    {% else %}
+                        <h2>{{ user.perfilusuario.despachante.nome_fantasia }}</h2>
+                    {% endif %}
+                    
                     <p>{{ user.perfilusuario.despachante.razao_social }}</p>
                     <p>CNPJ: {{ user.perfilusuario.despachante.cnpj|default:"Não informado" }}</p>
-                    <p>{{ user.perfilusuario.despachante.endereco|default:"Endereço não cadastrado" }}</p>
+                    <p>{{ user.perfilusuario.despachante.endereco_completo|default:"Endereço não cadastrado" }}</p>
                     <p>Tel: {{ user.perfilusuario.despachante.telefone|default:"(62) 0000-0000" }}</p>
                 </div>
                 <div class="valor-box">
@@ -153,8 +163,16 @@
             
             <div class="header-recibo">
                 <div class="empresa-info">
-                    <h2>{{ user.perfilusuario.despachante.nome_fantasia }}</h2>
+                    {% if user.perfilusuario.despachante.logo %}
+                        <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo">
+                    {% else %}
+                        <h2>{{ user.perfilusuario.despachante.nome_fantasia }}</h2>
+                    {% endif %}
+                    
+                    <p>{{ user.perfilusuario.despachante.razao_social }}</p>
                     <p>CNPJ: {{ user.perfilusuario.despachante.cnpj|default:"Não informado" }}</p>
+                    <p>{{ user.perfilusuario.despachante.endereco_completo|default:"Endereço não cadastrado" }}</p>
+                    <p>Tel: {{ user.perfilusuario.despachante.telefone|default:"(62) 0000-0000" }}</p>
                 </div>
                 <div class="valor-box">
                     <small>RECIBO Nº {{ atendimento.id }}</small>
@@ -164,16 +182,32 @@
 
             <div class="linha-texto">
                 Recebemos de <span class="campo-preenchido">{{ atendimento.cliente.nome }}</span>, 
-                a importância de <strong>R$ {{ total|floatformat:2 }}</strong>, 
-                referente a: <span class="campo-preenchido">{{ atendimento.servico }}</span> - Placa: {{ atendimento.veiculo.placa|default:"--" }}
+                CPF/CNPJ <span class="campo-preenchido">{{ atendimento.cliente.cpf_cnpj|default:"N/I" }}</span>,
+                a importância supramencionada de <strong>R$ {{ total|floatformat:2 }}</strong>, 
+                referente aos serviços de despachante: 
+                <span class="campo-preenchido">{{ atendimento.servico }}</span>
+                
+                {% if atendimento.veiculo %}
+                    do veículo Placa: <span class="campo-preenchido">{{ atendimento.veiculo.placa }}</span>, 
+                    Modelo: <span class="campo-preenchido">{{ atendimento.veiculo.modelo }}</span>.
+                {% else %}
+                    (Veículo não vinculado).
+                {% endif %}
+                <br>
+                <small>(Ref. Atendimento Nº {{ atendimento.numero_atendimento|default:atendimento.id }})</small>
+            </div>
+
+            <div class="linha-texto">
+                Para maior clareza, firmamos o presente recibo dando plena e geral quitação.
             </div>
 
             <div class="rodape-recibo">
                 <div class="data-local">
-                    Data: {% now "d/m/Y" %}
+                    {{ user.perfilusuario.despachante.cidade|default:"Goiânia" }}, {% now "d" %} de {% now "F" %} de {% now "Y" %}
                 </div>
                 <div class="assinatura">
-                    Assinatura do Cliente / Responsável
+                    {{ user.perfilusuario.despachante.nome_fantasia|upper }}<br>
+                    Assinatura do Responsável
                 </div>
             </div>
         </div>

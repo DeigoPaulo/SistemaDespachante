@@ -913,6 +913,33 @@ def excluir_servico(request, id):
     messages.success(request, "Serviço removido da lista.")
     return redirect('gerenciar_servicos')
 
+@login_required
+def editar_servico(request, id):
+    # Garante que só quem tem permissão acessa
+    if not request.user.is_superuser and not request.user.perfilusuario.tipo_usuario == 'ADMIN':
+        messages.error(request, "Você não tem permissão para editar serviços.")
+        return redirect('gerenciar_servicos')
+
+    servico = get_object_or_404(TipoServico, id=id)
+
+    if request.method == 'POST':
+        try:
+            servico.nome = request.POST.get('nome')
+            
+            # Tratamento de valores (R$ 1.000,00 -> 1000.00)
+            valor_base = request.POST.get('valor_base', '0').replace('.', '').replace(',', '.')
+            honorarios = request.POST.get('honorarios', '0').replace('.', '').replace(',', '.')
+            
+            servico.valor_base = valor_base
+            servico.honorarios = honorarios
+            servico.save()
+            
+            messages.success(request, f"Serviço '{servico.nome}' atualizado com sucesso!")
+            return redirect('gerenciar_servicos')
+        except Exception as e:
+            messages.error(request, "Erro ao atualizar valores. Verifique os campos.")
+
+    return render(request, 'cadastro/editar_servico.html', {'servico': servico})
 # --- ORÇAMENTOS ---
 
 @login_required

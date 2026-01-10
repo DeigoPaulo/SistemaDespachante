@@ -8,7 +8,6 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
 <style>
-    /* Ajuste fino para o Select2 parecer um input nativo do Bootstrap 5 */
     .select2-container--bootstrap-5 .select2-selection {
         min-height: 38px;
         padding-top: 4px;
@@ -98,7 +97,7 @@
                         <thead class="table-light small text-center">
                             <tr>
                                 <th class="text-start ps-4">Descrição do Serviço</th>
-                                <th width="150px">Valor (R$)</th>
+                                <th width="150px">Valor Total (R$)</th>
                                 <th width="50px"></th>
                             </tr>
                         </thead>
@@ -117,7 +116,8 @@
                                             {% for servico in servicos %}
                                                 <option value="{{ servico.nome }}" 
                                                         data-id="{{ servico.id }}" 
-                                                        data-preco="{{ servico.valor_total }}">
+                                                        data-honorario="{{ servico.honorarios }}"
+                                                        data-taxa="{{ servico.valor_base }}">
                                                 </option>
                                             {% endfor %}
                                         </datalist>
@@ -138,21 +138,38 @@
                     <div class="row align-items-center">
                         <div class="col-md-6">
                             <label class="form-label small text-white-50 fw-bold">Observações</label>
-                            <textarea name="observacoes" class="form-control bg-secondary text-white border-0" rows="3" placeholder="Condições de pagamento, prazos, validade..."></textarea>
+                            <textarea name="observacoes" class="form-control bg-secondary text-white border-0" rows="4" placeholder="Condições de pagamento, prazos, validade..."></textarea>
                         </div>
                         
                         <div class="col-md-6 mt-3 mt-md-0">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>Subtotal:</span>
-                                <span class="fw-bold" id="lbl_subtotal">R$ 0,00</span>
+                            <div class="d-flex justify-content-between mb-1 text-white-50 small">
+                                <span>Total Taxas (Sem desconto):</span>
+                                <span id="lbl_taxas">R$ 0,00</span>
                             </div>
+                            <div class="d-flex justify-content-between mb-2 text-white-50 small">
+                                <span>Total Honorários:</span>
+                                <span id="lbl_honorarios">R$ 0,00</span>
+                            </div>
+                            
+                            <hr class="border-white opacity-25 my-2">
+
+                            <div class="d-flex justify-content-between mb-2 align-items-center">
+                                <span>Subtotal:</span>
+                                <span class="fw-bold fs-5" id="lbl_subtotal">R$ 0,00</span>
+                            </div>
+                            
                             <div class="d-flex justify-content-between align-items-center mb-3">
-                                <span>Desconto (R$):</span>
+                                <div>
+                                    <span>Desconto (R$):</span>
+                                    <br><small class="text-warning" style="font-size: 0.7rem;">*Apenas sobre honorários</small>
+                                </div>
                                 <input type="number" step="0.01" name="desconto" id="input_desconto" 
                                        class="form-control form-control-sm text-end w-25" value="0.00">
                             </div>
+                            
                             <hr class="border-white opacity-25">
-                            <div class="d-flex justify-content-between fs-4 fw-bold text-success">
+                            
+                            <div class="d-flex justify-content-between fs-3 fw-bold text-success">
                                 <span>Total Final:</span>
                                 <span id="lbl_total">R$ 0,00</span>
                                 <input type="hidden" name="valor_total_hidden" id="valor_total_hidden" value="0.00">
@@ -205,22 +222,15 @@
             minimumInputLength: 3
         });
 
-        // --- 2. LÓGICA DE VEÍCULOS (NOVA) ---
-        
-        // Quando seleciona um cliente, busca os carros dele
+        // --- 2. LÓGICA DE VEÍCULOS ---
         $('#select_cliente_orcamento').on('select2:select', function (e) {
             var data = e.params.data;
             var clienteId = data.id;
 
-            // Mostra o container de veículo
             $('#container_veiculo_orcamento').removeClass('d-none');
             var selectVeiculo = $('#select_veiculo_orcamento');
-            
-            // Limpa e coloca msg de carregando
             selectVeiculo.empty().append('<option value="">Carregando veículos...</option>');
             
-            // Chama a API para pegar os carros (Certifique-se que essa URL existe no seu urls.py)
-            // Geralmente usamos: path('api/veiculos-cliente/<int:cliente_id>/', ...)
             $.ajax({
                 url: '/api/veiculos-cliente/' + clienteId + '/', 
                 dataType: 'json',
@@ -230,7 +240,6 @@
                     
                     if (veiculos.length > 0) {
                         veiculos.forEach(function(v) {
-                            // Assumindo que a API retorna id, placa e modelo
                             selectVeiculo.append(`<option value="${v.id}">${v.placa} - ${v.modelo}</option>`);
                         });
                     } else {
@@ -243,13 +252,11 @@
             });
         });
 
-        // Quando limpa o cliente, esconde o veículo
         $('#select_cliente_orcamento').on('select2:clear', function (e) {
             $('#container_veiculo_orcamento').addClass('d-none');
             $('#select_veiculo_orcamento').empty();
         });
 
-        // Botão "X" para limpar seleção do veículo
         $('#btn_limpar_veiculo').click(function() {
             $('#select_veiculo_orcamento').val('');
         });
@@ -264,24 +271,21 @@
 
         switchAvulso.addEventListener('change', function() {
             if (this.checked) {
-                // Modo Avulso: Esconde Select2, Mostra Input Texto, Esconde Veículo
                 containerBanco.classList.add('d-none');
                 containerAvulso.classList.remove('d-none');
-                containerVeiculo.classList.add('d-none'); // Avulso não tem veículo cadastrado
+                containerVeiculo.classList.add('d-none'); 
                 inputNomeAvulso.focus();
-                
-                // Limpa o Select2
                 $('#select_cliente_orcamento').val(null).trigger('change');
             } else {
-                // Modo Banco: Mostra Select2, Esconde Input Texto
                 containerBanco.classList.remove('d-none');
                 containerAvulso.classList.add('d-none');
                 inputNomeAvulso.value = '';
             }
         });
 
-        // --- 4. LÓGICA DE SERVIÇOS E CÁLCULOS (Mantida) ---
-        let subtotalGlobal = 0.00;
+        // --- 4. LÓGICA DE CÁLCULO ATUALIZADA (TAXAS vs HONORÁRIOS) ---
+        let totalTaxasGlobal = 0.00;
+        let totalHonorariosGlobal = 0.00;
 
         document.getElementById('btn-add-item').addEventListener('click', function() {
             const input = document.getElementById('input_busca_servico');
@@ -303,48 +307,62 @@
 
             const id = servicoSelecionado.getAttribute('data-id');
             const nome = servicoSelecionado.value;
-            let rawPreco = servicoSelecionado.getAttribute('data-preco');
-            if(typeof rawPreco === 'string') rawPreco = rawPreco.replace(',', '.');
-            const preco = parseFloat(rawPreco);
+            
+            // Tratamento de valores (substituir vírgula por ponto)
+            let rawHon = servicoSelecionado.getAttribute('data-honorario');
+            let rawTax = servicoSelecionado.getAttribute('data-taxa');
+            
+            if(typeof rawHon === 'string') rawHon = rawHon.replace(',', '.');
+            if(typeof rawTax === 'string') rawTax = rawTax.replace(',', '.');
+            
+            const honorario = parseFloat(rawHon) || 0;
+            const taxa = parseFloat(rawTax) || 0;
+            const totalItem = honorario + taxa;
 
-            adicionarLinhaTabela(id, nome, preco);
+            adicionarLinhaTabela(id, nome, honorario, taxa, totalItem);
 
             input.value = '';
             input.focus();
         });
 
-        function adicionarLinhaTabela(id, nome, preco) {
+        function adicionarLinhaTabela(id, nome, honorario, taxa, totalItem) {
             const tbody = document.getElementById('lista_itens_adicionados');
             const novaLinha = document.createElement('tr');
 
             novaLinha.innerHTML = `
                 <td class="ps-4">
                     <span class="fw-bold text-dark">${nome}</span>
+                    <br><small class="text-muted">Taxa: R$ ${taxa.toFixed(2)} | Hon: R$ ${honorario.toFixed(2)}</small>
                     <input type="hidden" name="servicos[]" value="${id}">
-                    <input type="hidden" name="precos[]" value="${preco}">
+                    <input type="hidden" name="precos[]" value="${totalItem}"> 
+                </td>
+                <td class="text-center fw-bold">
+                    R$ ${totalItem.toFixed(2).replace('.', ',')}
                 </td>
                 <td class="text-center">
-                    R$ ${preco.toFixed(2).replace('.', ',')}
-                </td>
-                <td class="text-center">
-                    <button type="button" class="btn btn-sm text-danger" onclick="removerLinha(this, ${preco})">
+                    <button type="button" class="btn btn-sm text-danger" onclick="removerLinha(this, ${honorario}, ${taxa})">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
             `;
 
             tbody.appendChild(novaLinha);
-            atualizarTotais(preco);
+            atualizarTotais(honorario, taxa);
         }
 
-        window.removerLinha = function(botao, valorRemovido) {
+        window.removerLinha = function(botao, honorario, taxa) {
             botao.closest('tr').remove();
-            atualizarTotais(-valorRemovido);
+            atualizarTotais(-honorario, -taxa);
         }
 
-        function atualizarTotais(valorDiferenca) {
-            subtotalGlobal += valorDiferenca;
-            if(subtotalGlobal < 0) subtotalGlobal = 0;
+        function atualizarTotais(honorarioDiff, taxaDiff) {
+            totalHonorariosGlobal += honorarioDiff;
+            totalTaxasGlobal += taxaDiff;
+            
+            // Evita negativos por erro de arredondamento
+            if(totalHonorariosGlobal < 0) totalHonorariosGlobal = 0;
+            if(totalTaxasGlobal < 0) totalTaxasGlobal = 0;
+
             renderizarTotaisNaTela();
         }
 
@@ -353,14 +371,22 @@
             let desconto = parseFloat(inputDesconto.value);
             if (isNaN(desconto)) desconto = 0;
 
-            if(desconto > subtotalGlobal) {
-                desconto = subtotalGlobal;
+            // REGRA: O desconto não pode ser maior que o total de honorários
+            if(desconto > totalHonorariosGlobal) {
+                desconto = totalHonorariosGlobal;
+                inputDesconto.value = desconto.toFixed(2);
+                // Opcional: alert("O desconto não pode ser maior que o valor dos honorários!");
             }
 
-            const totalFinal = subtotalGlobal - desconto;
+            const subtotal = totalTaxasGlobal + totalHonorariosGlobal;
+            const totalFinal = subtotal - desconto;
 
-            document.getElementById('lbl_subtotal').innerText = 'R$ ' + subtotalGlobal.toFixed(2).replace('.', ',');
+            // Atualiza os labels
+            document.getElementById('lbl_taxas').innerText = 'R$ ' + totalTaxasGlobal.toFixed(2).replace('.', ',');
+            document.getElementById('lbl_honorarios').innerText = 'R$ ' + totalHonorariosGlobal.toFixed(2).replace('.', ',');
+            document.getElementById('lbl_subtotal').innerText = 'R$ ' + subtotal.toFixed(2).replace('.', ',');
             document.getElementById('lbl_total').innerText = 'R$ ' + totalFinal.toFixed(2).replace('.', ',');
+            
             document.getElementById('valor_total_hidden').value = totalFinal.toFixed(2);
         }
 
@@ -371,19 +397,25 @@
             const isAvulso = switchAvulso.checked;
             const clienteId = $('#select_cliente_orcamento').val();
             const nomeAvulso = inputNomeAvulso.value.trim();
+            const total = parseFloat(document.getElementById('valor_total_hidden').value);
 
             if (isAvulso) {
                 if (!nomeAvulso) {
                     alert('Por favor, digite o nome do cliente avulso.');
                     event.preventDefault();
-                    inputNomeAvulso.focus();
                     return false;
                 }
             } else {
                 if (!clienteId) {
                     alert('Por favor, pesquise e selecione um cliente cadastrado.');
                     event.preventDefault();
-                    $('#select_cliente_orcamento').select2('open');
+                    return false;
+                }
+            }
+
+            if (total <= 0) {
+                if(!confirm("O valor total do orçamento está R$ 0,00. Deseja continuar mesmo assim?")) {
+                    event.preventDefault();
                     return false;
                 }
             }

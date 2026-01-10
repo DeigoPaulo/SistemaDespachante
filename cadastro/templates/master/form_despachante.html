@@ -25,7 +25,7 @@
                 </div>
                 
                 <div class="card-body p-5">
-                    <form method="post">
+                    <form method="post" enctype="multipart/form-data">
                         {% csrf_token %}
                         
                         <h6 class="text-uppercase text-muted fw-bold mb-3 border-bottom pb-2">
@@ -33,6 +33,14 @@
                         </h6>
                         
                         <div class="row g-3 mb-4">
+                            <div class="col-12 mb-3">
+                                <label class="form-label fw-bold">Logo do Escritório</label>
+                                {{ form.logo }}
+                                <div class="form-text small text-muted">
+                                    <i class="fas fa-image me-1"></i> Recomendado: Arquivo <strong>.PNG com fundo transparente</strong> para sair perfeito no recibo.
+                                </div>
+                            </div>
+
                             <div class="col-md-6">
                                 <label class="form-label fw-bold">Nome Fantasia</label>
                                 {{ form.nome_fantasia }}

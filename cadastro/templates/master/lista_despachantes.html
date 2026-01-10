@@ -36,8 +36,22 @@
                         {% for d in despachantes %}
                         <tr>
                             <td class="ps-4">
-                                <div class="fw-bold text-dark">{{ d.nome_fantasia }}</div>
-                                <small class="text-muted">{{ d.razao_social }}</small>
+                                <div class="d-flex align-items-center">
+                                    {% if d.logo %}
+                                        <img src="{{ d.logo.url }}" alt="Logo" class="rounded border me-3 bg-white" 
+                                             style="width: 45px; height: 45px; object-fit: contain; padding: 2px;">
+                                    {% else %}
+                                        <div class="rounded border me-3 d-flex align-items-center justify-content-center bg-light text-muted" 
+                                             style="width: 45px; height: 45px;">
+                                            <i class="fas fa-image"></i>
+                                        </div>
+                                    {% endif %}
+                                    
+                                    <div>
+                                        <div class="fw-bold text-dark">{{ d.nome_fantasia }}</div>
+                                        <small class="text-muted">{{ d.razao_social }}</small>
+                                    </div>
+                                </div>
                             </td>
                             <td>
                                 <div class="d-flex flex-column">

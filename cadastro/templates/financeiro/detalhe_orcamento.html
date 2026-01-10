@@ -27,11 +27,15 @@
 <div class="card border-0 shadow-lg p-5" id="folha-orcamento">
     
     <div class="text-center border-bottom pb-4 mb-4">
-        <h2 class="fw-bold text-uppercase mb-1 text-dark">
-            {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
-        </h2>
+        {% if user.perfilusuario.despachante.logo %}
+            <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo" style="max-height: 80px; max-width: 300px; margin-bottom: 10px;">
+        {% else %}
+            <h2 class="fw-bold text-uppercase mb-1 text-dark">
+                {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
+            </h2>
+        {% endif %}
         
-        <p class="text-muted mb-0 small">
+        <p class="text-muted mb-0 small mt-2">
             {{ user.perfilusuario.despachante.endereco_completo }} <br>
             <i class="fas fa-phone-alt me-1"></i> {{ user.perfilusuario.despachante.telefone }} 
             {% if user.perfilusuario.despachante.email %}
@@ -184,6 +188,12 @@
         .d-flex { display: flex !important; }
         .justify-content-between { justify-content: space-between !important; }
         .text-end { text-align: right !important; }
+        
+        /* Ajuste da Logo na Impressão */
+        img {
+            max-width: 250px !important;
+            height: auto !important;
+        }
     }
 </style>
 {% endblock %}

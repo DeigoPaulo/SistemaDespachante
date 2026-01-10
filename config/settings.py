@@ -28,14 +28,14 @@ SECRET_KEY = 'django-insecure-2#h1*u(9y)!*j%33_p_p!lljxdl%%+8_8t4cib3wh)5ymq0f!o
 DEBUG = True
 
 ALLOWED_HOSTS = []
+# 'dpcb00.pythonanywhere.com'
 
-#'dpcb00.pythonanywhere.com'
 
 # ==============================================================================
 # 3. APLICAÇÕES INSTALADAS
 # ==============================================================================
 INSTALLED_APPS = [
-    #"unfold",
+    # "unfold",
     "unfold.contrib.filters",  # (Opcional) Adicione se quiser filtros bonitos
     "unfold.contrib.forms",  # (Opcional) Adicione se quiser formulários bonitos
     'django.contrib.admin',
@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     # Seus Apps
     'cadastro',
 ]
+
 # --- CONTROLE DE SESSÃO ---
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
@@ -129,7 +130,7 @@ USE_TZ = True
 
 
 # ==============================================================================
-# 8. ARQUIVOS ESTÁTICOS (CSS, JS, IMAGENS)
+# 8. ARQUIVOS ESTÁTICOS E MÍDIA (CSS, JS, IMAGENS)
 # ==============================================================================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
@@ -138,6 +139,10 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+
+# --- CONFIGURAÇÃO DE MÍDIA (UPLOADS/LOGOS) ---
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
 
 
 # ==============================================================================
@@ -160,7 +165,6 @@ EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # Quando for para produção (internet), você mudará para SMTP:
 # EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-
 
 
 # --- CONFIGURAÇÃO DO VISUAL (UNFOLD) ---
@@ -238,6 +242,3 @@ CACHES = {
         'LOCATION': 'unique-snowflake', # Um nome único para sua instância
     }
 }
-
-
-

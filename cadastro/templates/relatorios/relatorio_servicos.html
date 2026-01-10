@@ -93,12 +93,13 @@
             <table class="table table-sm table-borderless mb-0 custom-print-table">
                 <thead style="border-bottom: 2px solid #000;">
                     <tr class="text-uppercase small fw-bold">
-                        <td width="12%">Data</td>
-                        <td width="22%">Veículo / Processo</td> 
+                        <td width="10%">Data</td>
+                        <td width="20%">Veículo / Processo</td> 
                         <td width="28%">Descrição do Serviço</td>
                         <td width="12%" class="text-end">Taxas DETRAN</td>
                         <td width="12%" class="text-end">Honorários</td>
-                        <td width="14%" class="text-end">Total Item</td>
+                        <td width="13%" class="text-end">Total Item</td>
+                        <td width="5%" class="text-center d-print-none">Rec.</td>
                     </tr>
                 </thead>
                 <tbody>
@@ -118,6 +119,12 @@
                         <td class="text-end align-middle">R$ {{ item.taxas|floatformat:2 }}</td>
                         <td class="text-end align-middle">R$ {{ item.honorario|floatformat:2 }}</td>
                         <td class="text-end align-middle fw-bold">R$ {{ item.valor_total|floatformat:2 }}</td>
+                        
+                        <td class="align-middle text-center d-print-none">
+                            <a href="{% url 'emitir_recibo' item.id %}" target="_blank" class="text-dark" title="Imprimir Recibo Individual">
+                                <i class="fas fa-print"></i>
+                            </a>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -127,6 +134,7 @@
                         <td class="text-end border-top border-dark pt-2 text-danger">R$ {{ dados.subtotal_taxas|floatformat:2 }}</td>
                         <td class="text-end border-top border-dark pt-2">R$ {{ dados.subtotal_honorarios|floatformat:2 }}</td>
                         <td class="text-end border-top border-dark pt-2 bg-light">R$ {{ dados.subtotal_valor|floatformat:2 }}</td>
+                        <td class="d-print-none border-top border-dark"></td>
                     </tr>
                 </tfoot>
             </table>

@@ -90,7 +90,8 @@
                     <thead class="table-light small text-uppercase">
                         <tr>
                             <th class="ps-4">Data Solicit.</th>
-                            <th>Cliente / Veículo / Processo</th> <th class="text-end">Taxas DETRAN</th>
+                            <th>Cliente / Veículo / Processo</th> 
+                            <th class="text-end">Taxas DETRAN</th>
                             <th class="text-end">Honorário</th>
                             <th class="text-end text-success">Lucro Real</th>
                             <th class="text-center">Status</th>
@@ -126,13 +127,17 @@
                             </td>
                             <td class="text-end pe-4">
                                 <div class="btn-group shadow-sm">
+                                    <a href="{% url 'emitir_recibo' p.id %}" target="_blank" class="btn btn-sm btn-outline-dark" title="Imprimir Recibo">
+                                        <i class="fas fa-print"></i>
+                                    </a>
+
                                     <a href="{% url 'editar_atendimento' p.id %}" class="btn btn-sm btn-outline-secondary" title="Ajustar Valores">
                                         <i class="fas fa-edit"></i>
                                     </a>
                                     
                                     {% if p.status_financeiro != 'PAGO' %}
-                                    <a href="{% url 'dar_baixa_pagamento' p.id %}" class="btn btn-sm btn-success">
-                                        <i class="fas fa-check me-1"></i> Baixar
+                                    <a href="{% url 'dar_baixa_pagamento' p.id %}" class="btn btn-sm btn-success" title="Dar Baixa">
+                                        <i class="fas fa-check"></i>
                                     </a>
                                     {% endif %}
                                 </div>

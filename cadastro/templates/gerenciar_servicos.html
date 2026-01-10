@@ -79,21 +79,29 @@
                                 {% for servico in servicos %}
                                 <tr>
                                     <td class="ps-3 fw-bold text-dark">{{ servico.nome }}</td>
-                                    <td class="text-muted">R$ {{ servico.valor_base }}</td>
-                                    <td class="text-success fw-bold">R$ {{ servico.honorarios }}</td>
+                                    <td class="text-muted">R$ {{ servico.valor_base|floatformat:2 }}</td>
+                                    <td class="text-success fw-bold">R$ {{ servico.honorarios|floatformat:2 }}</td>
                                     <td>
                                         <span class="badge bg-light text-dark border px-3 py-2 fs-6">
-                                            R$ {{ servico.valor_total }}
+                                            R$ {{ servico.valor_total|floatformat:2 }}
                                         </span>
                                     </td>
                                     <td class="text-end pe-3">
                                         {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+                                            
+                                            <a href="{% url 'editar_servico' servico.id %}" 
+                                               class="btn btn-sm btn-outline-primary border-0 me-1" 
+                                               title="Editar Serviço">
+                                                <i class="fas fa-pen"></i>
+                                            </a>
+
                                             <a href="{% url 'excluir_servico' servico.id %}" 
                                                class="btn btn-sm btn-outline-danger border-0" 
                                                onclick="return confirm('Tem certeza que deseja desativar o serviço {{ servico.nome }}?')"
                                                title="Excluir Serviço">
                                                 <i class="fas fa-trash-alt"></i>
                                             </a>
+
                                         {% else %}
                                             <i class="fas fa-lock text-muted opacity-25" title="Apenas leitura"></i>
                                         {% endif %}
