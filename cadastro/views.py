@@ -1,7 +1,7 @@
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils import timezone
-from django.db.models import Q, Sum, Count
+from django.db.models import Q, Sum, Count, Value, DecimalField
 from django.db import transaction
 from django.http import JsonResponse, FileResponse
 from django.contrib import messages
@@ -11,30 +11,24 @@ from django.core.cache import cache
 from django.contrib.auth.models import User
 from django.contrib.auth.hashers import make_password
 from django.urls import reverse
-from django.db.models.functions import ExtractMonth
+from django.db.models.functions import ExtractMonth, Coalesce
 import re
 import json
 import base64
+from decimal import Decimal
 from datetime import timedelta
-from .utils import registrar_log
-from django.core.paginator import Paginator
-from .models import LogAtividade
-from django.db.models import Sum, Value, DecimalField
-from django.db.models.functions import Coalesce, ExtractMonth
-from django.contrib.auth.decorators import user_passes_test
 from django.core.paginator import Paginator
 
 # Importação dos Modelos e Forms
-from .models import Atendimento, Cliente, Veiculo, TipoServico, PerfilUsuario, Despachante, Orcamento, ItemOrcamento
+from .models import Atendimento, Cliente, Veiculo, TipoServico, PerfilUsuario, Despachante, Orcamento, ItemOrcamento, LogAtividade
 from .forms import AtendimentoForm, ClienteForm, VeiculoForm, DespachanteForm, UsuarioMasterForm, UsuarioMasterEditForm, CompressaoPDFForm
 from .asaas import gerar_boleto_asaas
-from .utils import comprimir_pdf_memoria
+from .utils import comprimir_pdf_memoria, registrar_log
 
-# --- 2. FUNÇÃO DE SEGURANÇA (COLE ISSO LOGO APÓS OS IMPORTS) ---
+# --- FUNÇÃO DE SEGURANÇA ---
 def is_admin_or_superuser(user):
     """
     Retorna True se o usuário for Superusuário ou tiver perfil 'ADMIN'.
-    Caso contrário, retorna False.
     """
     if not user.is_authenticated:
         return False
@@ -42,7 +36,6 @@ def is_admin_or_superuser(user):
     if user.is_superuser:
         return True
         
-    # Verifica se tem perfil e se é ADMIN
     if hasattr(user, 'perfilusuario') and user.perfilusuario.tipo_usuario == 'ADMIN':
         return True
         
@@ -60,7 +53,6 @@ def minha_view_de_login(request):
         
         username_para_autenticar = login_input
 
-        # Verifica se é E-mail
         if '@' in login_input:
             try:
                 user_obj = User.objects.get(email=login_input)
@@ -141,47 +133,34 @@ def dashboard(request):
     data_filtro = request.GET.get('data_filtro')
     termo_busca = request.GET.get('busca')
 
-    # ==============================================================================
-    # 1. DEFINIÇÃO DO QUE NÃO DEVE APARECER (Processos Finalizados)
-    # ==============================================================================
-    # Adicione aqui todos os status que significam "Fim de papo"
     status_finalizados = ['APROVADO', 'CANCELADO', 'CONCLUIDO', 'ENTREGUE']
 
-    # ==============================================================================
-    # 2. ESTATÍSTICAS (Sem Cache para atualização instantânea)
-    # ==============================================================================
     hoje = timezone.now().date()
     
-    # Conta apenas o que NÃO está finalizado
     total_abertos = Atendimento.objects.filter(
         despachante=despachante
     ).exclude(
         status__in=status_finalizados
     ).count()
 
-    # Conta tudo que foi solicitado neste mês (independente do status)
     total_mes = Atendimento.objects.filter(
         despachante=despachante, 
         data_solicitacao__month=hoje.month,
         data_solicitacao__year=hoje.year
     ).count()
 
-    # ==============================================================================
-    # 3. LISTA DA FILA DE TRABALHO
-    # ==============================================================================
+    # Otimização: select_related para evitar query N+1
     fila_processos = Atendimento.objects.select_related(
-        'cliente', 'veiculo', 'responsavel'
+        'cliente', 'veiculo', 'responsavel', 'tipo_servico'
     ).filter(
         despachante=despachante
     ).exclude(
-        status__in=status_finalizados  # <--- AQUI GARANTE QUE ZERA/SOME
+        status__in=status_finalizados
     ).order_by('data_solicitacao')
     
-    # Filtro por Data (se selecionado no input)
     if data_filtro:
         fila_processos = fila_processos.filter(data_solicitacao=data_filtro)
 
-    # Filtro por Busca (se digitado)
     if termo_busca:
         fila_processos = fila_processos.filter(
             Q(cliente__nome__icontains=termo_busca) |
@@ -190,10 +169,13 @@ def dashboard(request):
             Q(servico__icontains=termo_busca)
         )
     
-    # ==============================================================================
-    # 4. LÓGICA DE CORES E PRAZOS
-    # ==============================================================================
-    for processo in fila_processos:
+    # Paginação para evitar travamento (50 itens por página)
+    paginator = Paginator(fila_processos, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # Lógica de Cores (Frontend Logic)
+    for processo in page_obj:
         if processo.data_entrega:
             dias_restantes = (processo.data_entrega - hoje).days
             processo.dias_na_fila = dias_restantes
@@ -205,7 +187,6 @@ def dashboard(request):
             else:
                 processo.alerta_cor = 'success'  # No prazo
         else:
-            # Se não tem data de entrega definida, baseia na data de solicitação
             dias_corridos = (hoje - processo.data_solicitacao).days
             if dias_corridos >= 30:
                 processo.alerta_cor = 'danger'
@@ -215,7 +196,7 @@ def dashboard(request):
                 processo.alerta_cor = 'success'
 
     context = {
-        'fila_processos': fila_processos,
+        'fila_processos': page_obj, # Passa o objeto paginado
         'total_abertos': total_abertos, 
         'total_mes': total_mes,
         'perfil': perfil,
@@ -226,7 +207,7 @@ def dashboard(request):
     return render(request, 'dashboard.html', context)
 
 # ==============================================================================
-# GESTÃO DE ATENDIMENTOS (CRUD) - ATUALIZADO COM TAXA SINDEGO
+# GESTÃO DE ATENDIMENTOS (CRUD) - REFATORADO PARA MODEL INTELIGENTE
 # ==============================================================================
 
 @login_required
@@ -243,44 +224,50 @@ def novo_atendimento(request):
             atendimento = form.save(commit=False)
             atendimento.despachante = despachante
             
-            # --- 1. LÓGICA DA TAXA DO SINDICATO (13,00 vs 6,50) ---
-            # Tenta achar o serviço cadastrado pelo nome (ignora maiúsculas/minúsculas)
-            tipo_servico = TipoServico.objects.filter(
-                despachante=despachante, 
-                nome__iexact=atendimento.servico
-            ).first()
-
-            if tipo_servico and tipo_servico.usa_taxa_sindego_reduzida:
-                # Se achou e é reduzida -> Cobra o valor menor (Ex: 6,50)
-                atendimento.custo_taxa_sindego = despachante.valor_taxa_sindego_reduzida
-            else:
-                # Se não achou ou é normal -> Cobra o valor cheio (Ex: 13,00)
-                atendimento.custo_taxa_sindego = despachante.valor_taxa_sindego_padrao
-            
-            # --- 2. CÁLCULO FINANCEIRO (IMPOSTOS %) ---
-            h_bruto = float(atendimento.valor_honorarios or 0)
-            aliquota = float(despachante.aliquota_imposto or 0)
-            taxa_bancaria_config = float(despachante.taxa_bancaria_padrao or 0)
-            
-            atendimento.custo_impostos = h_bruto * (aliquota / 100)
-            atendimento.custo_taxa_bancaria = h_bruto * (taxa_bancaria_config / 100)
-            
-            # --- 3. DEFINIÇÃO DE RESPONSÁVEL ---
             if not atendimento.responsavel:
                 atendimento.responsavel = request.user
             
+            # --- CORREÇÃO FINANCEIRA COMPLETA (DECIMAL) ---
+            if atendimento.tipo_servico:
+                # 1. Se valores estiverem zerados, puxa do catálogo
+                if not atendimento.valor_taxas_detran:
+                    atendimento.valor_taxas_detran = atendimento.tipo_servico.valor_base
+                
+                if not atendimento.valor_honorarios:
+                    atendimento.valor_honorarios = atendimento.tipo_servico.honorarios
+                
+                # 2. Lógica da Taxa Sindego (FALTAVA ISSO!)
+                if atendimento.custo_taxa_sindego == 0:
+                    if atendimento.tipo_servico.usa_taxa_sindego_reduzida:
+                        atendimento.custo_taxa_sindego = despachante.valor_taxa_sindego_reduzida
+                    else:
+                        atendimento.custo_taxa_sindego = despachante.valor_taxa_sindego_padrao
+
+            # 3. Recalcula Custos Variáveis (Imposto e Banco) com precisão
+            val_honorarios = Decimal(str(atendimento.valor_honorarios or 0))
+            val_taxas = Decimal(str(atendimento.valor_taxas_detran or 0))
+            
+            aliq_imposto = Decimal(str(despachante.aliquota_imposto or 0))
+            aliq_banco = Decimal(str(despachante.taxa_bancaria_padrao or 0))
+
+            # Imposto incide apenas sobre Honorários
+            atendimento.custo_impostos = val_honorarios * (aliq_imposto / 100)
+            
+            # Taxa bancária incide sobre o total transacionado
+            total_transacao = val_taxas + val_honorarios
+            atendimento.custo_taxa_bancaria = total_transacao * (aliq_banco / 100)
+
             atendimento.save()
 
-            # --- 4. LOG DE CRIAÇÃO ---
             registrar_log(
                 request, 
                 'CRIACAO', 
-                f"Criou o processo #{atendimento.numero_atendimento} para o cliente {atendimento.cliente}.",
+                f"Criou o processo #{atendimento.numero_atendimento} ({atendimento.servico}) para {atendimento.cliente}.",
                 atendimento=atendimento,
                 cliente=atendimento.cliente
             )
 
-            messages.success(request, "Processo criado e taxas calculadas com sucesso!")
+            messages.success(request, "Processo criado com financeiro corrigido!")
             return redirect('dashboard')
     else:
         form = AtendimentoForm(request.user, initial={'responsavel': request.user})
@@ -303,38 +290,40 @@ def editar_atendimento(request, id):
         if form.is_valid():
             atendimento_obj = form.save(commit=False)
             
-            # --- 1. LÓGICA DA TAXA DO SINDICATO (RECALCULAR NA EDIÇÃO) ---
-            # Recalcula caso o usuário tenha mudado o nome do serviço
-            tipo_servico = TipoServico.objects.filter(
-                despachante=despachante, 
-                nome__iexact=atendimento_obj.servico
-            ).first()
-
-            if tipo_servico and tipo_servico.usa_taxa_sindego_reduzida:
-                atendimento_obj.custo_taxa_sindego = despachante.valor_taxa_sindego_reduzida
-            else:
-                atendimento_obj.custo_taxa_sindego = despachante.valor_taxa_sindego_padrao
-
-            # --- 2. CÁLCULO FINANCEIRO (IMPOSTOS %) ---
-            h_bruto = float(atendimento_obj.valor_honorarios or 0)
-            aliquota = float(despachante.aliquota_imposto or 0)
-            taxa_bancaria_config = float(despachante.taxa_bancaria_padrao or 0)
+            # --- FORÇA RECALCULO FINANCEIRO AO EDITAR ---
+            # Converte para Decimal
+            val_honorarios = Decimal(str(atendimento_obj.valor_honorarios or 0))
+            val_taxas = Decimal(str(atendimento_obj.valor_taxas_detran or 0))
             
-            atendimento_obj.custo_impostos = h_bruto * (aliquota / 100)
-            atendimento_obj.custo_taxa_bancaria = h_bruto * (taxa_bancaria_config / 100)
+            aliq_imposto = Decimal(str(despachante.aliquota_imposto or 0))
+            aliq_banco = Decimal(str(despachante.taxa_bancaria_padrao or 0))
+
+            # Recalcula custos proporcionais
+            atendimento_obj.custo_impostos = val_honorarios * (aliq_imposto / 100)
             
+            total_transacao = val_taxas + val_honorarios
+            atendimento_obj.custo_taxa_bancaria = total_transacao * (aliq_banco / 100)
+            
+            # Nota: A taxa do sindicato (sindego) geralmente é fixa, então não recalculamos
+            # automaticamente na edição para não sobrescrever caso seja uma exceção manual.
+            # Mas garantimos que não fique zerada se foi esquecida.
+            if atendimento_obj.custo_taxa_sindego == 0 and atendimento_obj.tipo_servico:
+                 if atendimento_obj.tipo_servico.usa_taxa_sindego_reduzida:
+                     atendimento_obj.custo_taxa_sindego = despachante.valor_taxa_sindego_reduzida
+                 else:
+                     atendimento_obj.custo_taxa_sindego = despachante.valor_taxa_sindego_padrao
+
             atendimento_obj.save()
             
-            # --- LOG DE EDIÇÃO ---
             registrar_log(
                 request, 
                 'EDICAO', 
-                f"Editou o processo #{atendimento_obj.numero_atendimento}. Novo Status: {atendimento_obj.get_status_display()}.",
+                f"Editou o processo #{atendimento_obj.numero_atendimento}. Status: {atendimento_obj.get_status_display()}.",
                 atendimento=atendimento_obj,
                 cliente=atendimento_obj.cliente
             )
 
-            messages.success(request, f"Processo {atendimento_obj.numero_atendimento or id} atualizado!")
+            messages.success(request, f"Processo e financeiro atualizados!")
             return redirect('dashboard')
     else:
         form = AtendimentoForm(request.user, instance=atendimento)
@@ -363,14 +352,13 @@ def excluir_atendimento(request, id):
         return redirect('dashboard')
 
     if request.method == 'POST':
-        num_atendimento = atendimento.numero_atendimento
-        nome_cliente = atendimento.cliente.nome if atendimento.cliente else "Desconhecido"
+        num = atendimento.numero_atendimento
+        nome = atendimento.cliente.nome if atendimento.cliente else "Desconhecido"
         
-        # --- LOG DE EXCLUSÃO ---
         registrar_log(
             request, 
             'EXCLUSAO', 
-            f"Excluiu permanentemente o processo #{num_atendimento} do cliente {nome_cliente}.",
+            f"Excluiu permanentemente o processo #{num} de {nome}.",
             cliente=atendimento.cliente 
         )
 
@@ -383,6 +371,8 @@ def excluir_atendimento(request, id):
 # ==============================================================================
 # CADASTRO RÁPIDO (LOTE)
 # ==============================================================================
+
+from decimal import Decimal
 @login_required
 def cadastro_rapido(request):
     perfil = getattr(request.user, 'perfilusuario', None)
@@ -396,10 +386,8 @@ def cadastro_rapido(request):
     if request.method == 'POST':
         try:
             with transaction.atomic():
-                # --- CORREÇÃO DO RESPONSÁVEL ---
-                # Tenta pegar 'responsavel' OU 'responsavel_id'
+                # --- [Bloco de Responsável e Cliente] ---
                 responsavel_id = request.POST.get('responsavel') or request.POST.get('responsavel_id')
-                
                 responsavel_obj = request.user 
                 if responsavel_id:
                     try:
@@ -407,7 +395,6 @@ def cadastro_rapido(request):
                     except User.DoesNotExist:
                         pass
 
-                # Cliente
                 cliente_id = request.POST.get('cliente_id')
                 if not cliente_id:
                     messages.error(request, "Nenhum cliente selecionado.")
@@ -415,7 +402,7 @@ def cadastro_rapido(request):
                 
                 cliente = get_object_or_404(Cliente, id=cliente_id, despachante=despachante)
 
-                # Listas
+                # --- Listas do Formulário ---
                 placas = request.POST.getlist('veiculo_placa[]')
                 modelos = request.POST.getlist('veiculo_modelo[]')
                 servicos_str_lista = request.POST.getlist('servico[]') 
@@ -428,50 +415,102 @@ def cadastro_rapido(request):
                     placa_limpa = placas[i].replace('-', '').replace(' ', '').upper()
                     if not placa_limpa: continue
 
+                    # 1. Cria ou Pega o Veículo
                     veiculo, _ = Veiculo.objects.get_or_create(
                         placa=placa_limpa,
                         despachante=despachante,
                         defaults={'cliente': cliente, 'modelo': modelos[i].upper()}
                     )
 
-                    # Financeiro
+                    # ==========================================================
+                    # 2. SOMATÓRIA DOS SERVIÇOS (USANDO DECIMAL)
+                    # ==========================================================
                     nomes_selecionados = [s.strip() for s in servicos_str_lista[i].split('+')]
-                    total_taxas = 0
-                    total_honorarios = 0
+                    
+                    # Inicializa com Decimal para precisão monetária
+                    total_taxas_detran = Decimal('0.00')
+                    total_honorarios = Decimal('0.00')
+                    total_custo_sindego = Decimal('0.00')
+                    tipo_servico_vinculado = None
 
                     for nome_s in nomes_selecionados:
+                        # Busca case-insensitive
                         s_base = servicos_db.filter(nome__iexact=nome_s).first()
+                        
                         if s_base:
-                            total_taxas += s_base.valor_base
+                            # Converte e soma (Garante que não use float)
+                            total_taxas_detran += s_base.valor_base
                             total_honorarios += s_base.honorarios
 
-                    custo_imp = total_honorarios * (despachante.aliquota_imposto / 100)
-                    custo_ban = total_honorarios * (despachante.taxa_bancaria_padrao / 100)
+                            # CÁLCULO EXPLÍCITO DA TAXA SINDEGO (Corrige o erro de combos)
+                            if s_base.usa_taxa_sindego_reduzida:
+                                total_custo_sindego += despachante.valor_taxa_sindego_reduzida
+                            else:
+                                total_custo_sindego += despachante.valor_taxa_sindego_padrao
 
+                            # Se for item único, vincula o ID para relatórios
+                            if len(nomes_selecionados) == 1:
+                                tipo_servico_vinculado = s_base
+
+                    # ==========================================================
+                    # 3. CÁLCULO DE IMPOSTOS E TAXAS (COM LOG DE DEBUG)
+                    # ==========================================================
+                    
+                    # Converte configurações do despachante para Decimal
+                    # str() é usado para garantir conversão segura de Float/None para Decimal
+                    aliquota_db = Decimal(str(despachante.aliquota_imposto or 0))
+                    taxa_maq_db = Decimal(str(despachante.taxa_bancaria_padrao or 0))
+                    
+                    # --- DEBUG VISUAL (OLHE O TERMINAL) ---
+                    print(f"\n--- DEBUG FINANCEIRO (PLACA: {placa_limpa}) ---")
+                    print(f"Honorários Base: R$ {total_honorarios}")
+                    print(f"Alíquota Configurada (DB): {aliquota_db}%")
+                    print(f"Taxa Maquininha (DB): {taxa_maq_db}%")
+
+                    # Cálculo Seguro: (Valor * Porcentagem) / 100
+                    custo_imp = total_honorarios * (aliquota_db / 100)
+                    custo_ban = total_honorarios * (taxa_maq_db / 100)
+
+                    print(f"-> Custo Imposto Calculado: R$ {custo_imp}")
+                    print(f"-> Custo Banco Calculado: R$ {custo_ban}")
+                    print(f"----------------------------------------------\n")
+
+                    # ==========================================================
+                    # 4. CRIAÇÃO DO ATENDIMENTO
+                    # ==========================================================
                     Atendimento.objects.create(
                         despachante=despachante,
                         cliente=cliente,
                         veiculo=veiculo,
-                        servico=servicos_str_lista[i],
+                        
+                        tipo_servico=tipo_servico_vinculado, 
+                        servico=servicos_str_lista[i], 
+                        
                         responsavel=responsavel_obj,
                         numero_atendimento=atendimentos[i] if i < len(atendimentos) else '',
                         
-                        valor_taxas_detran=total_taxas,
+                        # Valores Monetários (Já estão em Decimal)
+                        valor_taxas_detran=total_taxas_detran,
                         valor_honorarios=total_honorarios,
+                        
+                        # Custos calculados na View
                         custo_impostos=custo_imp,
                         custo_taxa_bancaria=custo_ban,
-                        status_financeiro='ABERTO',
+                        custo_taxa_sindego=total_custo_sindego,
                         
+                        status_financeiro='ABERTO',
                         status='SOLICITADO',
                         data_solicitacao=timezone.now().date(),
                         data_entrega=prazo_input if prazo_input else None,
                         observacoes_internas=f"{obs_geral}\nGerado via Cadastro Rápido."
                     )
 
-            messages.success(request, f"{len(placas)} processos criados!")
+            messages.success(request, f"{len(placas)} processos criados com financeiro calculado!")
             return redirect('dashboard')
 
         except Exception as e:
+            # Imprime o erro completo no console para ajudar a debugar
+            print(f"ERRO CRÍTICO NO CADASTRO RÁPIDO: {e}")
             messages.error(request, f"Erro ao processar lote: {e}")
             return redirect('cadastro_rapido')
 
@@ -521,10 +560,6 @@ def novo_cliente(request):
                     cliente.nome = request.POST.get('cliente_nome')
                     cliente.telefone = request.POST.get('cliente_telefone')
                     cliente.email = request.POST.get('cliente_email')
-                    cliente.filiacao = request.POST.get('filiacao')
-                    cliente.uf_rg = request.POST.get('uf_rg')
-                    cliente.rg = request.POST.get('rg')
-                    cliente.rua = request.POST.get('rua')
                     cliente.save()
 
                 placas = request.POST.getlist('veiculo_placa[]')
@@ -549,7 +584,6 @@ def novo_cliente(request):
             return redirect('dashboard')
 
         except Exception as e:
-            print(f"❌ Erro no Cadastro Cliente: {e}")
             pass
 
     return render(request, 'clientes/cadastro_cliente.html')
@@ -571,6 +605,7 @@ def novo_veiculo(request):
 @login_required
 def lista_clientes(request):
     perfil = request.user.perfilusuario
+    # Otimização: Traz apenas o necessário
     clientes = Cliente.objects.filter(despachante=perfil.despachante).order_by('nome')
     search_term = request.GET.get('q')
 
@@ -580,13 +615,19 @@ def lista_clientes(request):
             Q(cpf_cnpj__icontains=search_term) |
             Q(telefone__icontains=search_term)
         )
+    
+    # Paginação para evitar crash com muitos clientes
+    paginator = Paginator(clientes, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
 
-    return render(request, 'clientes/lista_clientes.html', {'clientes': clientes})
+    return render(request, 'clientes/lista_clientes.html', {'clientes': page_obj})
 
 @login_required
 def detalhe_cliente(request, id):
     perfil = request.user.perfilusuario
     cliente = get_object_or_404(Cliente, id=id, despachante=perfil.despachante)
+    # Usa o índice de veículo
     veiculos = Veiculo.objects.filter(cliente_id=cliente.id, despachante=perfil.despachante).order_by('-id')
     return render(request, 'clientes/detalhe_cliente.html', {'cliente': cliente, 'veiculos': veiculos})
 
@@ -670,20 +711,18 @@ def gerenciar_servicos(request):
         raw_hon = request.POST.get('honorarios', '0')
         
         # --- CAPTURA DO CHECKBOX DA TAXA SINDICAL ---
-        # HTML Checkbox retorna 'on' se marcado, ou None se desmarcado
         usa_reduzida = request.POST.get('usa_taxa_sindego_reduzida') == 'on'
 
-        # Tratamento seguro para moeda (R$ 1.200,50 -> 1200.50)
+        # Tratamento seguro para moeda
         v_base = raw_base.replace('.', '').replace(',', '.') if raw_base else 0
         v_hon = raw_hon.replace('.', '').replace(',', '.') if raw_hon else 0
         
-        # Cria o serviço com a nova configuração
         TipoServico.objects.create(
             despachante=perfil.despachante, 
             nome=nome, 
             valor_base=v_base, 
             honorarios=v_hon,
-            usa_taxa_sindego_reduzida=usa_reduzida # <--- NOVO CAMPO
+            usa_taxa_sindego_reduzida=usa_reduzida 
         )
         
         messages.success(request, "Novo serviço cadastrado com sucesso!")
@@ -694,7 +733,6 @@ def gerenciar_servicos(request):
 @login_required
 @user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def editar_servico(request, id):
-    # Verificação de permissão (apenas Admin ou Superuser)
     if not request.user.is_superuser and not request.user.perfilusuario.tipo_usuario == 'ADMIN':
         messages.error(request, "Você não tem permissão para editar serviços.")
         return redirect('gerenciar_servicos')
@@ -705,11 +743,9 @@ def editar_servico(request, id):
         try:
             servico.nome = request.POST.get('nome')
             
-            # Tratamento de valores
             servico.valor_base = request.POST.get('valor_base', '0').replace('.', '').replace(',', '.')
             servico.honorarios = request.POST.get('honorarios', '0').replace('.', '').replace(',', '.')
             
-            # --- ATUALIZAÇÃO DO CHECKBOX ---
             servico.usa_taxa_sindego_reduzida = request.POST.get('usa_taxa_sindego_reduzida') == 'on'
             
             servico.save()
@@ -746,6 +782,7 @@ def buscar_clientes(request):
         return JsonResponse({'results': []}, safe=False)
 
     despachante = perfil.despachante
+    # Otimização com select_related e índices
     filters = Q(despachante=despachante)
 
     if term:
@@ -859,35 +896,23 @@ def detalhe_orcamento(request, id):
     orcamento = get_object_or_404(Orcamento, id=id, despachante=request.user.perfilusuario.despachante)
     return render(request, 'financeiro/detalhe_orcamento.html', {'orcamento': orcamento})
 
-
-
-from django.db import transaction
-from decimal import Decimal
-from django.shortcuts import get_object_or_404, redirect, render
-from django.contrib import messages
-from django.contrib.auth.decorators import login_required
-from django.utils import timezone
-from .models import Orcamento, Cliente, Atendimento, TipoServico
-
 @login_required
 def aprovar_orcamento(request, id):
     # Garante que o orçamento pertence ao despachante logado
     orcamento = get_object_or_404(Orcamento, id=id, despachante=request.user.perfilusuario.despachante)
     despachante = request.user.perfilusuario.despachante
 
-    # 1. Trava: Se já foi aprovado, não faz nada
     if orcamento.status == 'APROVADO':
         messages.warning(request, "Este orçamento já foi aprovado anteriormente.")
         return redirect('listar_orcamentos')
 
-    # 2. Verifica se precisa criar Cliente Avulso
+    # Verifica Cliente Avulso
     if not orcamento.cliente and orcamento.nome_cliente_avulso:
         try:
-            # Cria o cliente no banco agora
             novo_cliente = Cliente.objects.create(
                 despachante=orcamento.despachante,
                 nome=orcamento.nome_cliente_avulso.upper(),
-                telefone="(00) 00000-0000", # Telefone padrão para evitar erro de campo obrigatório
+                telefone="(00) 00000-0000", 
                 observacoes="Criado automaticamente via Aprovação de Orçamento."
             )
             orcamento.cliente = novo_cliente
@@ -896,70 +921,90 @@ def aprovar_orcamento(request, id):
             messages.error(request, f"Erro ao criar cliente avulso: {e}")
             return redirect('detalhe_orcamento', id=id)
 
-    # Validação Final
     if not orcamento.cliente:
         messages.error(request, "Não foi possível aprovar: Cliente não identificado.")
         return redirect('detalhe_orcamento', id=id)
 
     try:
         with transaction.atomic():
-            # 3. Muda status do Orçamento
             orcamento.status = 'APROVADO'
             orcamento.save()
 
-            # --- CÁLCULOS FINANCEIROS ---
-            total_venda_itens = Decimal(0)   # Soma do que foi cobrado no orçamento
-            total_custo_detran = Decimal(0)  # Soma das taxas do governo (custo)
+            # Inicializa com DECIMAL
+            total_venda_itens = Decimal('0.00')
+            total_custo_detran_catalogo = Decimal('0.00')
+            total_custo_sindego_acumulado = Decimal('0.00') # <--- NOVO PARA CORRIGIR LUCRO
+
             lista_nomes = []
             detalhes_texto = []
 
-            # Itera sobre os itens do orçamento
+            # Itera itens para somar e buscar custos de referência
             for item in orcamento.itens.all():
                 lista_nomes.append(item.servico_nome)
                 detalhes_texto.append(f"- {item.servico_nome}: R$ {item.valor}")
                 
-                # Soma o valor cobrado (Venda)
                 total_venda_itens += item.valor
 
-                # Tenta achar o serviço base para descobrir o custo da taxa (Detran)
+                # Busca o custo original no catálogo para comparação
                 servico_base = TipoServico.objects.filter(
                     despachante=orcamento.despachante, 
-                    nome=item.servico_nome
+                    nome__iexact=item.servico_nome # Busca insensível a maiúsculas/minúsculas
                 ).first()
 
                 if servico_base:
-                    total_custo_detran += servico_base.valor_base
-                # Se não achar o serviço cadastrado, assume que não tem taxa de terceiro (é 100% honorário)
+                    total_custo_detran_catalogo += servico_base.valor_base
 
-            # --- APLICAÇÃO DO DESCONTO (O PULO DO GATO) ---
-            desconto = orcamento.desconto or Decimal(0)
+                    # --- LÓGICA DE SINDICATO (CRUCIAL) ---
+                    if servico_base.usa_taxa_sindego_reduzida:
+                        total_custo_sindego_acumulado += despachante.valor_taxa_sindego_reduzida
+                    else:
+                        total_custo_sindego_acumulado += despachante.valor_taxa_sindego_padrao
+
+            # --- A CORREÇÃO INTELIGENTE (PULO DO GATO) ---
+            # Verifica se o valor total cobrado cobre as taxas do catálogo
             
-            # Honorário Bruto = (Tudo que cobrei) - (O que tenho que pagar pro Detran)
-            honorario_bruto = total_venda_itens - total_custo_detran
+            saldo_preliminar = total_venda_itens - total_custo_detran_catalogo
+
+            if saldo_preliminar < 0:
+                # CENÁRIO A: O valor cobrado é MENOR que as taxas do catálogo.
+                # Interpretação: O Cliente vai pagar as taxas (DUA) por fora.
+                valor_taxas_final = Decimal('0.00')
+                quem_pagou = 'CLIENTE'
+                base_honorario = total_venda_itens # Tudo que entrou é honorário
+            else:
+                # CENÁRIO B: O valor cobrado cobre as taxas.
+                # Interpretação: O Despachante paga as taxas e desconta do total.
+                valor_taxas_final = total_custo_detran_catalogo
+                quem_pagou = 'DESPACHANTE'
+                base_honorario = saldo_preliminar
+
+            # --- APLICAÇÃO DO DESCONTO ---
+            desconto = orcamento.desconto or Decimal('0.00')
             
-            # Honorário Líquido = Honorário Bruto - Desconto
-            valor_honorario_final = honorario_bruto - desconto
+            # O desconto é subtraído do Honorário Base
+            valor_honorario_liquido = base_honorario - desconto
 
-            # Segurança: Honorário não pode ser negativo
-            if valor_honorario_final < 0:
-                valor_honorario_final = Decimal(0)
+            # Segurança: Honorário não pode ser negativo no sistema
+            if valor_honorario_liquido < 0:
+                valor_honorario_liquido = Decimal('0.00')
 
-            # --- CÁLCULO DE CUSTOS OPERACIONAIS (Impostos/Banco) ---
-            # Imposto incide sobre o Honorário Final (Faturamento)
-            aliq_imposto = despachante.aliquota_imposto or Decimal(0)
-            custo_impostos = valor_honorario_final * (aliq_imposto / 100)
+            # --- CÁLCULO DE CUSTOS OPERACIONAIS (DECIMAL PURO) ---
+            # Converte as configurações para Decimal para evitar erro de float
+            aliq_imposto = Decimal(str(despachante.aliquota_imposto or 0))
+            aliq_banco = Decimal(str(despachante.taxa_bancaria_padrao or 0))
+
+            # Cálculo Seguro: Divide por 100
+            custo_impostos = valor_honorario_liquido * (aliq_imposto / 100)
             
-            # Taxa bancária incide sobre o valor TOTAL transacionado (Taxa + Honorário)
-            aliq_banco = despachante.taxa_bancaria_padrao or Decimal(0)
-            valor_total_transacao = total_custo_detran + valor_honorario_final
-            custo_bancario = valor_total_transacao * (aliq_banco / 100)
+            # A taxa bancária incide sobre o dinheiro que passou pela sua mão
+            valor_transacionado = valor_taxas_final + valor_honorario_liquido
+            custo_bancario = valor_transacionado * (aliq_banco / 100)
 
-            # Monta observação
-            nomes_agrupados = " + ".join(lista_nomes)[:100] # Limita tamanho do texto
+            nomes_agrupados = " + ".join(lista_nomes)[:100]
             obs_final = (
                 f"Origem: Orçamento #{orcamento.id}.\n"
-                f"Valor Total Venda: R$ {total_venda_itens}\n"
-                f"Desconto Aplicado: R$ {desconto}\n"
+                f"Venda Total: R$ {total_venda_itens} | Desconto: R$ {desconto}\n"
+                f"Taxas Detran: R$ {valor_taxas_final} (Pagador: {quem_pagou})\n"
                 f"Itens:\n" + "\n".join(detalhes_texto) + 
                 f"\n\nObs Original: {orcamento.observacoes or ''}"
             )
@@ -968,20 +1013,21 @@ def aprovar_orcamento(request, id):
             Atendimento.objects.create(
                 despachante=orcamento.despachante,
                 cliente=orcamento.cliente,
-                veiculo=orcamento.veiculo, # Pode ser None
-                servico=nomes_agrupados,
+                veiculo=orcamento.veiculo, 
                 
-                # AQUI ESTÁ A CORREÇÃO: Usamos o honorário JÁ COM DESCONTO
-                valor_taxas_detran=total_custo_detran,
-                valor_honorarios=valor_honorario_final, 
+                # Deixamos tipo_servico vazio pois é um combo vindo do orçamento
+                tipo_servico=None,
+                servico=nomes_agrupados, 
                 
-                # Custos calculados
+                valor_taxas_detran=valor_taxas_final,
+                valor_honorarios=valor_honorario_liquido, 
+                
                 custo_impostos=custo_impostos,
                 custo_taxa_bancaria=custo_bancario,
-                custo_taxa_sindego=0, # Valor padrão ou lógica específica se tiver
+                custo_taxa_sindego=total_custo_sindego_acumulado, # <--- CORRIGIDO
                 
                 status_financeiro='ABERTO',
-                quem_pagou_detran='DESPACHANTE', # Assume que despachante paga e recebe depois
+                quem_pagou_detran=quem_pagou,
                 
                 status='SOLICITADO',
                 data_solicitacao=timezone.now().date(),
@@ -989,12 +1035,11 @@ def aprovar_orcamento(request, id):
                 observacoes_internas=obs_final
             )
 
-        messages.success(request, f"Sucesso! Processo gerado com Honorário ajustado (Desconto: R$ {desconto}).")
+        messages.success(request, f"Processo gerado! Honorário Líquido Calculado: R$ {valor_honorario_liquido}")
         return redirect('dashboard')
 
     except Exception as e:
-        # Se der erro, printa no terminal para você ver e mostra na tela
-        print(f"ERRO AO APROVAR ORÇAMENTO: {e}") 
+        print(f"ERRO CRÍTICO AO APROVAR ORÇAMENTO: {e}") 
         messages.error(request, f"Erro crítico ao gerar processo: {str(e)}")
         return redirect('detalhe_orcamento', id=id)
 
@@ -1024,8 +1069,34 @@ def listar_orcamentos(request):
     
     if status_filtro:
         orcamentos = orcamentos.filter(status=status_filtro)
+    
+    # Paginação
+    paginator = Paginator(orcamentos, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
         
-    return render(request, 'financeiro/lista_orcamentos.html', {'orcamentos': orcamentos, 'filters': request.GET})
+    return render(request, 'financeiro/lista_orcamentos.html', {'orcamentos': page_obj, 'filters': request.GET})
+
+@login_required
+def excluir_orcamento(request, id):
+    try:
+        perfil = request.user.perfilusuario
+    except:
+        return redirect('dashboard')
+
+    orcamento = get_object_or_404(Orcamento, id=id, despachante=perfil.despachante)
+    
+    if not request.user.is_superuser and perfil.tipo_usuario != 'ADMIN':
+        if orcamento.status == 'APROVADO':
+            messages.error(request, "⛔ Permissão Negada: Operadores não podem excluir orçamentos já APROVADOS.")
+            return redirect('listar_orcamentos')
+
+    if request.method == 'POST':
+        orcamento.delete()
+        messages.success(request, f"Orçamento #{id} excluído com sucesso.")
+        return redirect('listar_orcamentos')
+    
+    return redirect('listar_orcamentos')
 
 @login_required
 def excluir_orcamento(request, id):
@@ -1064,7 +1135,10 @@ def relatorio_mensal(request):
     cliente_placa = request.GET.get('cliente_placa')
     responsavel_id = request.GET.get('responsavel')
 
-    processos = Atendimento.objects.filter(despachante=despachante).select_related('cliente', 'veiculo', 'responsavel').order_by('-data_solicitacao')
+    # Otimização de query
+    processos = Atendimento.objects.filter(despachante=despachante)\
+        .select_related('cliente', 'veiculo', 'responsavel', 'tipo_servico')\
+        .order_by('-data_solicitacao')
 
     if data_inicio and data_fim:
         processos = processos.filter(data_solicitacao__range=[data_inicio, data_fim])
@@ -1085,7 +1159,7 @@ def relatorio_mensal(request):
     equipe = PerfilUsuario.objects.filter(despachante=despachante).select_related('user')
 
     context = {
-        'processos': processos,
+        'processos': processos, # Considere paginar se crescer muito
         'equipe': equipe,
         'resumo_status': resumo_status,
         'total_qtd': processos.count(),
@@ -1136,7 +1210,7 @@ def relatorio_servicos(request):
                 relatorio_agrupado[cliente_id] = {
                     'dados_cliente': item.cliente,
                     'telefone_limpo': tel_limpo,
-                    'itens': [],      
+                    'itens': [],       
                     'linhas_zap': [], 
                     'texto_whatsapp': '', 
                     'subtotal_taxas': 0,
@@ -1195,7 +1269,7 @@ def fluxo_caixa(request):
     cliente_nome = request.GET.get('cliente')
     status_fin = request.GET.get('status_financeiro')
 
-    # QuerySet Base (Apenas Aprovados/Concluídos entram no financeiro)
+    # QuerySet Base
     processos = Atendimento.objects.filter(
         despachante=despachante, 
         status='APROVADO'
@@ -1203,7 +1277,6 @@ def fluxo_caixa(request):
 
     # Aplicação dos Filtros
     if not any([data_inicio, data_fim, cliente_nome, status_fin]):
-        # Se não tem filtro, mostra o mês atual
         hoje = timezone.now().date()
         processos = processos.filter(data_solicitacao__month=hoje.month, data_solicitacao__year=hoje.year)
     else:
@@ -1217,42 +1290,42 @@ def fluxo_caixa(request):
             )
         if status_fin: processos = processos.filter(status_financeiro=status_fin)
 
-    # --- AGREGAÇÃO DE VALORES (SOMA TUDO) ---
+    # --- AGREGAÇÃO DE VALORES ---
     dados_financeiros = processos.aggregate(
         total_taxas=Sum('valor_taxas_detran'),
         total_honorarios=Sum('valor_honorarios'),
         total_impostos=Sum('custo_impostos'),
         total_bancario=Sum('custo_taxa_bancaria'),
-        total_sindego=Sum('custo_taxa_sindego') # <--- NOVO CAMPO ADICIONADO
+        total_sindego=Sum('custo_taxa_sindego') 
     )
 
-    # Tratamento de valores nulos (se não tiver registros, vira 0)
     resumo = {
         'total_pendentes': processos.filter(status_financeiro='ABERTO').count(),
         'valor_taxas': dados_financeiros['total_taxas'] or 0,
         'valor_honorarios_bruto': dados_financeiros['total_honorarios'] or 0,
         'valor_impostos': dados_financeiros['total_impostos'] or 0,
         'valor_bancario': dados_financeiros['total_bancario'] or 0,
-        'valor_sindego': dados_financeiros['total_sindego'] or 0, # <--- NOVO
+        'valor_sindego': dados_financeiros['total_sindego'] or 0, 
     }
     
     # --- CÁLCULOS FINAIS ---
-    
-    # 1. Faturamento Bruto (O que entrou na conta, considerando taxas do detran + honorários)
     resumo['faturamento_total'] = resumo['valor_taxas'] + resumo['valor_honorarios_bruto']
     
-    # 2. Custos Operacionais (O que sai do lucro: Imposto + Banco + Sindicato)
     resumo['total_custos_operacionais'] = (
         resumo['valor_impostos'] + 
         resumo['valor_bancario'] + 
-        resumo['valor_sindego'] # <--- SOMANDO AQUI
+        resumo['valor_sindego']
     )
     
-    # 3. Lucro Líquido (O que sobra pro bolso)
     resumo['lucro_liquido_total'] = resumo['valor_honorarios_bruto'] - resumo['total_custos_operacionais']
 
-    return render(request, 'financeiro/fluxo_caixa.html', { # Verifique se o caminho do template está correto
-        'processos': processos, 
+    # Paginação para não travar fluxo de caixa
+    paginator = Paginator(processos, 50)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'financeiro/fluxo_caixa.html', { 
+        'processos': page_obj, 
         'resumo': resumo, 
         'filtros': request.GET
     })
@@ -1261,12 +1334,10 @@ def fluxo_caixa(request):
 def dar_baixa_pagamento(request, id):
     processo = get_object_or_404(Atendimento, id=id, despachante=request.user.perfilusuario.despachante)
     
-    # Atualiza o status
     processo.status_financeiro = 'PAGO'
     processo.data_pagamento = timezone.now().date()
     processo.save()
 
-    # --- LOG FINANCEIRO ---
     registrar_log(
         request, 
         'FINANCEIRO', 
@@ -1274,7 +1345,6 @@ def dar_baixa_pagamento(request, id):
         atendimento=processo,
         cliente=processo.cliente
     )
-    # ----------------------
     
     messages.success(request, f"Recebimento confirmado!")
     return redirect('fluxo_caixa')
@@ -1290,20 +1360,17 @@ def dashboard_financeiro(request):
         status='APROVADO' 
     ).exclude(status='CANCELADO')
 
-    # 2. Agregação de Valores (Soma segura com Coalesce e DecimalField)
+    # 2. Agregação de Valores (Soma segura)
     zero = Value(0, output_field=DecimalField())
     
     agregados = processos_fin.aggregate(
         total_taxas=Coalesce(Sum('valor_taxas_detran'), zero),
         total_honorarios=Coalesce(Sum('valor_honorarios'), zero),
-        
-        # Custos Operacionais
         total_impostos=Coalesce(Sum('custo_impostos'), zero),
         total_bancario=Coalesce(Sum('custo_taxa_bancaria'), zero),
-        total_sindego=Coalesce(Sum('custo_taxa_sindego'), zero) # <--- NOVO
+        total_sindego=Coalesce(Sum('custo_taxa_sindego'), zero) 
     )
 
-    # 3. Conversão para Float
     h_bruto = float(agregados['total_honorarios'])
     taxas_detran = float(agregados['total_taxas'])
     
@@ -1311,14 +1378,9 @@ def dashboard_financeiro(request):
     bancario = float(agregados['total_bancario'])
     sindego = float(agregados['total_sindego'])
 
-    # 4. Cálculo dos Custos Operacionais (Soma de tudo que sai do honorário)
     custos_operacionais = impostos + bancario + sindego
-
-    # 5. Lucro Líquido Real (Honorário - Custos Operacionais)
     lucro_liquido = h_bruto - custos_operacionais
 
-    # 6. Dados para o Gráfico de Rosca
-    # Ordem: [Lucro, Impostos, Taxas Bancárias, Sindicato]
     pie_data = [lucro_liquido, impostos, bancario, sindego]
 
     # 7. Gráfico de Evolução (Barras)
@@ -1334,12 +1396,11 @@ def dashboard_financeiro(request):
     labels_meses = [meses_nomes[item['mes']-1] for item in grafico_evolucao]
     valores_meses = [float(item['total']) for item in grafico_evolucao]
 
-    # 8. Contexto Final
     context = {
         'resumo': {
-            'bruto': float(taxas_detran + h_bruto), # Entrada Total (Taxas + Honorários)
+            'bruto': float(taxas_detran + h_bruto), 
             'detran': taxas_detran,
-            'custos_operacionais': custos_operacionais, # <--- Valor correto agora
+            'custos_operacionais': custos_operacionais, 
             'lucro': lucro_liquido,
             'pendente': processos_fin.filter(status_financeiro='ABERTO').count()
         },
@@ -1348,7 +1409,6 @@ def dashboard_financeiro(request):
         'valores_meses': json.dumps(valores_meses),
     }
     
-    # Verifique se o template está na pasta correta 'financeiro' ou 'cadastro'
     return render(request, 'cadastro/dashboard_financeiro.html', context)
 
 @login_required
@@ -1457,32 +1517,24 @@ def configuracoes_despachante(request):
     despachante = request.user.perfilusuario.despachante
 
     if request.method == 'POST':
-        # 1. Captura os valores do formulário
         aliquota_imposto = request.POST.get('aliquota_imposto')
         taxa_bancaria = request.POST.get('taxa_bancaria_padrao')
         
-        # NOVOS CAMPOS (TAXA SINDEGO)
         taxa_sindego_padrao = request.POST.get('valor_taxa_sindego_padrao')
         taxa_sindego_reduzida = request.POST.get('valor_taxa_sindego_reduzida')
 
-        # 2. LIMPEZA DOS DADOS (O Segredo está aqui!)
-        # A função replace troca a vírgula por ponto para o Python entender
-        
         if aliquota_imposto:
             despachante.aliquota_imposto = aliquota_imposto.replace(',', '.')
             
         if taxa_bancaria:
             despachante.taxa_bancaria_padrao = taxa_bancaria.replace(',', '.')
 
-        # Tratamento especial para Dinheiro (R$ 1.200,50 -> 1200.50)
-        # Primeiro tira o ponto de milhar, depois troca a vírgula do decimal
         if taxa_sindego_padrao:
             despachante.valor_taxa_sindego_padrao = taxa_sindego_padrao.replace('.', '').replace(',', '.')
             
         if taxa_sindego_reduzida:
             despachante.valor_taxa_sindego_reduzida = taxa_sindego_reduzida.replace('.', '').replace(',', '.')
 
-        # 3. Salva no banco
         despachante.save()
         
         messages.success(request, 'Configurações financeiras atualizadas com sucesso!')

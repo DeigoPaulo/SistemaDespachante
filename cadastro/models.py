@@ -144,10 +144,9 @@ class Cliente(models.Model):
         verbose_name = "Cliente"
         verbose_name_plural = "Clientes"
         ordering = ['nome']
-        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
         indexes = [
-            models.Index(fields=['despachante', 'nome']),      # Busca rápida por nome
-            models.Index(fields=['despachante', 'cpf_cnpj']),  # Busca rápida por documento
+            models.Index(fields=['despachante', 'nome']),
+            models.Index(fields=['despachante', 'cpf_cnpj']),
         ]
 
     def __str__(self):
@@ -180,10 +179,9 @@ class Veiculo(models.Model):
         unique_together = ('despachante', 'placa')
         verbose_name = "Veículo"
         verbose_name_plural = "Veículos"
-        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
         indexes = [
-            models.Index(fields=['despachante', 'placa']),     # Busca rápida de placa
-            models.Index(fields=['cliente']),                  # Listar carros de um cliente
+            models.Index(fields=['despachante', 'placa']),
+            models.Index(fields=['cliente']),
         ]
 
     def __str__(self):
@@ -246,14 +244,30 @@ class Atendimento(models.Model):
         verbose_name="Responsável Técnico"
     )
 
+    # --- NOVO: VÍNCULO COM O CATÁLOGO (FOREIGN KEY) ---
+    tipo_servico = models.ForeignKey(
+        'TipoServico', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        verbose_name="Tipo de Serviço (Catálogo)",
+        help_text="Selecione do catálogo para preencher valores automaticamente."
+    )
+
     numero_atendimento = models.CharField(max_length=50, blank=True, null=True)
-    servico = models.CharField(max_length=100)
+    
+    # --- SNAPSHOT: NOME DO SERVIÇO (HISTÓRICO) ---
+    servico = models.CharField(
+        max_length=100, 
+        verbose_name="Nome do Serviço (No Processo)",
+        help_text="Nome gravado no momento do atendimento. Não muda se o catálogo mudar."
+    )
 
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default='SOLICITADO'
     )
 
-    # --- FINANCEIRO: VALORES HERDADOS ---
+    # --- FINANCEIRO: VALORES HERDADOS (SNAPSHOT) ---
     valor_taxas_detran = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     valor_honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
@@ -277,16 +291,41 @@ class Atendimento(models.Model):
         verbose_name = "Atendimento"
         verbose_name_plural = "Atendimentos"
         ordering = ['-data_solicitacao']
-        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
         indexes = [
-            models.Index(fields=['despachante', 'status']),           # Filtros de Kanban/Listas
-            models.Index(fields=['despachante', 'data_solicitacao']), # Relatórios por data
-            models.Index(fields=['despachante', 'status_financeiro']),# Dashboard Financeiro
-            models.Index(fields=['veiculo']),                         # Histórico do carro
+            models.Index(fields=['despachante', 'status']),
+            models.Index(fields=['despachante', 'data_solicitacao']),
+            models.Index(fields=['despachante', 'status_financeiro']),
+            models.Index(fields=['tipo_servico']), # Novo índice para relatórios
+            models.Index(fields=['veiculo']),
         ]
 
     def __str__(self):
         return f"{self.numero_atendimento or 'S/N'} - {self.cliente}"
+
+    # --- LÓGICA DE SNAPSHOT (A MÁGICA) ---
+    def save(self, *args, **kwargs):
+        # Se selecionou um Tipo de Serviço do catálogo...
+        if self.tipo_servico:
+            # 1. Copia o nome se estiver vazio (garante o histórico)
+            if not self.servico:
+                self.servico = self.tipo_servico.nome
+            
+            # 2. Se os valores forem 0 (novo atendimento), puxa do catálogo
+            if self.pk is None or self.valor_honorarios == 0:
+                self.valor_honorarios = self.tipo_servico.honorarios
+            
+            if self.pk is None or self.valor_taxas_detran == 0:
+                self.valor_taxas_detran = self.tipo_servico.valor_base
+            
+            # 3. Calcula a Taxa Sindego Automaticamente (Reduzida vs Cheia)
+            # Só calcula se o custo estiver zerado para não sobrescrever ajustes manuais
+            if self.custo_taxa_sindego == 0:
+                if self.tipo_servico.usa_taxa_sindego_reduzida:
+                    self.custo_taxa_sindego = self.despachante.valor_taxa_sindego_reduzida
+                else:
+                    self.custo_taxa_sindego = self.despachante.valor_taxa_sindego_padrao
+
+        super().save(*args, **kwargs)
 
     @property
     def valor_total_cliente(self):
@@ -294,7 +333,6 @@ class Atendimento(models.Model):
 
     @property
     def lucro_liquido_real(self):
-        # Honorários - (Imposto + Taxa Banco + Taxa Sindicato)
         custos = self.custo_impostos + self.custo_taxa_bancaria + self.custo_taxa_sindego
         return self.valor_honorarios - custos
 
@@ -325,9 +363,8 @@ class Orcamento(models.Model):
 
     class Meta:
         ordering = ['-data_criacao']
-        # --- OTIMIZAÇÃO ---
         indexes = [
-            models.Index(fields=['despachante', 'status']), # Filtros de funil de vendas
+            models.Index(fields=['despachante', 'status']),
         ]
 
     def __str__(self):
@@ -379,10 +416,9 @@ class LogAtividade(models.Model):
 
     class Meta:
         ordering = ['-data']
-        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
         indexes = [
-            models.Index(fields=['despachante', 'data']), # Auditoria e rastreabilidade
-            models.Index(fields=['atendimento']),         # Histórico do processo
+            models.Index(fields=['despachante', 'data']),
+            models.Index(fields=['atendimento']),
         ]
 
     def __str__(self):
