@@ -28,7 +28,6 @@ class Despachante(models.Model):
     )
 
     # --- CONFIGURAÇÕES FINANCEIRAS (AUTOMATIZAÇÃO) ---
-    # 1. Porcentagens Variáveis
     aliquota_imposto = models.DecimalField(
         max_digits=5, decimal_places=2, default=0.00, 
         help_text="Alíquota de imposto (ex: 5.00 para 5%)"
@@ -38,7 +37,7 @@ class Despachante(models.Model):
         help_text="Taxa bancária/maquininha (ex: 2.50 para 2.5%)"
     )
 
-    # 2. Taxas Fixas (NOVO - SINDEGO)
+    # --- TAXAS SINDEGO ---
     valor_taxa_sindego_padrao = models.DecimalField(
         max_digits=10, decimal_places=2, default=13.00, 
         verbose_name="Taxa Sindego (Padrão)",
@@ -141,6 +140,16 @@ class Cliente(models.Model):
     telefone = models.CharField(max_length=20)
     email = models.EmailField(blank=True, null=True)
 
+    class Meta:
+        verbose_name = "Cliente"
+        verbose_name_plural = "Clientes"
+        ordering = ['nome']
+        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
+        indexes = [
+            models.Index(fields=['despachante', 'nome']),      # Busca rápida por nome
+            models.Index(fields=['despachante', 'cpf_cnpj']),  # Busca rápida por documento
+        ]
+
     def __str__(self):
         return self.nome
 
@@ -169,6 +178,13 @@ class Veiculo(models.Model):
 
     class Meta:
         unique_together = ('despachante', 'placa')
+        verbose_name = "Veículo"
+        verbose_name_plural = "Veículos"
+        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
+        indexes = [
+            models.Index(fields=['despachante', 'placa']),     # Busca rápida de placa
+            models.Index(fields=['cliente']),                  # Listar carros de um cliente
+        ]
 
     def __str__(self):
         return f"{self.placa} - {self.modelo}"
@@ -180,7 +196,6 @@ class TipoServico(models.Model):
     valor_base = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Custo DETRAN")
     honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Lucro/Honorários")
     
-    # --- NOVO: REGRA DE NEGÓCIO ---
     usa_taxa_sindego_reduzida = models.BooleanField(
         default=False, 
         verbose_name="Usa Taxa Reduzida (Sindego)?",
@@ -248,8 +263,6 @@ class Atendimento(models.Model):
     # Custos calculados
     custo_impostos = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_taxa_bancaria = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    
-    # --- NOVO: TAXA FIXA (SINDEGO) ---
     custo_taxa_sindego = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
     # --- SITUAÇÃO ---
@@ -259,6 +272,18 @@ class Atendimento(models.Model):
     observacoes_internas = models.TextField(blank=True, null=True)
     data_solicitacao = models.DateField(default=timezone.now)
     data_entrega = models.DateField(null=True, blank=True, verbose_name="Prazo de Entrega")
+
+    class Meta:
+        verbose_name = "Atendimento"
+        verbose_name_plural = "Atendimentos"
+        ordering = ['-data_solicitacao']
+        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
+        indexes = [
+            models.Index(fields=['despachante', 'status']),           # Filtros de Kanban/Listas
+            models.Index(fields=['despachante', 'data_solicitacao']), # Relatórios por data
+            models.Index(fields=['despachante', 'status_financeiro']),# Dashboard Financeiro
+            models.Index(fields=['veiculo']),                         # Histórico do carro
+        ]
 
     def __str__(self):
         return f"{self.numero_atendimento or 'S/N'} - {self.cliente}"
@@ -297,6 +322,13 @@ class Orcamento(models.Model):
     
     valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+
+    class Meta:
+        ordering = ['-data_criacao']
+        # --- OTIMIZAÇÃO ---
+        indexes = [
+            models.Index(fields=['despachante', 'status']), # Filtros de funil de vendas
+        ]
 
     def __str__(self):
         nome = self.cliente.nome if self.cliente else self.nome_cliente_avulso
@@ -347,6 +379,11 @@ class LogAtividade(models.Model):
 
     class Meta:
         ordering = ['-data']
+        # --- OTIMIZAÇÃO (ÍNDICES COMPOSTOS) ---
+        indexes = [
+            models.Index(fields=['despachante', 'data']), # Auditoria e rastreabilidade
+            models.Index(fields=['atendimento']),         # Histórico do processo
+        ]
 
     def __str__(self):
         return f"{self.usuario} - {self.acao} - {self.data}"
