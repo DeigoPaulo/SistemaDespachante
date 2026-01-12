@@ -1,0 +1,164 @@
+{% extends 'base.html' %}
+{% load humanize %}
+
+{% block title %}Relatório Contábil - {{ mes }}/{{ ano }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Estilo visual na tela */
+    .papel-a4 {
+        background: white;
+        max-width: 210mm;
+        margin: 20px auto;
+        padding: 20mm;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        min-height: 297mm;
+    }
+
+    /* Estilo APENAS para Impressão (Ctrl + P) */
+    @media print {
+        @page { margin: 0; size: A4; }
+        body { background: white; -webkit-print-color-adjust: exact; }
+        .navbar, .btn-imprimir, .filtros-tela, footer, .btn-voltar { display: none !important; }
+        .papel-a4 { box-shadow: none; margin: 0; width: 100%; max-width: 100%; padding: 15mm; }
+        .container { max-width: 100% !important; width: 100% !important; padding: 0 !important; margin: 0 !important; }
+    }
+
+    .tabela-contabil th { background-color: #f8f9fa !important; border-bottom: 2px solid #dee2e6; }
+    .destaque-honorario { background-color: #e8f5e9 !important; font-weight: bold; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mb-5">
+    
+    <div class="d-flex justify-content-between align-items-center mb-3 mt-3 filtros-tela mx-auto" style="max-width: 210mm;">
+        <form method="GET" class="d-flex gap-2">
+            <select name="mes" class="form-select form-select-sm" style="width: 120px;">
+                <option value="1" {% if mes == 1 %}selected{% endif %}>Janeiro</option>
+                <option value="2" {% if mes == 2 %}selected{% endif %}>Fevereiro</option>
+                <option value="3" {% if mes == 3 %}selected{% endif %}>Março</option>
+                <option value="4" {% if mes == 4 %}selected{% endif %}>Abril</option>
+                <option value="5" {% if mes == 5 %}selected{% endif %}>Maio</option>
+                <option value="6" {% if mes == 6 %}selected{% endif %}>Junho</option>
+                <option value="7" {% if mes == 7 %}selected{% endif %}>Julho</option>
+                <option value="8" {% if mes == 8 %}selected{% endif %}>Agosto</option>
+                <option value="9" {% if mes == 9 %}selected{% endif %}>Setembro</option>
+                <option value="10" {% if mes == 10 %}selected{% endif %}>Outubro</option>
+                <option value="11" {% if mes == 11 %}selected{% endif %}>Novembro</option>
+                <option value="12" {% if mes == 12 %}selected{% endif %}>Dezembro</option>
+            </select>
+            <input type="number" name="ano" class="form-control form-control-sm" value="{{ ano }}" style="width: 80px;">
+            <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+        </form>
+
+        <div>
+            <button onclick="window.print()" class="btn btn-dark btn-sm btn-imprimir">
+                <i class="fas fa-print me-2"></i> Imprimir / Salvar PDF
+            </button>
+        </div>
+    </div>
+
+    <div class="papel-a4">
+        
+        <div class="text-center mb-5 border-bottom pb-3">
+            <h3 class="fw-bold text-uppercase mb-1">{{ despachante.nome_fantasia }}</h3>
+            <p class="text-muted mb-0 small">{{ despachante.razao_social }} - CNPJ: {{ despachante.cnpj }}</p>
+            <p class="text-muted small">{{ despachante.endereco_completo }}</p>
+            <h5 class="mt-4 fw-bold">RELATÓRIO DE FECHAMENTO MENSAL</h5>
+            <span class="badge bg-dark text-white rounded-0 px-3 py-2 mt-1">COMPETÊNCIA: {{ mes }}/{{ ano }}</span>
+        </div>
+
+        <div class="row mb-5">
+            <div class="col-6">
+                <div class="card border-dark h-100 rounded-0">
+                    <div class="card-header bg-dark text-white fw-bold text-center py-1">RESUMO PARA TRIBUTAÇÃO</div>
+                    <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr>
+                                <td>Faturamento Total (Bruto):</td>
+                                <td class="text-end text-muted">R$ {{ resumo.total_movimentado|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td class="text-danger">(-) Repasses (Taxas DETRAN/Outros):</td>
+                                <td class="text-end text-danger">- R$ {{ resumo.total_taxas_orgaos|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="border-top border-dark mt-2">
+                                <td class="fw-bold pt-2">(=) BASE DE CÁLCULO (HONORÁRIOS):</td>
+                                <td class="text-end fw-bold pt-2 fs-5">R$ {{ resumo.total_honorarios|floatformat:2 }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-6">
+                <div class="card border-secondary h-100 rounded-0">
+                    <div class="card-header bg-secondary text-white fw-bold text-center py-1">DETALHAMENTO DE CUSTOS</div>
+                    <div class="card-body">
+                        <table class="table table-sm table-borderless mb-0">
+                            <tr>
+                                <td>Provisão de Impostos (ISS/Simples):</td>
+                                <td class="text-end">R$ {{ resumo.total_impostos_retidos|floatformat:2 }}</td>
+                            </tr>
+                            <tr>
+                                <td>Despesas Financeiras/Sindicato:</td>
+                                <td class="text-end">R$ {{ resumo.total_despesas_operacionais|floatformat:2 }}</td>
+                            </tr>
+                            <tr class="border-top mt-2">
+                                <td class="fw-bold pt-2 text-success">LUCRO LÍQUIDO ESTIMADO:</td>
+                                <td class="text-end fw-bold pt-2 text-success">
+                                    R$ {{ resumo.lucro_liquido_estimado|floatformat:2 }}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="fw-bold border-bottom pb-2 mb-3">DETALHAMENTO DE SERVIÇOS PRESTADOS (APENAS PAGOS)</h6>
+        <table class="table table-sm table-striped tabela-contabil text-uppercase" style="font-size: 0.8rem;">
+            <thead>
+                <tr>
+                    <th>Data Solic.</th>
+                    <th>Processo</th>
+                    <th>Cliente</th>
+                    <th>Serviço</th>
+                    <th class="text-end">Taxas (R$)</th>
+                    <th class="text-end destaque-honorario">Honorário Liq. (R$)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in processos %}
+                <tr>
+                    <td>{{ p.data_solicitacao|date:"d/m/Y" }}</td>
+                    <td>{{ p.numero_atendimento }}</td>
+                    <td>{{ p.cliente.nome|slice:":30" }}</td>
+                    <td>{{ p.servico }}</td>
+                    <td class="text-end text-muted">{{ p.valor_taxas_detran|floatformat:2 }}</td>
+                    <td class="text-end fw-bold">{{ p.valor_honorarios|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center py-4 text-muted">Nenhum processo pago encontrado neste mês.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="bg-dark text-white fw-bold">
+                    <td colspan="4" class="text-end pe-3">TOTAIS DO PERÍODO:</td>
+                    <td class="text-end">{{ resumo.total_taxas_orgaos|floatformat:2 }}</td>
+                    <td class="text-end">{{ resumo.total_honorarios|floatformat:2 }}</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        <div class="mt-5 pt-4 border-top text-center small text-muted">
+            <p>Relatório gerado automaticamente pelo sistema <strong>DespachaPro</strong> em {% now "d/m/Y H:i" %}.</p>
+            <p>Este documento serve como auxiliar para apuração contábil e conferência de caixa (Regime de Caixa).</p>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

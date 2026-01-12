@@ -83,11 +83,15 @@
                             </a>
                         </li>
                         <li><hr class="dropdown-divider bg-secondary"></li>
+                        
+                        {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
                         <li>
                             <a class="dropdown-item" href="{% url 'gerenciar_servicos' %}">
                                 <i class="fas fa-tags me-2"></i> Tabela de Preços
                             </a>
                         </li>
+                        {% endif %}
+                        
                         <li>
                             <a class="dropdown-item" href="{% url 'listar_orcamentos' %}">
                                 <i class="fas fa-list me-2"></i> Histórico de Orçamentos
@@ -96,6 +100,7 @@
                     </ul>
                 </li>
 
+                {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
                 <li class="nav-item dropdown ms-lg-2 mt-2 mt-lg-0">
                     <a class="btn btn-nav-dark btn-sm px-3 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="fas fa-wallet me-1 text-warning"></i> Financeiro
@@ -110,6 +115,12 @@
                         <li>
                             <a class="dropdown-item" href="{% url 'fluxo_caixa' %}">
                                 <i class="fas fa-exchange-alt me-2"></i> Fluxo de Caixa (Baixas)
+                            </a>
+                        </li>
+                        
+                        <li>
+                            <a class="dropdown-item" href="{% url 'relatorio_contabil' %}">
+                                <i class="fas fa-file-contract me-2"></i> Relatório Contábil (Mensal)
                             </a>
                         </li>
                         <li>
@@ -130,12 +141,20 @@
                         </li>
                     </ul>
                 </li>
+                {% endif %}
 
                 <li class="nav-item dropdown ms-lg-2 mt-2 mt-lg-0">
                     <a class="btn btn-nav-dark btn-sm px-3 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="fas fa-chart-pie me-1 text-danger"></i> Gestão
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark-custom shadow">
+                        <li>
+                            <a class="dropdown-item" href="{% url 'relatorio_mensal' %}">
+                                <i class="fas fa-clipboard-list me-2"></i> Controle de Produção
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider bg-secondary"></li>
+                        
                         <li>
                             <a class="dropdown-item" href="{% url 'selecao_documento' %}">
                                 <i class="fas fa-file-contract me-2"></i> Gerador de Documentos
@@ -147,6 +166,15 @@
                                 <i class="fas fa-compress-alt me-2"></i> Otimizar PDF 
                             </a>
                         </li>
+                        
+                        {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
+                        <li><hr class="dropdown-divider bg-secondary"></li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'relatorio_auditoria' %}">
+                                <i class="fas fa-shield-alt me-2"></i> Auditoria / Logs
+                            </a>
+                        </li>
+                        {% endif %}
                     </ul>
                 </li>
 

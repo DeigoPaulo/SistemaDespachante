@@ -12,19 +12,16 @@
 
             <form method="POST" class="card shadow-sm border-0">
                 {% csrf_token %}
+                
                 <div class="card-header bg-dark text-white py-3">
-                    <h5 class="mb-0"><i class="fas fa-percent me-2"></i> Parâmetros Financeiros (Automação)</h5>
+                    <h5 class="mb-0"><i class="fas fa-percent me-2"></i> Impostos e Taxas Variáveis (%)</h5>
                 </div>
                 <div class="card-body p-4">
-                    <p class="text-muted small mb-4">
-                        Defina abaixo as alíquotas padrão do seu escritório. Esses valores serão usados para calcular automaticamente o seu **Lucro Líquido** sempre que um orçamento for aprovado.
-                    </p>
-
                     <div class="row g-4">
                         <div class="col-md-6">
                             <label class="form-label fw-bold text-uppercase small">Imposto sobre Honorário (ISS/NF)</label>
                             <div class="input-group">
-                                <input type="text" name="aliquota_imposto" class="form-control form-control-lg mask-money" 
+                                <input type="text" name="aliquota_imposto" class="form-control form-control-lg mask-percent" 
                                        value="{{ despachante.aliquota_imposto }}" required>
                                 <span class="input-group-text bg-light text-dark fw-bold">%</span>
                             </div>
@@ -32,23 +29,51 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label fw-bold text-uppercase small">Taxa de Cartão / Operacional Média</label>
+                            <label class="form-label fw-bold text-uppercase small">Taxa de Cartão / Operacional</label>
                             <div class="input-group">
-                                <input type="text" name="taxa_bancaria_padrao" class="form-control form-control-lg mask-money" 
+                                <input type="text" name="taxa_bancaria_padrao" class="form-control form-control-lg mask-percent" 
                                        value="{{ despachante.taxa_bancaria_padrao }}" required>
                                 <span class="input-group-text bg-light text-dark fw-bold">%</span>
                             </div>
                             <div class="form-text mt-2">Custo médio de maquininha ou taxas bancárias.</div>
                         </div>
                     </div>
+                </div>
 
-                    <div class="alert alert-warning mt-4 border-0 shadow-sm d-flex align-items-center">
-                        <i class="fas fa-info-circle me-3 fa-2x"></i>
+                <div class="card-header bg-secondary text-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i> Taxas Fixas por Processo (R$)</h5>
+                </div>
+                <div class="card-body p-4 bg-light">
+                    <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-4">
+                        <i class="fas fa-info-circle me-3"></i>
                         <div class="small">
-                            <strong>Nota:</strong> Alterar esses valores não afetará processos que já foram criados, apenas os novos orçamentos aprovados a partir de agora.
+                            Esses valores são descontados do lucro em <strong>todo processo aprovado</strong>. Você define qual serviço usa a taxa reduzida na tela de "Cadastro de Serviços".
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-uppercase small text-dark">Taxa SINDEGO (Padrão)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-muted border-end-0">R$</span>
+                                <input type="text" name="valor_taxa_sindego_padrao" class="form-control form-control-lg mask-money border-start-0" 
+                                       value="{{ despachante.valor_taxa_sindego_padrao|floatformat:2 }}" required>
+                            </div>
+                            <div class="form-text mt-2">Valor cobrado na maioria dos processos (Ex: 13,00).</div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold text-uppercase small text-dark">Taxa SINDEGO (Reduzida)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white text-muted border-end-0">R$</span>
+                                <input type="text" name="valor_taxa_sindego_reduzida" class="form-control form-control-lg mask-money border-start-0" 
+                                       value="{{ despachante.valor_taxa_sindego_reduzida|floatformat:2 }}" required>
+                            </div>
+                            <div class="form-text mt-2">Para serviços específicos (Ex: 6,50).</div>
                         </div>
                     </div>
                 </div>
+
                 <div class="card-footer bg-white p-4 border-top-0">
                     <button type="submit" class="btn btn-primary btn-lg px-5 fw-bold shadow-sm">
                         <i class="fas fa-save me-2"></i> Salvar Configurações
@@ -63,7 +88,11 @@
 {% block extra_js %}
 <script>
     $(document).ready(function(){
-        $('.mask-money').mask('00,00', {reverse: true});
+        // Máscara para Porcentagem (ex: 05,00)
+        $('.mask-percent').mask('00,00', {reverse: true});
+        
+        // Máscara para Dinheiro (ex: 1.200,50)
+        $('.mask-money').mask('#.##0,00', {reverse: true});
     });
 </script>
 {% endblock %}

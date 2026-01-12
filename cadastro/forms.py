@@ -186,9 +186,14 @@ class DespachanteForm(forms.ModelForm):
             'dia_vencimento': forms.Select(attrs={'class': 'form-select'}),
             'valor_mensalidade': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'email_fatura': forms.EmailInput(attrs={'class': 'form-control'}),
-            # --- CAMPOS DE CONFIGURAÇÃO SaaS ADICIONADOS ---
+            
+            # --- CAMPOS DE CONFIGURAÇÃO FINANCEIRA ---
             'aliquota_imposto': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'taxa_bancaria_padrao': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            
+            # --- NOVOS CAMPOS (TAXA SINDICAL) ---
+            'valor_taxa_sindego_padrao': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+            'valor_taxa_sindego_reduzida': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }
 
 

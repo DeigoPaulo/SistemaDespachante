@@ -42,6 +42,17 @@
                                 </div>
                             </div>
                         </div>
+
+                        <div class="mb-3 form-check form-switch p-3 border rounded bg-light">
+                            <input class="form-check-input ms-0 me-2" type="checkbox" id="taxaReduzida" name="usa_taxa_sindego_reduzida">
+                            <label class="form-check-label small fw-bold text-dark" for="taxaReduzida">
+                                Usar Taxa Reduzida (Sindicato)?
+                            </label>
+                            <div class="form-text" style="font-size: 0.75rem;">
+                                Marque se este serviço paga a taxa menor (Ex: R$ 6,50). Se desmarcado, paga a cheia (Ex: R$ 13,00).
+                            </div>
+                        </div>
+
                         <button type="submit" class="btn btn-success w-100 fw-bold shadow-sm">
                             <i class="fas fa-save me-2"></i> Salvar na Tabela
                         </button>
@@ -72,6 +83,7 @@
                                     <th>Custo (Taxas)</th>
                                     <th>Honorários</th>
                                     <th>Preço Final</th>
+                                    <th class="text-center">Taxa Sind.</th> 
                                     <th class="text-end pe-3">Ação</th>
                                 </tr>
                             </thead>
@@ -86,6 +98,15 @@
                                             R$ {{ servico.valor_total|floatformat:2 }}
                                         </span>
                                     </td>
+                                    
+                                    <td class="text-center">
+                                        {% if servico.usa_taxa_sindego_reduzida %}
+                                            <span class="badge bg-info text-dark" title="Taxa Reduzida (R$ {{ user.perfilusuario.despachante.valor_taxa_sindego_reduzida }})">Reduzida</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary" title="Taxa Padrão (R$ {{ user.perfilusuario.despachante.valor_taxa_sindego_padrao }})">Padrão</span>
+                                        {% endif %}
+                                    </td>
+
                                     <td class="text-end pe-3">
                                         {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
                                             
@@ -142,7 +163,7 @@
                 "sLoadingRecords": "Carregando...",
                 "sProcessing": "Processando...",
                 "sZeroRecords": "Nenhum registro encontrado",
-                "sSearch": "Pesquisar Serviço:", // Label da caixa de busca
+                "sSearch": "Pesquisar Serviço:", 
                 "oPaginate": {
                     "sNext": "Próximo",
                     "sPrevious": "Anterior",
@@ -154,10 +175,10 @@
                     "sSortDescending": ": Ordenar colunas de forma descendente"
                 }
             },
-            "pageLength": 10, // Itens por página
-            "order": [[ 0, "asc" ]], // Ordena por Nome (Coluna 0) A-Z
+            "pageLength": 10, 
+            "order": [[ 0, "asc" ]], 
             "columnDefs": [
-                { "orderable": false, "targets": 4 } // Desabilita ordenação na coluna "Ação"
+                { "orderable": false, "targets": 5 } // Desabilita ordenação na coluna "Ação" (índice mudou para 5 por causa da nova coluna)
             ]
         });
     });

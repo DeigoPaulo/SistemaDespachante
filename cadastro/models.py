@@ -1,12 +1,11 @@
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
-from django.core.validators import FileExtensionValidator # <--- Importação necessária para validar o PNG
+from django.core.validators import FileExtensionValidator
 
 # ==============================================================================
-# MODELOS EXISTENTES
+# 1. CADASTRO DO ESCRITÓRIO (SaaS)
 # ==============================================================================
-
 class Despachante(models.Model):
     nome_fantasia = models.CharField(max_length=255)
     razao_social = models.CharField(max_length=255)
@@ -18,18 +17,18 @@ class Despachante(models.Model):
     data_cadastro = models.DateTimeField(auto_now_add=True)
     ativo = models.BooleanField(default=True)
 
-    # --- PERSONALIZAÇÃO VISUAL (NOVO) ---
+    # --- PERSONALIZAÇÃO VISUAL ---
     logo = models.ImageField(
         upload_to='logos_despachantes/', 
         null=True, 
         blank=True,
         verbose_name="Logo do Escritório",
         help_text="Formato obrigatório: PNG com fundo transparente. Tamanho ideal: 300x100px.",
-        validators=[FileExtensionValidator(['png'])] # <--- Trava para aceitar só PNG
+        validators=[FileExtensionValidator(['png'])]
     )
 
-    # --- CONFIGURAÇÕES DE CUSTOS PADRÃO (SaaS) ---
-    # Para não precisar digitar toda vez, o sistema calcula automático baseado nisso:
+    # --- CONFIGURAÇÕES FINANCEIRAS (AUTOMATIZAÇÃO) ---
+    # 1. Porcentagens Variáveis
     aliquota_imposto = models.DecimalField(
         max_digits=5, decimal_places=2, default=0.00, 
         help_text="Alíquota de imposto (ex: 5.00 para 5%)"
@@ -39,7 +38,19 @@ class Despachante(models.Model):
         help_text="Taxa bancária/maquininha (ex: 2.50 para 2.5%)"
     )
 
-    # --- NOVOS CAMPOS PARA O FINANCEIRO (SaaS / Asaas) ---
+    # 2. Taxas Fixas (NOVO - SINDEGO)
+    valor_taxa_sindego_padrao = models.DecimalField(
+        max_digits=10, decimal_places=2, default=13.00, 
+        verbose_name="Taxa Sindego (Padrão)",
+        help_text="Valor cobrado na maioria dos processos."
+    )
+    valor_taxa_sindego_reduzida = models.DecimalField(
+        max_digits=10, decimal_places=2, default=6.50, 
+        verbose_name="Taxa Sindego (Reduzida)",
+        help_text="Valor cobrado em processos específicos."
+    )
+
+    # --- CAMPOS DO SISTEMA (ASSINATURA/ASAAS) ---
     email_fatura = models.EmailField(
         blank=True, null=True,
         help_text="E-mail que receberá os boletos/Pix da mensalidade."
@@ -66,6 +77,9 @@ class Despachante(models.Model):
         return self.nome_fantasia
 
 
+# ==============================================================================
+# 2. USUÁRIOS E PERMISSÕES
+# ==============================================================================
 class PerfilUsuario(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     despachante = models.ForeignKey(
@@ -101,6 +115,9 @@ class PerfilUsuario(models.Model):
         return (self.data_expiracao - hoje).days
 
 
+# ==============================================================================
+# 3. CADASTROS DE BASE (CLIENTE, VEÍCULO, SERVIÇO)
+# ==============================================================================
 class Cliente(models.Model):
     despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
     nome = models.CharField(max_length=255, db_index=True)
@@ -157,11 +174,37 @@ class Veiculo(models.Model):
         return f"{self.placa} - {self.modelo}"
 
 
+class TipoServico(models.Model):
+    despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
+    nome = models.CharField(max_length=100)  
+    valor_base = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Custo DETRAN")
+    honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Lucro/Honorários")
+    
+    # --- NOVO: REGRA DE NEGÓCIO ---
+    usa_taxa_sindego_reduzida = models.BooleanField(
+        default=False, 
+        verbose_name="Usa Taxa Reduzida (Sindego)?",
+        help_text="Marque se este serviço paga a taxa menor (Ex: R$ 6,50) em vez da cheia (Ex: R$ 13,00)."
+    )
+    
+    ativo = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.nome
+
+    @property
+    def valor_total(self):
+        return self.valor_base + self.honorarios
+
+
+# ==============================================================================
+# 4. OPERACIONAL (ATENDIMENTOS)
+# ==============================================================================
 class Atendimento(models.Model):
     STATUS_CHOICES = (
         ('SOLICITADO', 'Solicitado'),
         ('EM_ANALISE', 'Em Análise'),
-        ('APROVADO', 'Aprovado/Concluído'), # Este status agora serve de gatilho para o financeiro
+        ('APROVADO', 'Aprovado/Concluído'), 
         ('CANCELADO', 'Cancelado'),
     )
 
@@ -195,16 +238,21 @@ class Atendimento(models.Model):
         max_length=20, choices=STATUS_CHOICES, default='SOLICITADO'
     )
 
-    # --- FINANCEIRO: VALORES HERDADOS DO ORÇAMENTO ---
+    # --- FINANCEIRO: VALORES HERDADOS ---
     valor_taxas_detran = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     valor_honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
-    # --- FINANCEIRO: CONTROLES INTERNOS (Calculados por alíquota) ---
+    # --- FINANCEIRO: CONTROLES INTERNOS ---
     quem_pagou_detran = models.CharField(max_length=20, choices=PAGADOR_DETRAN_CHOICES, default='DESPACHANTE')
+    
+    # Custos calculados
     custo_impostos = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_taxa_bancaria = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
-    # --- FINANCEIRO: SITUAÇÃO DE PAGAMENTO ---
+    # --- NOVO: TAXA FIXA (SINDEGO) ---
+    custo_taxa_sindego = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    
+    # --- SITUAÇÃO ---
     status_financeiro = models.CharField(max_length=15, choices=STATUS_FINANCEIRO, default='ABERTO')
     data_pagamento = models.DateField(null=True, blank=True)
 
@@ -221,24 +269,14 @@ class Atendimento(models.Model):
 
     @property
     def lucro_liquido_real(self):
-        return self.valor_honorarios - (self.custo_impostos + self.custo_taxa_bancaria)
+        # Honorários - (Imposto + Taxa Banco + Taxa Sindicato)
+        custos = self.custo_impostos + self.custo_taxa_bancaria + self.custo_taxa_sindego
+        return self.valor_honorarios - custos
 
 
-class TipoServico(models.Model):
-    despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
-    nome = models.CharField(max_length=100)  
-    valor_base = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Custo DETRAN")
-    honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Lucro/Honorários")
-    ativo = models.BooleanField(default=True)
-
-    def __str__(self):
-        return self.nome
-
-    @property
-    def valor_total(self):
-        return self.valor_base + self.honorarios
-
-
+# ==============================================================================
+# 5. COMERCIAL (ORÇAMENTOS)
+# ==============================================================================
 class Orcamento(models.Model):
     STATUS_ORCAMENTO = (
         ('PENDENTE', 'Pendente'),
@@ -282,3 +320,33 @@ class ItemOrcamento(models.Model):
 
     def __str__(self):
         return f"{self.servico_nome} - R$ {self.valor}"
+
+
+# ==============================================================================
+# 6. LOGS E AUDITORIA
+# ==============================================================================
+class LogAtividade(models.Model):
+    ACAO_CHOICES = [
+        ('CRIACAO', 'Criação'),
+        ('EDICAO', 'Edição'),
+        ('EXCLUSAO', 'Exclusão'),
+        ('LOGIN', 'Login'),
+        ('FINANCEIRO', 'Financeiro'),
+        ('STATUS', 'Mudança de Status'),
+    ]
+
+    despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
+    usuario = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    
+    atendimento = models.ForeignKey('Atendimento', on_delete=models.CASCADE, null=True, blank=True, related_name='logs')
+    cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE, null=True, blank=True)
+    
+    acao = models.CharField(max_length=20, choices=ACAO_CHOICES)
+    descricao = models.TextField() 
+    data = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-data']
+
+    def __str__(self):
+        return f"{self.usuario} - {self.acao} - {self.data}"

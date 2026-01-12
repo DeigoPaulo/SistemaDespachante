@@ -58,7 +58,7 @@
                 <div class="card-body">
                     <small class="text-white-50 text-uppercase fw-bold">Gastos Operacionais</small>
                     <h3 class="fw-bold mb-0">R$ {{ resumo.total_custos_operacionais|floatformat:2 }}</h3>
-                    <small class="small">Impostos + Taxas Banco</small>
+                    <small class="small" style="font-size: 0.75rem;">Impostos + Banco + Sindicato</small>
                 </div>
             </div>
         </div>
@@ -117,7 +117,9 @@
                             </td>
                             <td class="text-end text-danger">R$ {{ p.valor_taxas_detran|floatformat:2 }}</td>
                             <td class="text-end text-primary">R$ {{ p.valor_honorarios|floatformat:2 }}</td>
+                            
                             <td class="text-end fw-bold text-success">R$ {{ p.lucro_liquido_real|floatformat:2 }}</td>
+                            
                             <td class="text-center">
                                 {% if p.status_financeiro == 'PAGO' %}
                                     <span class="badge rounded-pill bg-success px-3">Pago</span>

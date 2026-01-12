@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+
+{% block title %}Auditoria do Sistema{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Estilos exclusivos para quando for imprimir ou gerar PDF */
+    @media print {
+        /* Esconde elementos desnecessários no papel */
+        .navbar, .btn, .no-print, form, .card-footer, .page-title-area {
+            display: none !important;
+        }
+        
+        /* Remove sombras e bordas para economizar tinta e ficar limpo */
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+
+        .card-body {
+            padding: 0 !important;
+        }
+
+        /* Garante que a tabela ocupe 100% e as letras fiquem pretas */
+        table {
+            width: 100% !important;
+            color: #000 !important;
+        }
+        
+        /* Adiciona um cabeçalho simples na impressão */
+        body::before {
+            content: "Relatório de Auditoria - DespachaPro";
+            font-size: 18pt;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        /* Ajusta badges para ficarem legíveis em preto e branco */
+        .badge {
+            border: 1px solid #000 !important;
+            color: #000 !important;
+            background: transparent !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <div class="d-flex justify-content-between align-items-center mb-4 page-title-area">
+        <div>
+            <h4 class="mb-0 fw-bold text-gray-800"><i class="fas fa-shield-alt text-primary me-2"></i> Auditoria de Atividades</h4>
+            <small class="text-muted">Rastreie todas as ações realizadas no sistema.</small>
+        </div>
+        <div>
+            <button onclick="window.print()" class="btn btn-outline-dark btn-sm shadow-sm">
+                <i class="fas fa-print me-2"></i> Imprimir Relatório
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0 mb-4 no-print">
+        <div class="card-body bg-light rounded">
+            <form method="GET" class="row g-3 align-items-end">
+                
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold text-uppercase">Palavra-chave</label>
+                    <input type="text" name="busca" class="form-control form-control-sm" placeholder="Ex: Placa, Nome, Processo..." value="{{ busca|default:'' }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-uppercase">De</label>
+                    <input type="date" name="data_inicio" class="form-control form-control-sm" value="{{ data_inicio|default:'' }}">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-uppercase">Até</label>
+                    <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ data_fim|default:'' }}">
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-uppercase">Ação</label>
+                    <select name="acao" class="form-select form-select-sm">
+                        <option value="">Todas</option>
+                        {% for valor, nome in opcoes_acao %}
+                            <option value="{{ valor }}" {% if acao_filtro == valor %}selected{% endif %}>{{ nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold text-uppercase">Usuário</label>
+                    <select name="usuario" class="form-select form-select-sm">
+                        <option value="">Todos</option>
+                        {% for perfil in usuarios_equipe %}
+                            <option value="{{ perfil.user.id }}" {% if usuario_filtro == perfil.user.id|stringformat:"s" %}selected{% endif %}>
+                                {{ perfil.user.first_name|default:perfil.user.username }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="col-md-1 d-grid">
+                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-4">Data/Hora</th>
+                            <th>Usuário</th>
+                            <th>Ação</th>
+                            <th>Descrição do Evento</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in logs %}
+                        <tr>
+                            <td class="ps-4 text-nowrap" style="width: 150px;">
+                                <div class="fw-bold text-dark">{{ log.data|date:"d/m/Y" }}</div>
+                                <small class="text-muted">{{ log.data|date:"H:i:s" }}</small>
+                            </td>
+                            
+                            <td style="width: 150px;">
+                                <div class="d-flex align-items-center">
+                                    <div class="avatar-circle bg-secondary text-white me-2 d-flex align-items-center justify-content-center rounded-circle" style="width: 30px; height: 30px; font-size: 12px;">
+                                        {{ log.usuario.username|slice:":2"|upper }}
+                                    </div>
+                                    <span class="fw-bold text-dark small">{{ log.usuario.first_name|default:log.usuario.username }}</span>
+                                </div>
+                            </td>
+
+                            <td style="width: 120px;">
+                                {% if log.acao == 'CRIACAO' %}
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill">CRIAÇÃO</span>
+                                {% elif log.acao == 'EDICAO' %}
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill">EDIÇÃO</span>
+                                {% elif log.acao == 'EXCLUSAO' %}
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill">EXCLUSÃO</span>
+                                {% elif log.acao == 'FINANCEIRO' %}
+                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill">FINANCEIRO</span>
+                                {% else %}
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary rounded-pill">{{ log.get_acao_display|upper }}</span>
+                                {% endif %}
+                            </td>
+
+                            <td class="text-secondary small">
+                                {{ log.descricao }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-5 text-muted">
+                                <i class="fas fa-search fa-2x mb-3 opacity-25"></i>
+                                <p>Nenhum registro encontrado com os filtros atuais.</p>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% if logs.has_other_pages %}
+        <div class="card-footer bg-white py-3 no-print">
+            <nav>
+                <ul class="pagination justify-content-center mb-0 pagination-sm">
+                    {% if logs.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ logs.previous_page_number }}&busca={{ busca }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&acao={{ acao_filtro }}&usuario={{ usuario_filtro }}">Anterior</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                    {% endif %}
+                    
+                    <li class="page-item disabled">
+                        <span class="page-link bg-light text-dark fw-bold">
+                            Página {{ logs.number }} de {{ logs.paginator.num_pages }}
+                        </span>
+                    </li>
+
+                    {% if logs.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ logs.next_page_number }}&busca={{ busca }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&acao={{ acao_filtro }}&usuario={{ usuario_filtro }}">Próxima</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Próxima</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

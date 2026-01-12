@@ -28,7 +28,7 @@ urlpatterns = [
     
     # Configurações e Utilitários de Impressão
     path('configuracoes/', views.configuracoes_despachante, name='configuracoes_despachante'),
-    path('recibo/<int:id>/', views.emitir_recibo, name='emitir_recibo'), # <--- Botão de Recibo aponta pra cá
+    path('recibo/<int:id>/', views.emitir_recibo, name='emitir_recibo'),
 
     # ==========================================================================
     # 3. CADASTROS DE BASE (Clientes, Veículos, Serviços)
@@ -67,9 +67,12 @@ urlpatterns = [
     path('ferramentas/comprimir-pdf/', views.ferramentas_compressao, name='ferramentas_compressao'),
 
     path('relatorios/servicos/', views.relatorio_servicos, name='relatorio_servicos'),
-    # path('relatorios/mensal/', views.relatorio_mensal, name='relatorio_mensal'), # (Removido se não for usar mais)
+    path('relatorios/mensal/', views.relatorio_mensal, name='relatorio_mensal'),
+    
+    # Logs de Auditoria
+    path('configuracoes/auditoria/', views.relatorio_auditoria, name='relatorio_auditoria'),
 
-    # Financeiro (Usuário Comum pagando o próprio boleto do SaaS)
+    # Financeiro (Pagamento da mensalidade do software)
     path('financeiro/pagar/', views.pagar_mensalidade, name='pagar_mensalidade'),
 
     # ==========================================================================
@@ -77,6 +80,11 @@ urlpatterns = [
     # ==========================================================================
     path('financeiro/dashboard/', views.dashboard_financeiro, name='dashboard_financeiro'),
     path('financeiro/fluxo-caixa/', views.fluxo_caixa, name='fluxo_caixa'),
+    
+    # --- ROTA DO RELATÓRIO CONTÁBIL ---
+    path('financeiro/relatorio-contabil/', views.relatorio_contabil, name='relatorio_contabil'),
+    # ----------------------------------
+
     path('financeiro/baixa/<int:id>/', views.dar_baixa_pagamento, name='dar_baixa_pagamento'),
     path('financeiro/inadimplencia/', views.relatorio_inadimplencia, name='relatorio_inadimplencia'),
 
