@@ -24,33 +24,117 @@
             <div class="card-body p-4">
                 <form method="post" enctype="multipart/form-data"> {% csrf_token %}
 
-                    {% for field in form %}
-                        <div class="mb-3">
-                            <label for="{{ field.id_for_label }}" class="form-label fw-bold small text-uppercase text-muted">
-                                {{ field.label }}
-                                {% if field.field.required %} <span class="text-danger">*</span> {% endif %}
-                            </label>
-                            
-                            {# --- LÓGICA DE BLOQUEIO PARA CAMPOS FINANCEIROS AUTOMÁTICOS --- #}
-                            {% if field.name == 'custo_impostos' or field.name == 'custo_taxa_bancaria' %}
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light text-muted border-end-0">
-                                        <i class="fas fa-calculator small"></i>
-                                    </span>
-                                    <input type="text" 
-                                           class="form-control bg-light border-start-0 fw-bold text-secondary" 
-                                           value="R$ {{ field.value|default:'0,00' }}" 
-                                           readonly 
-                                           tabindex="-1">
-                                </div>
-                                <div class="form-text text-info small">
-                                    <i class="fas fa-info-circle me-1"></i> Provisionado automaticamente.
-                                </div>
-                                {# Campo oculto real para processamento do Django #}
-                                <input type="hidden" name="{{ field.name }}" value="{{ field.value|stringformat:'s'|default:'0' }}">
+                    {# --- CAMPOS OCULTOS PARA CÁLCULO AUTOMÁTICO --- #}
+                    {# Eles continuam aqui para serem enviados ao banco de dados #}
+                    <input type="hidden" name="custo_impostos" value="{{ form.custo_impostos.value|stringformat:'s'|default:'0' }}">
+                    <input type="hidden" name="custo_taxa_bancaria" value="{{ form.custo_taxa_bancaria.value|stringformat:'s'|default:'0' }}">
 
-                            {% else %}
-                                {# Renderização normal dos demais campos #}
+                    {# ================================================================= #}
+                    {#  1. BLOCO DE CONTROLE (AMARELO SUAVE)                             #}
+                    {# ================================================================= #}
+                    {% if form.status or form.numero_atendimento or form.responsavel %}
+                    <div class="card mb-4 shadow-sm border-0" style="background-color: #fffdf5; border-left: 4px solid #ffc107 !important;">
+                        <div class="card-body">
+                            <h6 class="text-muted fw-bold text-uppercase mb-3 small">
+                                <i class="fas fa-tasks text-warning me-2"></i> Controle Operacional
+                            </h6>
+                            <div class="row g-3">
+                                {% if form.status %}
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Status</label>
+                                    {{ form.status }}
+                                    {% if form.status.errors %}
+                                        <div class="text-danger small">{{ form.status.errors.0 }}</div>
+                                    {% endif %}
+                                </div>
+                                {% endif %}
+
+                                {% if form.numero_atendimento %}
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Nº Atendimento</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white text-warning border-end-0"><i class="fas fa-hashtag"></i></span>
+                                        {{ form.numero_atendimento }}
+                                    </div>
+                                </div>
+                                {% endif %}
+
+                                {% if form.responsavel %}
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Responsável</label>
+                                    {{ form.responsavel }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# ================================================================= #}
+                    {#  2. BLOCO FINANCEIRO (VERDE SUAVE)                                #}
+                    {# ================================================================= #}
+                    {% if form.valor_honorarios %}
+                    <div class="card mb-4 shadow-sm border-0" style="background-color: #f8fffa; border-left: 4px solid #198754 !important;">
+                        <div class="card-body">
+                            <h6 class="text-muted fw-bold text-uppercase mb-3 small">
+                                <i class="fas fa-wallet text-success me-2"></i> Gestão Financeira
+                            </h6>
+                            
+                            {# --- LINHA 1: VALORES DE ENTRADA --- #}
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Taxas (Repasse)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white text-danger border-end-0">R$</span>
+                                        {{ form.valor_taxas_detran }}
+                                    </div>
+                                    <div class="form-text small text-muted">Valor pago ao órgão.</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Honorários (Lucro)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white text-success border-end-0">R$</span>
+                                        {{ form.valor_honorarios }}
+                                    </div>
+                                    <div class="form-text small text-muted">Valor do serviço.</div>
+                                </div>
+                            </div>
+
+                            {# --- LINHA 2: PAGAMENTO --- #}
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Quem pagou?</label>
+                                    {{ form.quem_pagou_detran }}
+                                </div>
+
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Situação</label>
+                                    {{ form.status_financeiro }}
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">Data Baixa</label>
+                                    {{ form.data_pagamento }}
+                                </div>
+                            </div>
+                            
+                            {# REMOVI O BLOCO VISUAL DE IMPOSTOS/TAXAS AQUI #}
+
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    {# ================================================================= #}
+                    {#  3. RESTANTE DOS CAMPOS                                           #}
+                    {# ================================================================= #}
+                    {% for field in form %}
+                        {% if field.name not in 'status,numero_atendimento,responsavel,valor_taxas_detran,valor_honorarios,quem_pagou_detran,status_financeiro,data_pagamento,custo_impostos,custo_taxa_bancaria' %}
+                        
+                            <div class="mb-3">
+                                <label for="{{ field.id_for_label }}" class="form-label fw-bold small text-uppercase text-muted">
+                                    {{ field.label }}
+                                    {% if field.field.required %} <span class="text-danger">*</span> {% endif %}
+                                </label>
+                                
                                 {% if field.field.widget.attrs.class %}
                                     {{ field }}
                                 {% elif "Select" in field.field.widget.constructor_name %}
@@ -60,18 +144,19 @@
                                 {% else %}
                                     {{ field }}
                                 {% endif %}
-                            {% endif %}
 
-                            {% if field.help_text and field.name != 'custo_impostos' and field.name != 'custo_taxa_bancaria' %}
-                                <div class="form-text text-muted small">{{ field.help_text|safe }}</div>
-                            {% endif %}
-                            
-                            {% if field.errors %}
-                                <div class="text-danger small mt-1">
-                                    <i class="fas fa-exclamation-circle me-1"></i> {{ field.errors.0 }}
-                                </div>
-                            {% endif %}
-                        </div>
+                                {% if field.help_text %}
+                                    <div class="form-text text-muted small">{{ field.help_text|safe }}</div>
+                                {% endif %}
+                                
+                                {% if field.errors %}
+                                    <div class="text-danger small mt-1">
+                                        <i class="fas fa-exclamation-circle me-1"></i> {{ field.errors.0 }}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        
+                        {% endif %}
                     {% endfor %}
 
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4 border-top pt-3">
@@ -117,4 +202,53 @@
         </div>
     {% endif %}
 {% endif %}
+
+{# ================================================================= #}
+{# JAVASCRIPT - VERSÃO SIMPLIFICADA (SÓ ATUALIZA OS HIDDEN)          #}
+{# ================================================================= #}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // 1. Configurações Fiscais
+        const ALIQUOTA_PERCENTUAL = parseFloat("{{ user.perfilusuario.despachante.aliquota_imposto|default:0|stringformat:'f' }}".replace(',', '.'));
+        const TAXA_PERCENTUAL = parseFloat("{{ user.perfilusuario.despachante.taxa_bancaria_padrao|default:0|stringformat:'f' }}".replace(',', '.'));
+
+        // 2. Elementos do DOM
+        const inputHonorarios = document.querySelector('[name="valor_honorarios"]');
+        
+        // Inputs Ocultos (Hidden)
+        const hiddenImposto = document.querySelector('input[type="hidden"][name="custo_impostos"]');
+        const hiddenTaxa = document.querySelector('input[type="hidden"][name="custo_taxa_bancaria"]');
+
+        // 3. FUNÇÃO DE LIMPEZA
+        function parseMoney(valor) {
+            if (!valor) return 0;
+            valor = String(valor); 
+            let limpo = valor.replace(/\./g, '').replace(/[^\d,]/g, '');
+            return parseFloat(limpo.replace(',', '.')) || 0;
+        }
+
+        // 4. LÓGICA DE CÁLCULO
+        function calcular() {
+            let honorario = parseMoney(inputHonorarios.value);
+
+            let imposto = honorario * (ALIQUOTA_PERCENTUAL / 100);
+            let taxa = honorario * (TAXA_PERCENTUAL / 100);
+
+            // Atualiza APENAS os inputs ocultos com formato de banco de dados (ponto)
+            if(hiddenImposto) hiddenImposto.value = imposto.toFixed(2);
+            if(hiddenTaxa) hiddenTaxa.value = taxa.toFixed(2);
+
+            // Debug Opcional (apenas para você confirmar que está funcionando no console)
+            // console.log(`Cálculo oculto -> Imposto: ${imposto.toFixed(2)} | Taxa: ${taxa.toFixed(2)}`);
+        }
+
+        // 5. Ativação
+        if (inputHonorarios) {
+            inputHonorarios.addEventListener('input', calcular);
+            setTimeout(calcular, 500); 
+        }
+    });
+</script>
+
 {% endblock %}

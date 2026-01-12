@@ -6,6 +6,10 @@ from .models import Atendimento, Cliente, Veiculo, Despachante, PerfilUsuario
 # FORMULÁRIOS OPERACIONAIS
 # ==============================================================================
 
+from django import forms
+from django.contrib.auth.models import User
+from .models import Atendimento, Cliente, Veiculo
+
 class AtendimentoForm(forms.ModelForm):
     class Meta:
         model = Atendimento
@@ -60,6 +64,13 @@ class AtendimentoForm(forms.ModelForm):
 
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # --- CORREÇÃO PRINCIPAL AQUI ---
+        # Define que esses campos NÃO são obrigatórios na validação do formulário.
+        # Isso permite salvar o form mesmo se o HTML enviar vazio (pois será calculado na View).
+        self.fields['custo_impostos'].required = False
+        self.fields['custo_taxa_bancaria'].required = False
+
         if user and hasattr(user, 'perfilusuario'):
             despachante = user.perfilusuario.despachante
             
