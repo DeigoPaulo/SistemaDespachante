@@ -113,6 +113,11 @@
                                     <span class="badge bg-light text-muted border small">
                                         <i class="fas fa-hashtag me-1"></i>{{ p.numero_atendimento|default:"S/N" }}
                                     </span>
+                                    {% if p.asaas_id %}
+                                        <span class="badge bg-info text-white border small" title="Cobrança Asaas Gerada">
+                                            ASAAS
+                                        </span>
+                                    {% endif %}
                                 </div>
                             </td>
                             <td class="text-end text-danger">R$ {{ p.valor_taxas_detran|floatformat:2 }}</td>
@@ -129,6 +134,20 @@
                             </td>
                             <td class="text-end pe-4">
                                 <div class="btn-group shadow-sm">
+                                    
+                                    {% if p.status_financeiro != 'PAGO' %}
+                                        {% if p.asaas_id %}
+                                            <button type="button" class="btn btn-sm btn-info text-white" title="Link de Pagamento Já Ativo">
+                                                <i class="fas fa-link"></i>
+                                            </button>
+                                        {% else %}
+                                            <a href="{% url 'gerar_cobranca_asaas' p.id %}" class="btn btn-sm btn-primary" 
+                                               title="Gerar Boleto/Pix (Asaas)" 
+                                               onclick="return confirm('Deseja gerar uma cobrança automática no Asaas para este processo?');">
+                                                <i class="fas fa-money-bill-wave"></i>
+                                            </a>
+                                        {% endif %}
+                                    {% endif %}
                                     <a href="{% url 'emitir_recibo' p.id %}" target="_blank" class="btn btn-sm btn-outline-dark" title="Imprimir Recibo">
                                         <i class="fas fa-print"></i>
                                     </a>
@@ -138,7 +157,7 @@
                                     </a>
                                     
                                     {% if p.status_financeiro != 'PAGO' %}
-                                    <a href="{% url 'dar_baixa_pagamento' p.id %}" class="btn btn-sm btn-success" title="Dar Baixa">
+                                    <a href="{% url 'dar_baixa_pagamento' p.id %}" class="btn btn-sm btn-success" title="Dar Baixa Manual">
                                         <i class="fas fa-check"></i>
                                     </a>
                                     {% endif %}

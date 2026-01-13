@@ -66,10 +66,20 @@ class Despachante(models.Model):
         verbose_name="Dia de Vencimento Preferencial"
     )
 
+    # ID do Despachante no Asaas (Para você cobrar a mensalidade dele)
     asaas_customer_id = models.CharField(
         max_length=50, blank=True, null=True,
-        verbose_name="ID Asaas",
+        verbose_name="ID Asaas (Cliente)",
         help_text="ID gerado automaticamente pela integração."
+    )
+
+    # --- NOVO CAMPO: Chave de API do Despachante (Para ele cobrar os clientes dele) ---
+    asaas_api_key = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True, 
+        verbose_name="Chave de API (Asaas)",
+        help_text="Chave gerada no painel do Asaas para receber pagamentos diretamente."
     )
 
     def __str__(self):
@@ -194,10 +204,18 @@ class TipoServico(models.Model):
     valor_base = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Custo DETRAN")
     honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Lucro/Honorários")
     
+    # --- CONFIGURAÇÃO DE TAXAS SINDICAIS ---
     usa_taxa_sindego_reduzida = models.BooleanField(
         default=False, 
         verbose_name="Usa Taxa Reduzida (Sindego)?",
         help_text="Marque se este serviço paga a taxa menor (Ex: R$ 6,50) em vez da cheia (Ex: R$ 13,00)."
+    )
+
+    # NOVO CAMPO: ISENÇÃO
+    isenta_taxa_sindego = models.BooleanField(
+        default=False,
+        verbose_name="Isento de Taxa Sindical?",
+        help_text="Se marcado, o valor da taxa sindical será R$ 0,00."
     )
     
     ativo = models.BooleanField(default=True)
@@ -208,7 +226,6 @@ class TipoServico(models.Model):
     @property
     def valor_total(self):
         return self.valor_base + self.honorarios
-
 
 # ==============================================================================
 # 4. OPERACIONAL (ATENDIMENTOS)
@@ -283,6 +300,16 @@ class Atendimento(models.Model):
     status_financeiro = models.CharField(max_length=15, choices=STATUS_FINANCEIRO, default='ABERTO')
     data_pagamento = models.DateField(null=True, blank=True)
 
+    # --- CAMPO NOVO PARA INTEGRAÇÃO ASAAS ---
+    asaas_id = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True, 
+        unique=True, 
+        verbose_name="ID Cobrança Asaas",
+        help_text="ID gerado automaticamente (ex: pay_58694038593)"
+    )
+
     observacoes_internas = models.TextField(blank=True, null=True)
     data_solicitacao = models.DateField(default=timezone.now)
     data_entrega = models.DateField(null=True, blank=True, verbose_name="Prazo de Entrega")
@@ -302,7 +329,7 @@ class Atendimento(models.Model):
     def __str__(self):
         return f"{self.numero_atendimento or 'S/N'} - {self.cliente}"
 
-    # --- LÓGICA DE SNAPSHOT (A MÁGICA) ---
+    # --- LÓGICA DE SNAPSHOT (ATUALIZADA COM ISENÇÃO) ---
     def save(self, *args, **kwargs):
         # Se selecionou um Tipo de Serviço do catálogo...
         if self.tipo_servico:
@@ -317,11 +344,19 @@ class Atendimento(models.Model):
             if self.pk is None or self.valor_taxas_detran == 0:
                 self.valor_taxas_detran = self.tipo_servico.valor_base
             
-            # 3. Calcula a Taxa Sindego Automaticamente (Reduzida vs Cheia)
+            # 3. Calcula a Taxa Sindego (ATUALIZADO AQUI)
             # Só calcula se o custo estiver zerado para não sobrescrever ajustes manuais
             if self.custo_taxa_sindego == 0:
-                if self.tipo_servico.usa_taxa_sindego_reduzida:
+                
+                # Prioridade 1: Isenção Total
+                if self.tipo_servico.isenta_taxa_sindego:
+                    self.custo_taxa_sindego = 0.00
+                
+                # Prioridade 2: Taxa Reduzida
+                elif self.tipo_servico.usa_taxa_sindego_reduzida:
                     self.custo_taxa_sindego = self.despachante.valor_taxa_sindego_reduzida
+                
+                # Padrão: Taxa Cheia
                 else:
                     self.custo_taxa_sindego = self.despachante.valor_taxa_sindego_padrao
 
@@ -335,7 +370,6 @@ class Atendimento(models.Model):
     def lucro_liquido_real(self):
         custos = self.custo_impostos + self.custo_taxa_bancaria + self.custo_taxa_sindego
         return self.valor_honorarios - custos
-
 
 # ==============================================================================
 # 5. COMERCIAL (ORÇAMENTOS)
@@ -385,7 +419,23 @@ class Orcamento(models.Model):
 class ItemOrcamento(models.Model):
     orcamento = models.ForeignKey(Orcamento, related_name='itens', on_delete=models.CASCADE)
     servico_nome = models.CharField(max_length=200)
+    
+    # Mantém o valor total do item
     valor = models.DecimalField(max_digits=10, decimal_places=2)
+    
+    # --- NOVOS CAMPOS: Separação de Taxas e Honorários ---
+    valor_honorario = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0.00,
+        verbose_name="Honorários (Lucro)"
+    )
+    valor_taxa = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0.00,
+        verbose_name="Taxas (Estado)"
+    )
 
     def __str__(self):
         return f"{self.servico_nome} - R$ {self.valor}"

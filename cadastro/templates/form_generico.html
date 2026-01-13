@@ -206,49 +206,58 @@
 {# ================================================================= #}
 {# JAVASCRIPT - VERSÃO SIMPLIFICADA (SÓ ATUALIZA OS HIDDEN)          #}
 {# ================================================================= #}
+{% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+
 <script>
-    document.addEventListener("DOMContentLoaded", function() {
+    $(document).ready(function(){
+        // 1. ATIVAR MÁSCARA DE DINHEIRO
+        $('.mask-money').mask('000.000.000,00', {reverse: true});
+
+        // =================================================================
+        // CÁLCULO AUTOMÁTICO DE CUSTOS (Hidden Inputs)
+        // =================================================================
         
-        // 1. Configurações Fiscais
+        // Configurações vindas do Backend
         const ALIQUOTA_PERCENTUAL = parseFloat("{{ user.perfilusuario.despachante.aliquota_imposto|default:0|stringformat:'f' }}".replace(',', '.'));
         const TAXA_PERCENTUAL = parseFloat("{{ user.perfilusuario.despachante.taxa_bancaria_padrao|default:0|stringformat:'f' }}".replace(',', '.'));
 
-        // 2. Elementos do DOM
-        const inputHonorarios = document.querySelector('[name="valor_honorarios"]');
-        
-        // Inputs Ocultos (Hidden)
-        const hiddenImposto = document.querySelector('input[type="hidden"][name="custo_impostos"]');
-        const hiddenTaxa = document.querySelector('input[type="hidden"][name="custo_taxa_bancaria"]');
+        // Seletores
+        const $inputHonorarios = $('input[name="valor_honorarios"]');
+        const $hiddenImposto = $('input[name="custo_impostos"]');
+        const $hiddenTaxa = $('input[name="custo_taxa_bancaria"]');
 
-        // 3. FUNÇÃO DE LIMPEZA
+        // Função de Converter Texto (R$ 1.000,00) para Float (1000.00)
         function parseMoney(valor) {
             if (!valor) return 0;
-            valor = String(valor); 
-            let limpo = valor.replace(/\./g, '').replace(/[^\d,]/g, '');
-            return parseFloat(limpo.replace(',', '.')) || 0;
+            let limpo = valor.replace(/\./g, '').replace(',', '.');
+            return parseFloat(limpo) || 0;
         }
 
-        // 4. LÓGICA DE CÁLCULO
-        function calcular() {
-            let honorario = parseMoney(inputHonorarios.value);
+        // Função de Cálculo
+        function calcularCustos() {
+            let honorario = parseMoney($inputHonorarios.val());
 
             let imposto = honorario * (ALIQUOTA_PERCENTUAL / 100);
             let taxa = honorario * (TAXA_PERCENTUAL / 100);
 
-            // Atualiza APENAS os inputs ocultos com formato de banco de dados (ponto)
-            if(hiddenImposto) hiddenImposto.value = imposto.toFixed(2);
-            if(hiddenTaxa) hiddenTaxa.value = taxa.toFixed(2);
-
-            // Debug Opcional (apenas para você confirmar que está funcionando no console)
-            // console.log(`Cálculo oculto -> Imposto: ${imposto.toFixed(2)} | Taxa: ${taxa.toFixed(2)}`);
+            // Atualiza os inputs ocultos com ponto decimal (formato banco de dados)
+            $hiddenImposto.val(imposto.toFixed(2));
+            $hiddenTaxa.val(taxa.toFixed(2));
         }
 
-        // 5. Ativação
-        if (inputHonorarios) {
-            inputHonorarios.addEventListener('input', calcular);
-            setTimeout(calcular, 500); 
+        // Evento: Quando digitar no campo honorários
+        if ($inputHonorarios.length) {
+            $inputHonorarios.on('input change', function() {
+                calcularCustos();
+            });
+            
+            // Roda uma vez ao carregar para garantir
+            setTimeout(calcularCustos, 500); 
         }
     });
 </script>
+{% endblock %}
 
 {% endblock %}

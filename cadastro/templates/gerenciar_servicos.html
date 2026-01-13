@@ -43,13 +43,23 @@
                             </div>
                         </div>
 
-                        <div class="mb-3 form-check form-switch p-3 border rounded bg-light">
-                            <input class="form-check-input ms-0 me-2" type="checkbox" id="taxaReduzida" name="usa_taxa_sindego_reduzida">
-                            <label class="form-check-label small fw-bold text-dark" for="taxaReduzida">
-                                Usar Taxa Reduzida (Sindicato)?
-                            </label>
-                            <div class="form-text" style="font-size: 0.75rem;">
-                                Marque se este serviço paga a taxa menor (Ex: R$ 6,50). Se desmarcado, paga a cheia (Ex: R$ 13,00).
+                        <div class="mb-3 p-3 border rounded bg-light">
+                            <label class="form-label fw-bold small text-uppercase text-dark mb-2">Configuração da Taxa Sindical</label>
+                            
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="taxaReduzida" name="usa_taxa_sindego_reduzida">
+                                    <label class="form-check-label small" for="taxaReduzida">Reduzida</label>
+                                </div>
+
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" id="taxaIsenta" name="isenta_taxa_sindego">
+                                    <label class="form-check-label small fw-bold text-success" for="taxaIsenta">Isento (R$ 0)</label>
+                                </div>
+                            </div>
+                            <div class="form-text mt-2" style="font-size: 0.75rem;">
+                                Se ambos desmarcados = Taxa Padrão. <br>
+                                "Isento" tem prioridade sobre "Reduzida".
                             </div>
                         </div>
 
@@ -100,7 +110,9 @@
                                     </td>
                                     
                                     <td class="text-center">
-                                        {% if servico.usa_taxa_sindego_reduzida %}
+                                        {% if servico.isenta_taxa_sindego %}
+                                            <span class="badge bg-success" title="Isento de Taxa (R$ 0,00)">ISENTO</span>
+                                        {% elif servico.usa_taxa_sindego_reduzida %}
                                             <span class="badge bg-info text-dark" title="Taxa Reduzida (R$ {{ user.perfilusuario.despachante.valor_taxa_sindego_reduzida }})">Reduzida</span>
                                         {% else %}
                                             <span class="badge bg-secondary" title="Taxa Padrão (R$ {{ user.perfilusuario.despachante.valor_taxa_sindego_padrao }})">Padrão</span>
@@ -150,15 +162,27 @@
         // 1. Máscara de Moeda (Padrão Brasileiro)
         $('.mask-money').mask('000.000.000,00', {reverse: true});
 
-        // 2. Ativa o DataTables (Pesquisa e Ordenação Inteligente)
+        // 2. Lógica Visual dos Checkboxes (Exclusividade)
+        // Se marcar "Isento", desmarca "Reduzida" e vice-versa, para evitar confusão visual
+        $('#taxaIsenta').change(function() {
+            if(this.checked) {
+                $('#taxaReduzida').prop('checked', false);
+            }
+        });
+
+        $('#taxaReduzida').change(function() {
+            if(this.checked) {
+                $('#taxaIsenta').prop('checked', false);
+            }
+        });
+
+        // 3. Ativa o DataTables
         $('#tabelaServicos').DataTable({
             "language": {
                 "sEmptyTable": "Nenhum registro encontrado",
                 "sInfo": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
                 "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
                 "sInfoFiltered": "(Filtrados de _MAX_ registros)",
-                "sInfoPostFix": "",
-                "sInfoThousands": ".",
                 "sLengthMenu": "_MENU_ resultados por página",
                 "sLoadingRecords": "Carregando...",
                 "sProcessing": "Processando...",
@@ -169,16 +193,12 @@
                     "sPrevious": "Anterior",
                     "sFirst": "Primeiro",
                     "sLast": "Último"
-                },
-                "oAria": {
-                    "sSortAscending": ": Ordenar colunas de forma ascendente",
-                    "sSortDescending": ": Ordenar colunas de forma descendente"
                 }
             },
             "pageLength": 10, 
             "order": [[ 0, "asc" ]], 
             "columnDefs": [
-                { "orderable": false, "targets": 5 } // Desabilita ordenação na coluna "Ação" (índice mudou para 5 por causa da nova coluna)
+                { "orderable": false, "targets": 5 } 
             ]
         });
     });

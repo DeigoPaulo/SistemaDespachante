@@ -329,12 +329,18 @@
             const tbody = document.getElementById('lista_itens_adicionados');
             const novaLinha = document.createElement('tr');
 
+            // --- AQUI ESTÁ A ATUALIZAÇÃO IMPORTANTE ---
+            // Agora enviamos 'honorarios[]' e 'taxas[]' separados para a View
             novaLinha.innerHTML = `
                 <td class="ps-4">
                     <span class="fw-bold text-dark">${nome}</span>
                     <br><small class="text-muted">Taxa: R$ ${taxa.toFixed(2)} | Hon: R$ ${honorario.toFixed(2)}</small>
+                    
                     <input type="hidden" name="servicos[]" value="${id}">
-                    <input type="hidden" name="precos[]" value="${totalItem}"> 
+                    <input type="hidden" name="precos[]" value="${totalItem.toFixed(2).replace('.', ',')}">
+                    
+                    <input type="hidden" name="honorarios[]" value="${honorario.toFixed(2).replace('.', ',')}">
+                    <input type="hidden" name="taxas[]" value="${taxa.toFixed(2).replace('.', ',')}">
                 </td>
                 <td class="text-center fw-bold">
                     R$ ${totalItem.toFixed(2).replace('.', ',')}

@@ -4,7 +4,7 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-md-9"> 
         
         <div class="d-flex justify-content-between mb-4 no-print">
             <a href="{% url 'listar_orcamentos' %}" class="btn btn-outline-secondary">
@@ -26,6 +26,9 @@
         <div class="card border-0 shadow-lg p-5" id="folha-orcamento">
             
             <div class="text-center border-bottom pb-4 mb-4">
+                {% if user.perfilusuario.despachante.logo %}
+                    <img src="{{ user.perfilusuario.despachante.logo.url }}" style="max-height: 80px;" class="mb-3">
+                {% endif %}
                 <h2 class="fw-bold text-uppercase mb-1 text-dark">
                     {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
                 </h2>
@@ -58,6 +61,9 @@
                     
                     <p class="mt-3 mb-0 small text-muted">
                         <strong>Emissão:</strong> {{ orcamento.data_criacao|date:"d/m/Y" }}
+                        {% if orcamento.veiculo %}
+                        <br><strong>Veículo:</strong> {{ orcamento.veiculo.modelo }} - {{ orcamento.veiculo.placa }}
+                        {% endif %}
                     </p>
                 </div>
                 
@@ -73,29 +79,47 @@
                 </div>
             </div>
 
-            <table class="table table-bordered mb-4">
+            <table class="table table-bordered mb-4 border-dark">
                 <thead class="bg-light">
                     <tr>
                         <th class="ps-3 text-uppercase small text-muted">Descrição do Serviço</th>
-                        <th class="text-end pe-3 text-uppercase small text-muted" width="150px">Valor</th>
+                        <th class="text-center text-uppercase small text-muted" width="120px">Taxas</th>
+                        <th class="text-center text-uppercase small text-muted" width="120px">Honorários</th>
+                        <th class="text-end pe-3 text-uppercase small text-muted fw-bold" width="130px">Total</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for item in orcamento.itemorcamento_set.all %}
+                    {% for item in orcamento.itens.all %}
                     <tr>
-                        <td class="ps-3 fw-bold text-dark">{{ item.servico_nome }}</td>
-                        <td class="text-end pe-3">R$ {{ item.valor }}</td>
+                        <td class="ps-3 fw-bold text-dark align-middle">{{ item.servico_nome }}</td>
+                        
+                        <td class="text-center align-middle text-muted">
+                            {% if item.valor_taxa > 0 %}
+                                R$ {{ item.valor_taxa }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        
+                        <td class="text-center align-middle text-muted">
+                            {% if item.valor_honorario > 0 %}
+                                R$ {{ item.valor_honorario }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        
+                        <td class="text-end pe-3 align-middle fw-bold bg-light">R$ {{ item.valor }}</td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="2" class="text-center py-4 text-muted fst-italic">
+                        <td colspan="4" class="text-center py-4 text-muted fst-italic">
                             Nenhum serviço registrado.
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
             </table>
-
             <div class="row justify-content-end">
                 <div class="col-md-5">
                     <table class="table table-sm border-0">
@@ -103,7 +127,7 @@
                             <tr>
                                 <td class="text-muted text-end border-0">Subtotal:</td>
                                 <td class="text-end fw-bold border-0 text-muted">
-                                    (Calculado)
+                                    R$ {{ orcamento.valor_total|add:orcamento.desconto|floatformat:2 }}
                                 </td>
                             </tr>
                             <tr>
@@ -113,7 +137,7 @@
                         {% endif %}
                         
                         <tr class="bg-light border-top border-dark">
-                            <td class="text-end fw-bold fs-5 pt-2 border-0">TOTAL:</td>
+                            <td class="text-end fw-bold fs-5 pt-2 border-0">TOTAL GERAL:</td>
                             <td class="text-end fw-bold fs-5 pt-2 text-success border-0">R$ {{ orcamento.valor_total }}</td>
                         </tr>
                     </table>
@@ -138,72 +162,48 @@
 
 <style>
     @media print {
-        /* 1. RESET TOTAL: Esconde tudo na página */
         body * {
             visibility: hidden;
             opacity: 0;
             height: 0;
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
             overflow: hidden;
         }
-
-        /* 2. REVELAÇÃO DO ORÇAMENTO: Mostra só o card específico */
         #folha-orcamento, #folha-orcamento * {
             visibility: visible !important;
             opacity: 1 !important;
             height: auto !important;
             display: block !important;
-            color: #000 !important; /* Força preto puro para nitidez */
+            color: #000 !important;
         }
-
-        /* 3. POSICIONAMENTO ABSOLUTO NO PAPEL */
         #folha-orcamento {
             position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
+            left: 0; top: 0; width: 100%;
             margin: 0 !important;
-            padding: 20px !important; /* Margem interna segura */
-            border: 1px solid #000 !important; /* Borda preta simples */
-            box-shadow: none !important; /* Remove sombras */
+            padding: 20px !important;
+            border: none !important;
+            box-shadow: none !important;
             background-color: white !important;
         }
-
-        /* 4. ESCONDE ELEMENTOS INTERNOS DO CARD QUE NÃO DEVEM SAIR */
-        .no-print, .btn {
-            display: none !important;
-        }
-
-        /* 5. AJUSTES DE TABELA PARA IMPRESSÃO */
-        .table-bordered, .table-bordered td, .table-bordered th {
-            border: 1px solid #000 !important;
-        }
-        .bg-light {
-            background-color: #f0f0f0 !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
+        .no-print, .btn { display: none !important; }
         
-        /* 6. GARANTE O FLEXBOX PARA O HEADER (Lado a lado) */
-        .d-flex {
-            display: flex !important;
-        }
-        .justify-content-between {
-            justify-content: space-between !important;
-        }
-        .align-items-end {
-            align-items: flex-end !important;
-        }
-        .text-end {
-            text-align: right !important;
-        }
+        /* Ajustes de Tabela para Impressão */
+        .table-bordered th, .table-bordered td { border: 1px solid #000 !important; }
+        .bg-light { background-color: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        
+        /* Flexbox Fix para Impressão */
+        .d-flex { display: flex !important; }
+        .justify-content-between { justify-content: space-between !important; }
+        .align-items-end { align-items: flex-end !important; }
+        .text-end { text-align: right !important; }
+        .text-center { text-align: center !important; }
+        
+        /* Layout de Colunas */
+        .row { display: flex !important; flex-wrap: wrap; margin-right: -15px; margin-left: -15px; }
+        /* Ajuste do tamanho da coluna de totais na impressão */
+        .col-md-5 { width: 45% !important; margin-left: auto; }
 
-        /* Configuração da Página */
-        @page {
-            size: auto;
-            margin: 0mm;
-        }
+        @page { size: auto; margin: 0mm; }
     }
 </style>
 {% endblock %}

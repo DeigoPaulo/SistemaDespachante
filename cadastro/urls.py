@@ -104,4 +104,13 @@ urlpatterns = [
     path('master/usuarios/', views.master_listar_usuarios, name='master_listar_usuarios'),
     path('master/usuarios/novo/', views.master_criar_usuario, name='master_criar_usuario'),
     path('master/usuarios/<int:id>/', views.master_editar_usuario, name='master_editar_usuario'),
+
+    # ==========================================================================
+    # 8. INTEGRAÇÕES (ASAAS) - NOVAS ROTAS
+    # ==========================================================================
+    # Gera cobrança individual (um atendimento só)
+    path('financeiro/gerar-asaas/<int:id>/', views.gerar_cobranca_asaas, name='gerar_cobranca_asaas'),
+    
+    # Gera cobrança agrupada (vários atendimentos de um cliente) <-- AQUI ESTAVA FALTANDO
+    path('financeiro/boleto-agrupado/<int:cliente_id>/', views.gerar_boleto_agrupado, name='gerar_boleto_agrupado'),
 ]

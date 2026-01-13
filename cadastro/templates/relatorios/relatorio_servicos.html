@@ -80,14 +80,38 @@
                     </small>
                 </div>
                 
-                {% if dados.telefone_limpo %}
-                <a href="https://wa.me/55{{ dados.telefone_limpo }}?text={{ dados.texto_whatsapp|urlencode }}" 
-                   target="_blank" 
-                   class="btn btn-outline-success btn-sm d-print-none fw-bold shadow-sm"
-                   title="Enviar lista detalhada no WhatsApp">
-                    <i class="fab fa-whatsapp me-1"></i> Enviar Cobrança Detalhada
-                </a>
-                {% endif %}
+                <div class="btn-group d-print-none">
+                    {% if dados.telefone_limpo %}
+                    <a href="https://wa.me/55{{ dados.telefone_limpo }}?text={{ dados.texto_whatsapp|urlencode }}" 
+                       target="_blank" 
+                       class="btn btn-outline-success btn-sm fw-bold"
+                       title="Enviar lista no WhatsApp">
+                        <i class="fab fa-whatsapp"></i> WhatsApp
+                    </a>
+                    {% endif %}
+
+                    {% if dados.subtotal_aberto > 0 %}
+                        <form action="{% url 'gerar_boleto_agrupado' cliente_id %}" method="POST" class="d-inline ms-1"
+                              onsubmit="return confirm('ATENÇÃO: Você está gerando um boleto de R$ {{ dados.subtotal_aberto|floatformat:2 }} apenas para os itens pendentes. Continuar?');">
+                            {% csrf_token %}
+                            
+                            {% for item in dados.itens %}
+                                {% if item.status_code == 'ABERTO' %}
+                                    <input type="hidden" name="atendimentos_ids" value="{{ item.id }}">
+                                {% endif %}
+                            {% endfor %}
+                            
+                            <button type="submit" class="btn btn-primary btn-sm fw-bold" title="Gerar Boleto Único (Asaas)">
+                                <i class="fas fa-barcode me-1"></i> Cobrar R$ {{ dados.subtotal_aberto|floatformat:2 }}
+                            </button>
+                        </form>
+                    
+                    {% elif dados.subtotal_valor > 0 %}
+                        <button class="btn btn-secondary btn-sm fw-bold ms-1" disabled title="Todos os itens deste cliente já constam como PAGOS">
+                            <i class="fas fa-check-double me-1"></i> Quitado
+                        </button>
+                    {% endif %}
+                    </div>
             </div>
 
             <table class="table table-sm table-borderless mb-0 custom-print-table">
@@ -119,6 +143,12 @@
                         
                         <td class="text-end align-middle">
                             <span class="fw-bold text-dark">R$ {{ item.valor_total|floatformat:2 }}</span>
+                            
+                            {% if item.status_code == 'PAGO' %}
+                                <i class="fas fa-check-circle text-success ms-1" title="Pago"></i>
+                            {% elif item.asaas_id %}
+                                <i class="fas fa-barcode text-warning ms-1" title="Boleto Gerado (Aguardando Pagamento)"></i>
+                            {% endif %}
                             
                             <a href="{% url 'emitir_recibo' item.id %}" target="_blank" 
                                class="btn btn-sm btn-link text-secondary p-0 ms-2 d-print-none" 
@@ -179,7 +209,6 @@
 
 {% block extra_css %}
 <style>
-    /* Estilos preservados para impressão A4 */
     @media print {
         @page { size: A4; margin: 10mm 15mm; }
         body { background-color: #fff !important; font-family: Arial, sans-serif; font-size: 11pt; color: #000 !important; }

@@ -93,13 +93,25 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ==============================================================================
 # 5. BANCO DE DADOS
 # ==============================================================================
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
+#    }
+#}
+
+# --- OPÇÃO 2: POSTGRESQL (Produção / Alta Performance) ---
+# Para usar, certifique-se de ter criado o banco 'sistema_despachante_db' no pgAdmin.
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'sistema_despachante_db',  # Nome do banco que você criou
+        'USER': 'postgres',                # Seu usuário do Postgres (geralmente 'postgres')
+        'PASSWORD': '121166',      # A senha que você definiu ao instalar o Postgres
+        'HOST': 'localhost',               # Ou o IP do servidor
+        'PORT': '5432',                    # Porta padrão
     }
 }
-
 
 # ==============================================================================
 # 6. VALIDAÇÃO DE SENHA

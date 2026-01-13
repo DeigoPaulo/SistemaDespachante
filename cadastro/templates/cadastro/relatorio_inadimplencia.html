@@ -69,12 +69,17 @@
                             <td>
                                 <div class="small fw-bold">{{ p.servico }}</div>
                                 <span class="badge bg-light text-dark border small">{{ p.veiculo.placa|default:"--" }}</span>
+                                
+                                {% if p.asaas_id %}
+                                    <span class="badge bg-info text-white border small ms-1" title="Boleto Gerado">ASAAS</span>
+                                {% endif %}
                             </td>
                             <td class="text-end text-danger">R$ {{ p.valor_taxas_detran|floatformat:2 }}</td>
                             <td class="text-end text-muted">R$ {{ p.valor_honorarios|floatformat:2 }}</td>
                             <td class="text-end fw-bold fs-6">R$ {{ p.valor_total_cliente|floatformat:2 }}</td>
                             <td class="text-end pe-4">
                                 <div class="btn-group">
+                                    
                                     {% if p.telefone_limpo %}
                                     <a href="https://wa.me/55{{ p.telefone_limpo }}?text={{ p.texto_whatsapp|urlencode }}" 
                                        target="_blank" 
@@ -84,7 +89,18 @@
                                     </a>
                                     {% endif %}
                                     
-                                    <a href="{% url 'dar_baixa_pagamento' p.id %}" class="btn btn-sm btn-outline-dark" title="Receber agora">
+                                    {% if not p.asaas_id %}
+                                        <a href="{% url 'gerar_cobranca_asaas' p.id %}" 
+                                           class="btn btn-sm btn-primary" 
+                                           title="Gerar Link Pix/Boleto"
+                                           onclick="return confirm('Gerar cobrança Asaas para {{ p.cliente.nome }}?');">
+                                            <i class="fas fa-money-bill-wave"></i>
+                                        </a>
+                                    {% else %}
+                                        <button class="btn btn-sm btn-secondary" disabled title="Link já gerado"><i class="fas fa-link"></i></button>
+                                    {% endif %}
+
+                                    <a href="{% url 'dar_baixa_pagamento' p.id %}" class="btn btn-sm btn-outline-dark" title="Receber Dinheiro em Mãos">
                                         <i class="fas fa-check"></i>
                                     </a>
                                 </div>

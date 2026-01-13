@@ -24,176 +24,233 @@
     </div>
 </div>
 
-<div class="card border-0 shadow-lg p-5" id="folha-orcamento">
-    
-    <div class="text-center border-bottom pb-4 mb-4">
-        {% if user.perfilusuario.despachante.logo %}
-            <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo" style="max-height: 80px; max-width: 300px; margin-bottom: 10px;">
-        {% else %}
-            <h2 class="fw-bold text-uppercase mb-1 text-dark">
-                {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
-            </h2>
-        {% endif %}
-        
-        <p class="text-muted mb-0 small mt-2">
-            {{ user.perfilusuario.despachante.endereco_completo }} <br>
-            <i class="fas fa-phone-alt me-1"></i> {{ user.perfilusuario.despachante.telefone }} 
-            {% if user.perfilusuario.despachante.email %}
-                | <i class="fas fa-envelope me-1"></i> {{ user.perfilusuario.despachante.email }}
-            {% endif %}
-        </p>
-    </div>
-
-    <div class="d-flex justify-content-between align-items-end mb-5">
-        <div>
-            <small class="text-muted text-uppercase fw-bold">Orçamento para:</small>
+<div class="row justify-content-center">
+    <div class="col-md-10 col-lg-8 print-full-width">
+        <div class="card border-0 shadow-lg p-4 p-print-0" id="folha-orcamento">
             
-            {% if orcamento.cliente %}
-                <h5 class="fw-bold mt-1 mb-0">{{ orcamento.cliente.nome }}</h5>
-                <p class="mb-0 small text-muted">
-                    CPF/CNPJ: {{ orcamento.cliente.cpf_cnpj }} <br>
-                    Tel: {{ orcamento.cliente.telefone }}
-                </p>
-            {% elif orcamento.nome_cliente_avulso %}
-                <h5 class="fw-bold mt-1 mb-0">{{ orcamento.nome_cliente_avulso }}</h5>
-                <p class="mb-0 small text-muted text-uppercase">Cliente Avulso</p>
-            {% else %}
-                <h5 class="fw-bold mt-1 text-danger">Cliente não identificado</h5>
-            {% endif %}
-            
-            <p class="mt-3 mb-0 small text-muted">
-                <strong>Emissão:</strong> {{ orcamento.data_criacao|date:"d/m/Y" }}
-            </p>
-        </div>
-        
-        <div class="text-end">
-            <h5 class="text-muted mb-1">Orçamento #{{ orcamento.id }}</h5>
-            {% if orcamento.status == 'PENDENTE' %}
-                <span class="badge bg-warning text-dark border px-3 py-2">PENDENTE</span>
-            {% elif orcamento.status == 'APROVADO' %}
-                <span class="badge bg-success text-white border px-3 py-2">APROVADO</span>
-            {% else %}
-                <span class="badge bg-secondary border px-3 py-2">{{ orcamento.status }}</span>
-            {% endif %}
-        </div>
-    </div>
-
-    <table class="table table-bordered mb-4">
-        <thead class="bg-light">
-            <tr>
-                <th class="ps-3 text-uppercase small text-muted">Descrição do Serviço</th>
-                <th class="text-end pe-3 text-uppercase small text-muted" width="150px">Valor</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in orcamento.itens.all %}
-            <tr>
-                <td class="ps-3 fw-bold text-dark">{{ item.servico_nome }}</td>
-                <td class="text-end pe-3">R$ {{ item.valor }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="2" class="text-center py-4 text-muted fst-italic">
-                    Nenhum serviço registrado.
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <div class="row justify-content-end">
-        <div class="col-md-5">
-            <table class="table table-sm border-0">
-                {% if orcamento.desconto and orcamento.desconto > 0 %}
-                    <tr>
-                        <td class="text-muted text-end border-0">Subtotal:</td>
-                        <td class="text-end fw-bold border-0 text-muted">
-                            (Calculado)
-                        </td>
-                    </tr>
-                    <tr>
-                        <td class="text-danger text-end border-0">Desconto:</td>
-                        <td class="text-end text-danger border-0">- R$ {{ orcamento.desconto }}</td>
-                    </tr>
+            <div class="text-center border-bottom pb-3 mb-4">
+                {% if user.perfilusuario.despachante.logo %}
+                    <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo" style="max-height: 80px; max-width: 250px; margin-bottom: 10px;">
+                {% else %}
+                    <h2 class="fw-bold text-uppercase mb-1 text-dark">
+                        {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
+                    </h2>
                 {% endif %}
                 
-                <tr class="bg-light border-top border-dark">
-                    <td class="text-end fw-bold fs-5 pt-2 border-0">TOTAL:</td>
-                    <td class="text-end fw-bold fs-5 pt-2 text-success border-0">R$ {{ orcamento.valor_total }}</td>
-                </tr>
-            </table>
+                <p class="text-muted mb-0 small mt-2">
+                    {{ user.perfilusuario.despachante.endereco_completo }} <br>
+                    <i class="fas fa-phone-alt me-1"></i> {{ user.perfilusuario.despachante.telefone }} 
+                    {% if user.perfilusuario.despachante.email %}
+                        | <i class="fas fa-envelope me-1"></i> {{ user.perfilusuario.despachante.email }}
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="d-flex justify-content-between align-items-end mb-4">
+                <div>
+                    <small class="text-muted text-uppercase fw-bold">Orçamento para:</small>
+                    
+                    {% if orcamento.cliente %}
+                        <h5 class="fw-bold mt-1 mb-0">{{ orcamento.cliente.nome }}</h5>
+                        <p class="mb-0 small text-muted">
+                            CPF/CNPJ: {{ orcamento.cliente.cpf_cnpj }} <br>
+                            Tel: {{ orcamento.cliente.telefone }}
+                        </p>
+                    {% elif orcamento.nome_cliente_avulso %}
+                        <h5 class="fw-bold mt-1 mb-0">{{ orcamento.nome_cliente_avulso }}</h5>
+                        <p class="mb-0 small text-muted text-uppercase">Cliente Avulso</p>
+                    {% else %}
+                        <h5 class="fw-bold mt-1 text-danger">Cliente não identificado</h5>
+                    {% endif %}
+                    
+                    <p class="mt-2 mb-0 small text-muted">
+                        <strong>Emissão:</strong> {{ orcamento.data_criacao|date:"d/m/Y" }}
+                    </p>
+                </div>
+                
+                <div class="text-end">
+                    <h5 class="text-muted mb-1">Orçamento #{{ orcamento.id }}</h5>
+                    {% if orcamento.status == 'PENDENTE' %}
+                        <span class="badge bg-warning text-dark border px-3 py-2">PENDENTE</span>
+                    {% elif orcamento.status == 'APROVADO' %}
+                        <span class="badge bg-success text-white border px-3 py-2">APROVADO</span>
+                    {% else %}
+                        <span class="badge bg-secondary border px-3 py-2">{{ orcamento.status }}</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered mb-4 border-dark table-sm-print">
+                    <thead class="bg-light">
+                        <tr>
+                            <th class="ps-3 text-uppercase small text-muted">Descrição do Serviço</th>
+                            <th class="text-center text-uppercase small text-muted" width="15%">Taxas</th>
+                            <th class="text-center text-uppercase small text-muted" width="15%">Honorários</th>
+                            <th class="text-end pe-3 text-uppercase small text-muted fw-bold" width="20%">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in orcamento.itens.all %}
+                        <tr>
+                            <td class="ps-3 fw-bold text-dark align-middle">{{ item.servico_nome }}</td>
+                            
+                            <td class="text-center align-middle text-muted small">
+                                {% if item.valor_taxa > 0 %}
+                                    R$ {{ item.valor_taxa }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            
+                            <td class="text-center align-middle text-muted small">
+                                {% if item.valor_honorario > 0 %}
+                                    R$ {{ item.valor_honorario }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            
+                            <td class="text-end pe-3 align-middle fw-bold bg-light">R$ {{ item.valor }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center py-4 text-muted fst-italic">
+                                Nenhum serviço registrado.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="row justify-content-end">
+                <div class="col-md-6 col-print-6">
+                    <table class="table table-sm border-0">
+                        {% if orcamento.desconto and orcamento.desconto > 0 %}
+                            <tr>
+                                <td class="text-muted text-end border-0">Subtotal:</td>
+                                <td class="text-end fw-bold border-0 text-muted">
+                                    R$ {{ orcamento.valor_total|add:orcamento.desconto|floatformat:2 }}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td class="text-danger text-end border-0">Desconto:</td>
+                                <td class="text-end text-danger border-0">- R$ {{ orcamento.desconto }}</td>
+                            </tr>
+                        {% endif %}
+                        
+                        <tr class="bg-light border-top border-dark">
+                            <td class="text-end fw-bold fs-5 pt-2 border-0">TOTAL GERAL:</td>
+                            <td class="text-end fw-bold fs-5 pt-2 text-success border-0">R$ {{ orcamento.valor_total }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            {% if orcamento.observacoes %}
+            <div class="mt-4 p-3 bg-light rounded border border-light">
+                <small class="fw-bold text-muted text-uppercase">Observações / Condições:</small>
+                <p class="mb-0 small text-dark mt-1">{{ orcamento.observacoes|linebreaksbr }}</p>
+            </div>
+            {% endif %}
+
+            <div class="mt-5 pt-3 text-center text-muted small border-top">
+                <p class="mb-1">Este orçamento tem validade de 5 dias.</p>
+                <p class="fw-bold">{{ user.perfilusuario.despachante.nome_fantasia }} agradece a preferência!</p>
+            </div>
+
         </div>
     </div>
-
-    {% if orcamento.observacoes %}
-    <div class="mt-4 p-3 bg-light rounded border border-light">
-        <small class="fw-bold text-muted text-uppercase">Observações / Condições:</small>
-        <p class="mb-0 small text-dark mt-1">{{ orcamento.observacoes|linebreaksbr }}</p>
-    </div>
-    {% endif %}
-
-    <div class="mt-5 pt-5 text-center text-muted small border-top">
-        <p class="mb-1">Este orçamento tem validade de 5 dias.</p>
-        <p class="fw-bold">{{ user.perfilusuario.despachante.nome_fantasia }} agradece a preferência!</p>
-    </div>
-
 </div>
+
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    /* LÓGICA DE IMPRESSÃO UNIFICADA */
+    /* AJUSTES PARA TELA */
+    .p-print-0 { padding: 1.5rem !important; } /* Padding padrão na tela */
+
+    /* === AJUSTES PARA IMPRESSÃO A4 === */
     @media print {
-        /* 1. Esconde tudo na página */
+        /* 1. Reset Global */
         body * {
             visibility: hidden;
+            height: 0;
+            overflow: hidden;
         }
 
-        /* 2. Mostra apenas a folha de orçamento e seu conteúdo */
+        /* 2. Definir a página A4 com margens seguras */
+        @page {
+            size: A4;
+            margin: 1cm; /* Margem física da impressora */
+        }
+
+        /* 3. Mostrar e posicionar o orçamento */
         #folha-orcamento, #folha-orcamento * {
             visibility: visible;
+            height: auto;
+            color: #000 !important; /* Força cor preta */
+            overflow: visible;
         }
 
-        /* 3. Posiciona a folha no topo absoluto da impressão */
         #folha-orcamento {
             position: absolute;
             left: 0;
             top: 0;
             width: 100%;
             margin: 0 !important;
-            padding: 0 !important; /* Remove padding extra se necessário */
-            box-shadow: none !important; /* Remove sombras para economizar tinta */
-            border: none !important; /* Borda limpa */
+            padding: 0 !important; /* Remove padding interno para ganhar espaço */
+            border: none !important;
+            box-shadow: none !important;
+            background-color: white !important;
         }
 
-        /* 4. Garante que elementos com d-print-none (botões) sumam mesmo */
-        .d-print-none {
+        /* 4. Forçar largura total das colunas do Bootstrap */
+        .print-full-width {
+            width: 100% !important;
+            max-width: 100% !important;
+            flex: 0 0 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* 5. Ajuste da coluna de totais */
+        .col-print-6 {
+            width: 50% !important;
+            float: right !important;
+            margin-left: auto !important;
+        }
+
+        /* 6. Esconder elementos de tela */
+        .d-print-none, header, footer, .sidebar {
             display: none !important;
         }
 
-        /* 5. Ajustes finos de cores para sair nítido no papel */
+        /* 7. Estilos visuais para papel */
         .bg-light {
             background-color: #f8f9fa !important;
             -webkit-print-color-adjust: exact;
             print-color-adjust: exact;
         }
         
-        /* Força layout em colunas (Grid System) funcionar na impressão */
-        .col-md-5 {
-            width: 41.66666667%;
-            float: right;
+        .table-bordered th, .table-bordered td { 
+            border: 1px solid #000 !important; 
+        }
+
+        /* Reduzir fonte levemente se necessário para caber */
+        body {
+            font-size: 10pt;
         }
         
-        /* Garante Flexbox */
+        /* Flexbox Fix */
         .d-flex { display: flex !important; }
         .justify-content-between { justify-content: space-between !important; }
+        .align-items-end { align-items: flex-end !important; }
         .text-end { text-align: right !important; }
         
-        /* Ajuste da Logo na Impressão */
-        img {
-            max-width: 250px !important;
-            height: auto !important;
-        }
+        /* Imagem */
+        img { max-width: 200px !important; }
     }
 </style>
 {% endblock %}

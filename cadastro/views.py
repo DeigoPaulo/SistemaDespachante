@@ -18,6 +18,9 @@ import base64
 from decimal import Decimal
 from datetime import timedelta
 from django.core.paginator import Paginator
+import requests 
+
+
 
 # Importação dos Modelos e Forms
 from .models import Atendimento, Cliente, Veiculo, TipoServico, PerfilUsuario, Despachante, Orcamento, ItemOrcamento, LogAtividade
@@ -710,10 +713,11 @@ def gerenciar_servicos(request):
         raw_base = request.POST.get('valor_base', '0')
         raw_hon = request.POST.get('honorarios', '0')
         
-        # --- CAPTURA DO CHECKBOX DA TAXA SINDICAL ---
+        # --- CAPTURA DAS OPÇÕES DE TAXA SINDICAL ---
         usa_reduzida = request.POST.get('usa_taxa_sindego_reduzida') == 'on'
+        eh_isento = request.POST.get('isenta_taxa_sindego') == 'on' # <--- NOVO CAMPO
 
-        # Tratamento seguro para moeda
+        # Tratamento seguro para moeda (pt-BR para float/decimal)
         v_base = raw_base.replace('.', '').replace(',', '.') if raw_base else 0
         v_hon = raw_hon.replace('.', '').replace(',', '.') if raw_hon else 0
         
@@ -722,7 +726,8 @@ def gerenciar_servicos(request):
             nome=nome, 
             valor_base=v_base, 
             honorarios=v_hon,
-            usa_taxa_sindego_reduzida=usa_reduzida 
+            usa_taxa_sindego_reduzida=usa_reduzida,
+            isenta_taxa_sindego=eh_isento # <--- SALVANDO NO BANCO
         )
         
         messages.success(request, "Novo serviço cadastrado com sucesso!")
@@ -746,7 +751,9 @@ def editar_servico(request, id):
             servico.valor_base = request.POST.get('valor_base', '0').replace('.', '').replace(',', '.')
             servico.honorarios = request.POST.get('honorarios', '0').replace('.', '').replace(',', '.')
             
+            # --- ATUALIZAÇÃO DAS TAXAS ---
             servico.usa_taxa_sindego_reduzida = request.POST.get('usa_taxa_sindego_reduzida') == 'on'
+            servico.isenta_taxa_sindego = request.POST.get('isenta_taxa_sindego') == 'on' # <--- NOVO CAMPO
             
             servico.save()
             
@@ -865,27 +872,35 @@ def novo_orcamento(request):
                 
                 orcamento.save()
 
+                # --- CAPTURA DAS LISTAS DO FORMULÁRIO ---
                 ids_servicos = request.POST.getlist('servicos[]') 
                 precos_servicos = request.POST.getlist('precos[]')
+                
+                # NOVOS DADOS: Honorários e Taxas separados
+                honorarios_lista = request.POST.getlist('honorarios[]')
+                taxas_lista = request.POST.getlist('taxas[]')
                 
                 if not ids_servicos:
                     raise Exception("A lista de serviços está vazia.")
 
-                for servico_id, preco_raw in zip(ids_servicos, precos_servicos):
+                # O ZIP AGORA AGRUPA 4 LISTAS PARA SALVAR DETALHADO
+                for servico_id, preco_raw, hon_raw, tax_raw in zip(ids_servicos, precos_servicos, honorarios_lista, taxas_lista):
                     servico_obj = TipoServico.objects.filter(id=servico_id).first()
                     nome_servico = servico_obj.nome if servico_obj else "Serviço Avulso"
-                    valor_item = limpar_valor(preco_raw)
-
+                    
                     ItemOrcamento.objects.create(
                         orcamento=orcamento,
                         servico_nome=nome_servico,
-                        valor=valor_item
+                        valor=limpar_valor(preco_raw),          # Valor Total
+                        valor_honorario=limpar_valor(hon_raw),  # Novo Campo
+                        valor_taxa=limpar_valor(tax_raw)        # Novo Campo
                     )
 
                 messages.success(request, f"Orçamento #{orcamento.id} gerado com sucesso!")
                 return redirect('detalhe_orcamento', id=orcamento.id)
 
         except Exception as e:
+            print(f"Erro ao criar orçamento: {e}") # Debug no console
             messages.error(request, f"Erro ao criar orçamento: {e}")
             return redirect('novo_orcamento')
 
@@ -893,7 +908,12 @@ def novo_orcamento(request):
 
 @login_required
 def detalhe_orcamento(request, id):
-    orcamento = get_object_or_404(Orcamento, id=id, despachante=request.user.perfilusuario.despachante)
+    # Prefetch para otimizar o carregamento dos itens
+    orcamento = get_object_or_404(
+        Orcamento.objects.prefetch_related('itens'), 
+        id=id, 
+        despachante=request.user.perfilusuario.despachante
+    )
     return render(request, 'financeiro/detalhe_orcamento.html', {'orcamento': orcamento})
 
 @login_required
@@ -906,7 +926,7 @@ def aprovar_orcamento(request, id):
         messages.warning(request, "Este orçamento já foi aprovado anteriormente.")
         return redirect('listar_orcamentos')
 
-    # Verifica Cliente Avulso
+    # Verifica e Cria Cliente Avulso se necessário
     if not orcamento.cliente and orcamento.nome_cliente_avulso:
         try:
             novo_cliente = Cliente.objects.create(
@@ -927,104 +947,105 @@ def aprovar_orcamento(request, id):
 
     try:
         with transaction.atomic():
+            # Atualiza status do orçamento
             orcamento.status = 'APROVADO'
             orcamento.save()
 
-            # Inicializa com DECIMAL
-            total_venda_itens = Decimal('0.00')
-            total_custo_detran_catalogo = Decimal('0.00')
-            total_custo_sindego_acumulado = Decimal('0.00') # <--- NOVO PARA CORRIGIR LUCRO
+            # --- SOMAS TOTAIS (Baseado no que foi salvo no item) ---
+            total_taxas_reais = Decimal('0.00')
+            total_honorarios_reais = Decimal('0.00')
+            total_custo_sindego = Decimal('0.00')
 
-            lista_nomes = []
+            lista_descricoes = []
             detalhes_texto = []
 
-            # Itera itens para somar e buscar custos de referência
             for item in orcamento.itens.all():
-                lista_nomes.append(item.servico_nome)
-                detalhes_texto.append(f"- {item.servico_nome}: R$ {item.valor}")
+                lista_descricoes.append(item.servico_nome)
+                detalhes_texto.append(f"- {item.servico_nome}: Total R$ {item.valor} (Tx: {item.valor_taxa} | Hon: {item.valor_honorario})")
                 
-                total_venda_itens += item.valor
+                # Soma direta dos valores salvos (Muito mais seguro!)
+                total_taxas_reais += (item.valor_taxa or 0)
+                total_honorarios_reais += (item.valor_honorario or 0)
 
-                # Busca o custo original no catálogo para comparação
-                servico_base = TipoServico.objects.filter(
+                # --- Cálculo da Taxa Sindicato (SINDEGO) ---
+                # Precisamos consultar o catálogo para ver a configuração de isenção/redução
+                servico_catalogo = TipoServico.objects.filter(
                     despachante=orcamento.despachante, 
-                    nome__iexact=item.servico_nome # Busca insensível a maiúsculas/minúsculas
+                    nome__iexact=item.servico_nome
                 ).first()
 
-                if servico_base:
-                    total_custo_detran_catalogo += servico_base.valor_base
-
-                    # --- LÓGICA DE SINDICATO (CRUCIAL) ---
-                    if servico_base.usa_taxa_sindego_reduzida:
-                        total_custo_sindego_acumulado += despachante.valor_taxa_sindego_reduzida
+                if servico_catalogo:
+                    # 1. Prioridade: ISENÇÃO
+                    if servico_catalogo.isenta_taxa_sindego:
+                        total_custo_sindego += Decimal('0.00')
+                    
+                    # 2. Prioridade: TAXA REDUZIDA
+                    elif servico_catalogo.usa_taxa_sindego_reduzida:
+                        total_custo_sindego += despachante.valor_taxa_sindego_reduzida
+                    
+                    # 3. Padrão: TAXA CHEIA
                     else:
-                        total_custo_sindego_acumulado += despachante.valor_taxa_sindego_padrao
+                        total_custo_sindego += despachante.valor_taxa_sindego_padrao
+                else:
+                    # Se não achar no catálogo (foi editado ou excluído), assume taxa padrão por segurança
+                    total_custo_sindego += despachante.valor_taxa_sindego_padrao
 
-            # --- A CORREÇÃO INTELIGENTE (PULO DO GATO) ---
-            # Verifica se o valor total cobrado cobre as taxas do catálogo
-            
-            saldo_preliminar = total_venda_itens - total_custo_detran_catalogo
-
-            if saldo_preliminar < 0:
-                # CENÁRIO A: O valor cobrado é MENOR que as taxas do catálogo.
-                # Interpretação: O Cliente vai pagar as taxas (DUA) por fora.
-                valor_taxas_final = Decimal('0.00')
-                quem_pagou = 'CLIENTE'
-                base_honorario = total_venda_itens # Tudo que entrou é honorário
-            else:
-                # CENÁRIO B: O valor cobrado cobre as taxas.
-                # Interpretação: O Despachante paga as taxas e desconta do total.
-                valor_taxas_final = total_custo_detran_catalogo
-                quem_pagou = 'DESPACHANTE'
-                base_honorario = saldo_preliminar
-
-            # --- APLICAÇÃO DO DESCONTO ---
+            # --- TRATAMENTO DE DESCONTO ---
             desconto = orcamento.desconto or Decimal('0.00')
             
-            # O desconto é subtraído do Honorário Base
-            valor_honorario_liquido = base_honorario - desconto
+            # O desconto sempre sai do honorário
+            honorario_liquido = total_honorarios_reais - desconto
+            if honorario_liquido < 0:
+                honorario_liquido = Decimal('0.00')
 
-            # Segurança: Honorário não pode ser negativo no sistema
-            if valor_honorario_liquido < 0:
-                valor_honorario_liquido = Decimal('0.00')
-
-            # --- CÁLCULO DE CUSTOS OPERACIONAIS (DECIMAL PURO) ---
-            # Converte as configurações para Decimal para evitar erro de float
+            # --- CÁLCULO DE CUSTOS VARIÁVEIS ---
             aliq_imposto = Decimal(str(despachante.aliquota_imposto or 0))
             aliq_banco = Decimal(str(despachante.taxa_bancaria_padrao or 0))
 
-            # Cálculo Seguro: Divide por 100
-            custo_impostos = valor_honorario_liquido * (aliq_imposto / 100)
+            # Imposto sobre Honorário Líquido
+            custo_impostos = honorario_liquido * (aliq_imposto / 100)
             
-            # A taxa bancária incide sobre o dinheiro que passou pela sua mão
-            valor_transacionado = valor_taxas_final + valor_honorario_liquido
+            # Taxa Bancária sobre o valor TOTAL transacionado (Taxas + Honorários)
+            valor_transacionado = total_taxas_reais + honorario_liquido
             custo_bancario = valor_transacionado * (aliq_banco / 100)
 
-            nomes_agrupados = " + ".join(lista_nomes)[:100]
+            # --- DEFINIÇÃO DE QUEM PAGOU O DETRAN ---
+            # Se cobramos taxas no orçamento, o dinheiro entrou na nossa conta, 
+            # logo, o escritório paga o Detran (Reembolso).
+            if total_taxas_reais > 0:
+                quem_pagou = 'DESPACHANTE'
+            else:
+                quem_pagou = 'CLIENTE'
+
+            # Montagem do texto de observação
+            nomes_agrupados = " + ".join(lista_descricoes)[:100]
             obs_final = (
                 f"Origem: Orçamento #{orcamento.id}.\n"
-                f"Venda Total: R$ {total_venda_itens} | Desconto: R$ {desconto}\n"
-                f"Taxas Detran: R$ {valor_taxas_final} (Pagador: {quem_pagou})\n"
-                f"Itens:\n" + "\n".join(detalhes_texto) + 
+                f"Itens: {len(lista_descricoes)}\n"
+                f"Taxas Detran: R$ {total_taxas_reais}\n"
+                f"Honorários: R$ {total_honorarios_reais} (Desc: {desconto})\n"
+                f"----------------\n" + 
+                "\n".join(detalhes_texto) + 
                 f"\n\nObs Original: {orcamento.observacoes or ''}"
             )
 
-            # 4. Criação do Processo (Atendimento)
+            # 4. CRIAÇÃO DO PROCESSO (ATENDIMENTO)
             Atendimento.objects.create(
                 despachante=orcamento.despachante,
                 cliente=orcamento.cliente,
                 veiculo=orcamento.veiculo, 
                 
-                # Deixamos tipo_servico vazio pois é um combo vindo do orçamento
-                tipo_servico=None,
+                tipo_servico=None, # Múltiplos serviços
                 servico=nomes_agrupados, 
                 
-                valor_taxas_detran=valor_taxas_final,
-                valor_honorarios=valor_honorario_liquido, 
+                # Valores Monetários Exatos
+                valor_taxas_detran=total_taxas_reais,
+                valor_honorarios=honorario_liquido, 
                 
+                # Custos Calculados
                 custo_impostos=custo_impostos,
                 custo_taxa_bancaria=custo_bancario,
-                custo_taxa_sindego=total_custo_sindego_acumulado, # <--- CORRIGIDO
+                custo_taxa_sindego=total_custo_sindego, 
                 
                 status_financeiro='ABERTO',
                 quem_pagou_detran=quem_pagou,
@@ -1035,14 +1056,14 @@ def aprovar_orcamento(request, id):
                 observacoes_internas=obs_final
             )
 
-        messages.success(request, f"Processo gerado! Honorário Líquido Calculado: R$ {valor_honorario_liquido}")
+        messages.success(request, f"Processo gerado com sucesso! Honorário Líquido: R$ {honorario_liquido}")
         return redirect('dashboard')
 
     except Exception as e:
         print(f"ERRO CRÍTICO AO APROVAR ORÇAMENTO: {e}") 
         messages.error(request, f"Erro crítico ao gerar processo: {str(e)}")
         return redirect('detalhe_orcamento', id=id)
-
+    
 @login_required
 def listar_orcamentos(request):
     termo = request.GET.get('termo', '').strip()
@@ -1181,15 +1202,18 @@ def relatorio_servicos(request):
     total_geral_valor = 0
 
     if cliente_placa:
+        # Filtra atendimentos aprovados
         atendimentos = Atendimento.objects.filter(
             despachante=request.user.perfilusuario.despachante,
             status='APROVADO' 
         ).select_related('cliente', 'veiculo').order_by('cliente__nome', '-data_solicitacao')
 
+        # Aplica filtros extras
         if data_inicio: atendimentos = atendimentos.filter(data_solicitacao__gte=data_inicio)
         if data_fim: atendimentos = atendimentos.filter(data_solicitacao__lte=data_fim)
         if status_fin: atendimentos = atendimentos.filter(status_financeiro=status_fin)
 
+        # Filtro de busca textual
         atendimentos = atendimentos.filter(Q(cliente__nome__icontains=cliente_placa) | Q(veiculo__placa__icontains=cliente_placa))
 
         relatorio_agrupado = {}
@@ -1203,6 +1227,8 @@ def relatorio_servicos(request):
             modelo = item.veiculo.modelo if item.veiculo else "---"
 
             cliente_id = item.cliente.id
+            
+            # Inicializa o grupo do cliente se não existir
             if cliente_id not in relatorio_agrupado:
                 tel_bruto = item.cliente.telefone or ""
                 tel_limpo = "".join([c for c in tel_bruto if c.isdigit()])
@@ -1215,9 +1241,11 @@ def relatorio_servicos(request):
                     'texto_whatsapp': '', 
                     'subtotal_taxas': 0,
                     'subtotal_honorarios': 0,
-                    'subtotal_valor': 0
+                    'subtotal_valor': 0,
+                    'subtotal_aberto': 0 # <--- NOVO CAMPO: Soma apenas o que falta pagar
                 }
 
+            # Adiciona dados do item na lista
             relatorio_agrupado[cliente_id]['itens'].append({
                 'id': item.id,
                 'data': item.data_solicitacao,
@@ -1228,25 +1256,36 @@ def relatorio_servicos(request):
                 'taxas': taxas,
                 'honorario': honorarios,
                 'valor_total': valor_total_item,
-                'status_fin': item.get_status_financeiro_display()
+                'status_fin': item.get_status_financeiro_display(),
+                'status_code': item.status_financeiro, # <--- IMPORTANTE: Usado no HTML para filtrar
+                'asaas_id': item.asaas_id
             })
 
+            # Formata linha para WhatsApp
             linha_formatada = f"• {item.servico} ({placa}) - R$ {valor_total_item:.2f}"
             relatorio_agrupado[cliente_id]['linhas_zap'].append(linha_formatada)
 
+            # Somas Totais do Cliente
             relatorio_agrupado[cliente_id]['subtotal_taxas'] += taxas
             relatorio_agrupado[cliente_id]['subtotal_honorarios'] += honorarios
             relatorio_agrupado[cliente_id]['subtotal_valor'] += valor_total_item
 
+            # --- TRAVA DE SEGURANÇA ---
+            # Só adiciona ao montante "cobrável" se estiver em aberto
+            if item.status_financeiro == 'ABERTO':
+                relatorio_agrupado[cliente_id]['subtotal_aberto'] += valor_total_item
+
+            # Somas Gerais do Relatório
             total_geral_taxas += taxas
             total_geral_honorarios += honorarios
             total_geral_valor += valor_total_item
 
+        # Monta textos finais do WhatsApp
         for c_id, dados in relatorio_agrupado.items():
             nome_cliente = dados['dados_cliente'].nome.split()[0] if dados['dados_cliente'].nome else "Cliente"
             total_formatado = f"{dados['subtotal_valor']:.2f}"
             lista_servicos = "\n".join(dados['linhas_zap'])
-            msg = f"Olá {nome_cliente}, segue o extrato dos seus serviços:\n\n{lista_servicos}\n\n*TOTAL A PAGAR: R$ {total_formatado}*"
+            msg = f"Olá {nome_cliente}, segue o extrato dos seus serviços:\n\n{lista_servicos}\n\n*TOTAL GERAL: R$ {total_formatado}*"
             dados['texto_whatsapp'] = msg
 
     context = {
@@ -1350,6 +1389,132 @@ def dar_baixa_pagamento(request, id):
     return redirect('fluxo_caixa')
 
 @login_required
+def gerar_boleto_agrupado(request, cliente_id):
+    if request.method != 'POST':
+        messages.error(request, "Ação inválida.")
+        return redirect('relatorio_servicos')
+
+    despachante = request.user.perfilusuario.despachante
+    cliente = get_object_or_404(Cliente, id=cliente_id, despachante=despachante)
+    
+    # 1. Validação da Chave API
+    ASAAS_API_KEY = despachante.asaas_api_key
+    if not ASAAS_API_KEY:
+        messages.warning(request, "⚠️ Configure sua Chave API do Asaas primeiro.")
+        return redirect('configuracoes_despachante')
+
+    # 2. Captura os IDs selecionados
+    lista_ids = request.POST.getlist('atendimentos_ids')
+    
+    atendimentos = Atendimento.objects.filter(
+        id__in=lista_ids, 
+        despachante=despachante, 
+        cliente=cliente,
+        status_financeiro='ABERTO'
+    ).select_related('veiculo') # Otimiza a busca da placa
+
+    if not atendimentos.exists():
+        messages.error(request, "Nenhum atendimento pendente encontrado para gerar boleto.")
+        return redirect('relatorio_servicos')
+
+    # 3. Somatório
+    valor_total_agrupado = sum(a.valor_total_cliente for a in atendimentos)
+    
+    # --- 4. MONTAGEM DA DESCRIÇÃO INTELIGENTE (ATUALIZADO) ---
+    lista_descricoes = []
+    for a in atendimentos:
+        placa = a.veiculo.placa if a.veiculo else "S/Placa"
+        ref = a.numero_atendimento or str(a.id)
+        # Formato: [ABC-1234 / Proc: 1050]
+        lista_descricoes.append(f"[{placa} - Proc:{ref}]")
+
+    # Junta tudo com vírgulas
+    resumo_veiculos = ", ".join(lista_descricoes)
+
+    # O Asaas tem limite de caracteres, então cortamos se for gigante (aprox 400 chars para sobrar espaço pro aviso)
+    if len(resumo_veiculos) > 400:
+        resumo_veiculos = resumo_veiculos[:397] + "..."
+
+    descricao_unificada = (
+        f"PAGAMENTO REF. {len(atendimentos)} SERVIÇOS DO ESCRITÓRIO {despachante.nome_fantasia.upper()}.\n\n"
+        f"VEÍCULOS/PROCESSOS:\n"
+        f"{resumo_veiculos}\n\n"
+        f"OBS: Este boleto unifica taxas e honorários. "
+        f"Para visualizar o detalhamento completo de cada serviço, "
+        f"solicite o EXTRATO DE SERVIÇOS ao seu Despachante."
+    )
+    # ---------------------------------------------------------
+
+    # 5. Integração Asaas
+    ASAAS_URL = "https://sandbox.asaas.com/api/v3" 
+    
+    headers = {
+        "Content-Type": "application/json",
+        "access_token": ASAAS_API_KEY
+    }
+
+    try:
+        # 5.1 Busca/Cria Cliente no Asaas
+        payload_cliente = {
+            "name": cliente.nome,
+            "cpfCnpj": cliente.cpf_cnpj,
+            "mobilePhone": cliente.telefone,
+            "email": cliente.email,
+            "postalCode": cliente.cep,
+            "address": cliente.rua,
+            "addressNumber": cliente.numero,
+            "province": cliente.bairro,
+            "externalReference": str(cliente.id)
+        }
+
+        req_cliente = requests.post(f"{ASAAS_URL}/customers", json=payload_cliente, headers=headers)
+        
+        if req_cliente.status_code == 200:
+            cliente_asaas_id = req_cliente.json().get('id')
+        elif "KB001" in req_cliente.text: 
+            req_busca = requests.get(f"{ASAAS_URL}/customers?cpfCnpj={cliente.cpf_cnpj}", headers=headers)
+            if req_busca.json()['data']:
+                cliente_asaas_id = req_busca.json()['data'][0]['id']
+            else:
+                raise Exception("Erro ao sincronizar cliente Asaas.")
+        else:
+            req_busca = requests.get(f"{ASAAS_URL}/customers?cpfCnpj={cliente.cpf_cnpj}", headers=headers)
+            if req_busca.json()['data']:
+                cliente_asaas_id = req_busca.json()['data'][0]['id']
+            else:
+                raise Exception(f"Erro Asaas Cliente: {req_cliente.text}")
+
+        # 5.2 Gera Cobrança Única com a Nova Descrição
+        payload_cobranca = {
+            "customer": cliente_asaas_id,
+            "billingType": "UNDEFINED",
+            "value": float(valor_total_agrupado),
+            "dueDate": (timezone.now() + timedelta(days=3)).strftime('%Y-%m-%d'),
+            "description": descricao_unificada, # <--- AQUI VAI O TEXTO NOVO
+            "externalReference": f"AGRUPADO_{cliente.id}_{timezone.now().timestamp()}"
+        }
+
+        req_cobranca = requests.post(f"{ASAAS_URL}/payments", json=payload_cobranca, headers=headers)
+        
+        if req_cobranca.status_code != 200:
+            raise Exception(f"Erro ao criar cobrança: {req_cobranca.text}")
+
+        dados_cobranca = req_cobranca.json()
+        boleto_id = dados_cobranca.get('id')
+        link_pagamento = dados_cobranca.get('invoiceUrl')
+
+        # 6. Salva o ID do boleto em TODOS os atendimentos
+        atendimentos.update(asaas_id=boleto_id)
+
+        messages.success(request, f"Boleto Unificado gerado! Valor: R$ {valor_total_agrupado}")
+        return redirect(link_pagamento)
+
+    except Exception as e:
+        print(f"ERRO BOLETO: {e}")
+        messages.error(request, "Erro na comunicação com Asaas.")
+        return redirect('relatorio_servicos')
+    
+@login_required
 @user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def dashboard_financeiro(request):
     despachante = request.user.perfilusuario.despachante
@@ -1439,6 +1604,7 @@ def relatorio_inadimplencia(request):
         lista_devedores.append({
             'id': item.id,
             'dias_atraso': dias_atraso,
+            'asaas_id': item.asaas_id,
             'cliente': item.cliente,
             'servico': item.servico,
             'veiculo': item.veiculo,
@@ -1517,6 +1683,7 @@ def configuracoes_despachante(request):
     despachante = request.user.perfilusuario.despachante
 
     if request.method == 'POST':
+        # --- 1. LÓGICA ORIGINAL (Mantida) ---
         aliquota_imposto = request.POST.get('aliquota_imposto')
         taxa_bancaria = request.POST.get('taxa_bancaria_padrao')
         
@@ -1535,9 +1702,18 @@ def configuracoes_despachante(request):
         if taxa_sindego_reduzida:
             despachante.valor_taxa_sindego_reduzida = taxa_sindego_reduzida.replace('.', '').replace(',', '.')
 
+        # --- 2. ATUALIZAÇÃO: SALVAR CHAVE ASAAS (Novo) ---
+        api_key_asaas = request.POST.get('asaas_api_key')
+        
+        # Verifica se o campo foi enviado no formulário
+        if api_key_asaas is not None:
+            # .strip() remove espaços em branco antes e depois (comum ao copiar e colar)
+            despachante.asaas_api_key = api_key_asaas.strip()
+
+        # Salva tudo no banco de dados
         despachante.save()
         
-        messages.success(request, 'Configurações financeiras atualizadas com sucesso!')
+        messages.success(request, 'Configurações financeiras e integração atualizadas com sucesso!')
         return redirect('configuracoes_despachante')
 
     return render(request, 'cadastro/configuracoes_despachante.html', {'despachante': despachante})
@@ -1970,3 +2146,130 @@ def relatorio_auditoria(request):
     }
     
     return render(request, 'relatorios/auditoria.html', context)
+
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse, HttpResponse
+import json
+
+# ==============================================================================
+# WEBHOOKS (INTEGRAÇÃO ASAAS)
+# ==============================================================================
+
+@login_required
+def gerar_cobranca_asaas(request, id):
+    despachante = request.user.perfilusuario.despachante
+    atendimento = get_object_or_404(Atendimento, id=id, despachante=despachante)
+    
+    # 1. VALIDAÇÃO DE SEGURANÇA
+    ASAAS_API_KEY = despachante.asaas_api_key
+    
+    if not ASAAS_API_KEY:
+        messages.warning(request, "⚠️ Para gerar boletos, configure sua Chave de API do Asaas em 'Configurações'.")
+        return redirect('configuracoes_despachante')
+
+    # Validações financeiras
+    if atendimento.status_financeiro == 'PAGO':
+        messages.warning(request, "Este atendimento já consta como pago.")
+        return redirect('fluxo_caixa')
+        
+    valor_cobranca = float(atendimento.valor_total_cliente) # Taxas + Honorários
+    
+    if valor_cobranca <= 0:
+        messages.error(request, "O valor total do atendimento está zerado.")
+        return redirect('fluxo_caixa')
+
+    # 2. CONFIGURAÇÃO DA REQUISIÇÃO
+    # Use 'https://sandbox.asaas.com/api/v3' para testes
+    # Use 'https://www.asaas.com/api/v3' para produção (quando for valer dinheiro)
+    ASAAS_URL = "https://sandbox.asaas.com/api/v3" 
+    
+    headers = {
+        "Content-Type": "application/json",
+        "access_token": ASAAS_API_KEY
+    }
+
+    try:
+        # 3. PREPARAÇÃO DOS DADOS DO CLIENTE (COM ENDEREÇO)
+        payload_cliente = {
+            "name": atendimento.cliente.nome,
+            "cpfCnpj": atendimento.cliente.cpf_cnpj,
+            "mobilePhone": atendimento.cliente.telefone,
+            "email": atendimento.cliente.email,
+            
+            # --- DADOS DE ENDEREÇO (NOVO) ---
+            "postalCode": atendimento.cliente.cep,
+            "address": atendimento.cliente.rua,
+            "addressNumber": atendimento.cliente.numero,
+            "complement": atendimento.cliente.complemento or "",
+            "province": atendimento.cliente.bairro, # Asaas chama bairro de 'province'
+            "externalReference": str(atendimento.cliente.id)
+        }
+        
+        # Tenta criar o cliente
+        req_cliente = requests.post(f"{ASAAS_URL}/customers", json=payload_cliente, headers=headers)
+        
+        # Lógica de Cliente Existente
+        if req_cliente.status_code == 400 and "KB001" in req_cliente.text:
+             # Se já existe (erro KB001), buscamos o ID pelo CPF
+             req_busca = requests.get(f"{ASAAS_URL}/customers?cpfCnpj={atendimento.cliente.cpf_cnpj}", headers=headers)
+             if req_busca.json()['data']:
+                 cliente_asaas_id = req_busca.json()['data'][0]['id']
+                 
+                 # IMPORTANTE: Atualiza o endereço do cliente no Asaas com os dados novos
+                 requests.post(f"{ASAAS_URL}/customers/{cliente_asaas_id}", json=payload_cliente, headers=headers)
+             else:
+                 raise Exception("Erro ao sincronizar cliente no Asaas.")
+        elif req_cliente.status_code == 200:
+            cliente_asaas_id = req_cliente.json().get('id')
+        else:
+             # Fallback de busca se der outro erro
+             req_busca = requests.get(f"{ASAAS_URL}/customers?cpfCnpj={atendimento.cliente.cpf_cnpj}", headers=headers)
+             if req_busca.status_code == 200 and req_busca.json()['data']:
+                 cliente_asaas_id = req_busca.json()['data'][0]['id']
+             else:
+                 raise Exception(f"Erro Asaas Cliente: {req_cliente.text}")
+
+        # 4. GERAÇÃO DA COBRANÇA COM DESCRIÇÃO DETALHADA
+        # Monta texto bonito para o boleto
+        veiculo_info = "Veículo não informado"
+        if atendimento.veiculo:
+            veiculo_info = f"{atendimento.veiculo.modelo} - Placa: {atendimento.veiculo.placa}"
+            
+        descricao_servico = (
+            f"REF: Processo {atendimento.numero_atendimento or atendimento.id}\n"
+            f"Serviço: {atendimento.servico}\n"
+            f"{veiculo_info}"
+        )
+
+        payload_cobranca = {
+            "customer": cliente_asaas_id,
+            "billingType": "UNDEFINED", # Permite Pix ou Boleto
+            "value": valor_cobranca,
+            "dueDate": (timezone.now() + timedelta(days=3)).strftime('%Y-%m-%d'),
+            
+            # --- DESCRIÇÃO DETALHADA (NOVO) ---
+            "description": descricao_servico,
+            
+            "externalReference": str(atendimento.id)
+        }
+
+        req_cobranca = requests.post(f"{ASAAS_URL}/payments", json=payload_cobranca, headers=headers)
+        
+        if req_cobranca.status_code != 200:
+             raise Exception(f"Erro Asaas Cobrança: {req_cobranca.text}")
+
+        dados_cobranca = req_cobranca.json()
+        
+        # 5. SALVA E REDIRECIONA
+        atendimento.asaas_id = dados_cobranca.get('id')
+        atendimento.save()
+        
+        link_pagamento = dados_cobranca.get('invoiceUrl')
+        
+        messages.success(request, "Link de pagamento gerado com sucesso!")
+        return redirect(link_pagamento) 
+
+    except Exception as e:
+        print(f"ERRO INTEGRAÇÃO ASAAS: {e}")
+        messages.error(request, "Falha na comunicação com o Asaas. Verifique sua chave de API e conexão.")
+        return redirect('fluxo_caixa')
