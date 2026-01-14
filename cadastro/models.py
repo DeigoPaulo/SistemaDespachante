@@ -6,6 +6,7 @@ import uuid
 # ==============================================================================
 # 1. CADASTRO DO ESCRITÓRIO (SaaS)
 # ==============================================================================
+
 class Despachante(models.Model):
     nome_fantasia = models.CharField(max_length=255)
     razao_social = models.CharField(max_length=255)
@@ -27,21 +28,31 @@ class Despachante(models.Model):
         validators=[FileExtensionValidator(['png'])]
     )
 
-    # --- CONFIGURAÇÕES FINANCEIRAS (AUTOMATIZAÇÃO) ---
+    # --- CONFIGURAÇÕES FINANCEIRAS (PORCENTAGENS) ---
     aliquota_imposto = models.DecimalField(
         max_digits=5, decimal_places=2, default=0.00, 
-        help_text="Alíquota de imposto (ex: 5.00 para 5%)"
+        help_text="Alíquota de imposto sobre honorários (ex: 5.00 para 5%)"
     )
     taxa_bancaria_padrao = models.DecimalField(
         max_digits=5, decimal_places=2, default=0.00, 
-        help_text="Taxa bancária/maquininha (ex: 2.50 para 2.5%)"
+        help_text="Taxa bancária/maquininha média (ex: 2.50 para 2.5%)"
     )
 
-    # --- TAXAS SINDEGO ---
+    # --- CONFIGURAÇÕES FINANCEIRAS (VALORES FIXOS EM R$) ---
+    
+    # [NOVO] Honorário Padrão para Orçamentos
+    valor_honorario_padrao = models.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        default=0.00, 
+        verbose_name="Honorário Padrão (Orçamento)",
+        help_text="Valor sugerido automaticamente no campo de honorários ao criar um novo orçamento."
+    )
+
     valor_taxa_sindego_padrao = models.DecimalField(
         max_digits=10, decimal_places=2, default=13.00, 
         verbose_name="Taxa Sindego (Padrão)",
-        help_text="Valor cobrado na maioria dos processos."
+        help_text="Valor cobrado na maioria dos processos (Custo Operacional)."
     )
     valor_taxa_sindego_reduzida = models.DecimalField(
         max_digits=10, decimal_places=2, default=6.50, 
@@ -49,10 +60,10 @@ class Despachante(models.Model):
         help_text="Valor cobrado em processos específicos."
     )
 
-    # --- CAMPOS DO SISTEMA (ASSINATURA/ASAAS) ---
+    # --- CAMPOS DO SISTEMA (SUA COBRANÇA DE MENSALIDADE) ---
     email_fatura = models.EmailField(
         blank=True, null=True,
-        help_text="E-mail que receberá os boletos/Pix da mensalidade."
+        help_text="E-mail que receberá os boletos/Pix da mensalidade do sistema."
     )
     valor_mensalidade = models.DecimalField(
         max_digits=10, decimal_places=2, default=100.00,
@@ -66,14 +77,15 @@ class Despachante(models.Model):
         verbose_name="Dia de Vencimento Preferencial"
     )
 
-    # ID do Despachante no Asaas (Para você cobrar a mensalidade dele)
+    # ID do Despachante no SEU Asaas (Para você cobrar a mensalidade dele)
     asaas_customer_id = models.CharField(
         max_length=50, blank=True, null=True,
         verbose_name="ID Asaas (Cliente)",
         help_text="ID gerado automaticamente pela integração."
     )
 
-    # --- NOVO CAMPO: Chave de API do Despachante (Para ele cobrar os clientes dele) ---
+    # --- INTEGRAÇÃO (COBRANÇA DOS CLIENTES DELE) ---
+    # Chave de API do Despachante (Para ele cobrar os clientes dele)
     asaas_api_key = models.CharField(
         max_length=255, 
         blank=True, 
@@ -392,19 +404,28 @@ class Orcamento(models.Model):
         ('CANCELADO', 'Cancelado/Recusado'),
     )
 
+    # --- CAMPOS DE RELACIONAMENTO E IDENTIFICAÇÃO ---
     despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
     cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True)
     veiculo = models.ForeignKey(Veiculo, on_delete=models.SET_NULL, null=True, blank=True)
     nome_cliente_avulso = models.CharField(max_length=200, blank=True, null=True)
 
+    # --- DATAS E CONTROLE ---
     data_criacao = models.DateTimeField(auto_now_add=True)
     validade = models.DateField(null=True, blank=True)
-    
     observacoes = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_ORCAMENTO, default='PENDENTE')
     
-    valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    status = models.CharField(
+        max_length=20, 
+        choices=STATUS_ORCAMENTO, 
+        default='PENDENTE'
+    )
+
+    # --- FINANCEIRO (VALORES GLOBAIS) ---
+    valor_honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Honorários Totais")
+    valor_taxas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Soma das Taxas")
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    valor_total = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
 
     class Meta:
         ordering = ['-data_criacao']
@@ -413,15 +434,11 @@ class Orcamento(models.Model):
         ]
 
     def __str__(self):
-        nome = self.cliente.nome if self.cliente else self.nome_cliente_avulso
-        return f"Orçamento #{self.id} - {nome}"
+        return f"Orçamento #{self.id} - {self.nome_cliente_display}"
 
     @property
-    def valor_final(self):
-        return self.valor_total - self.desconto
-    
-    @property
     def nome_cliente_display(self):
+        """Retorna o nome do cliente (seja do banco ou avulso)"""
         if self.cliente:
             return self.cliente.nome
         return self.nome_cliente_avulso or "Cliente Desconhecido"
@@ -431,23 +448,12 @@ class ItemOrcamento(models.Model):
     orcamento = models.ForeignKey(Orcamento, related_name='itens', on_delete=models.CASCADE)
     servico_nome = models.CharField(max_length=200)
     
-    # Mantém o valor total do item
-    valor = models.DecimalField(max_digits=10, decimal_places=2)
-    
-    # --- NOVOS CAMPOS: Separação de Taxas e Honorários ---
-    valor_honorario = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=0.00,
-        verbose_name="Honorários (Lucro)"
-    )
-    valor_taxa = models.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=0.00,
-        verbose_name="Taxas (Estado)"
-    )
+    # [5] AQUI FICA APENAS A TAXA DO DETRAN DESTE ITEM
+    # Ex: Licenciamento (R$ 150,00)
+    valor = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Valor da Taxa")
 
+    # Removemos valor_honorario e valor_taxa daqui para não duplicar informação.
+    
     def __str__(self):
         return f"{self.servico_nome} - R$ {self.valor}"
 

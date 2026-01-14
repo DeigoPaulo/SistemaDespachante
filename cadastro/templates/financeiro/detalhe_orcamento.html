@@ -84,38 +84,19 @@
                 <table class="table table-bordered mb-4 border-dark table-sm-print">
                     <thead class="bg-light">
                         <tr>
-                            <th class="ps-3 text-uppercase small text-muted">Descrição do Serviço</th>
-                            <th class="text-center text-uppercase small text-muted" width="15%">Taxas</th>
-                            <th class="text-center text-uppercase small text-muted" width="15%">Honorários</th>
-                            <th class="text-end pe-3 text-uppercase small text-muted fw-bold" width="20%">Total</th>
+                            <th class="ps-3 text-uppercase small text-muted">Descrição do Serviço / Taxa</th>
+                            <th class="text-end pe-3 text-uppercase small text-muted fw-bold" width="150px">Valor (R$)</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for item in orcamento.itens.all %}
                         <tr>
                             <td class="ps-3 fw-bold text-dark align-middle">{{ item.servico_nome }}</td>
-                            
-                            <td class="text-center align-middle text-muted small">
-                                {% if item.valor_taxa > 0 %}
-                                    R$ {{ item.valor_taxa }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                            
-                            <td class="text-center align-middle text-muted small">
-                                {% if item.valor_honorario > 0 %}
-                                    R$ {{ item.valor_honorario }}
-                                {% else %}
-                                    -
-                                {% endif %}
-                            </td>
-                            
-                            <td class="text-end pe-3 align-middle fw-bold bg-light">R$ {{ item.valor }}</td>
+                            <td class="text-end pe-3 align-middle text-muted">R$ {{ item.valor }}</td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="4" class="text-center py-4 text-muted fst-italic">
+                            <td colspan="2" class="text-center py-4 text-muted fst-italic">
                                 Nenhum serviço registrado.
                             </td>
                         </tr>
@@ -127,13 +108,21 @@
             <div class="row justify-content-end">
                 <div class="col-md-6 col-print-6">
                     <table class="table table-sm border-0">
+                        <tr>
+                            <td class="text-muted text-end border-0">Soma das Taxas:</td>
+                            <td class="text-end text-muted border-0">
+                                R$ {{ orcamento.valor_taxas|floatformat:2 }}
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <td class="text-muted text-end border-0">Honorários (Serviço):</td>
+                            <td class="text-end text-muted border-0">
+                                R$ {{ orcamento.valor_honorarios|floatformat:2 }}
+                            </td>
+                        </tr>
+
                         {% if orcamento.desconto and orcamento.desconto > 0 %}
-                            <tr>
-                                <td class="text-muted text-end border-0">Subtotal:</td>
-                                <td class="text-end fw-bold border-0 text-muted">
-                                    R$ {{ orcamento.valor_total|add:orcamento.desconto|floatformat:2 }}
-                                </td>
-                            </tr>
                             <tr>
                                 <td class="text-danger text-end border-0">Desconto:</td>
                                 <td class="text-end text-danger border-0">- R$ {{ orcamento.desconto }}</td>
@@ -169,87 +158,33 @@
 {% block extra_css %}
 <style>
     /* AJUSTES PARA TELA */
-    .p-print-0 { padding: 1.5rem !important; } /* Padding padrão na tela */
+    .p-print-0 { padding: 1.5rem !important; }
 
     /* === AJUSTES PARA IMPRESSÃO A4 === */
     @media print {
-        /* 1. Reset Global */
-        body * {
-            visibility: hidden;
-            height: 0;
-            overflow: hidden;
-        }
+        body * { visibility: hidden; height: 0; overflow: hidden; }
+        @page { size: A4; margin: 1cm; }
 
-        /* 2. Definir a página A4 com margens seguras */
-        @page {
-            size: A4;
-            margin: 1cm; /* Margem física da impressora */
-        }
-
-        /* 3. Mostrar e posicionar o orçamento */
         #folha-orcamento, #folha-orcamento * {
-            visibility: visible;
-            height: auto;
-            color: #000 !important; /* Força cor preta */
-            overflow: visible;
+            visibility: visible; height: auto; color: #000 !important; overflow: visible;
         }
 
         #folha-orcamento {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0 !important;
-            padding: 0 !important; /* Remove padding interno para ganhar espaço */
-            border: none !important;
-            box-shadow: none !important;
-            background-color: white !important;
+            position: absolute; left: 0; top: 0; width: 100%; margin: 0 !important; padding: 0 !important;
+            border: none !important; box-shadow: none !important; background-color: white !important;
         }
 
-        /* 4. Forçar largura total das colunas do Bootstrap */
-        .print-full-width {
-            width: 100% !important;
-            max-width: 100% !important;
-            flex: 0 0 100% !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-
-        /* 5. Ajuste da coluna de totais */
-        .col-print-6 {
-            width: 50% !important;
-            float: right !important;
-            margin-left: auto !important;
-        }
-
-        /* 6. Esconder elementos de tela */
-        .d-print-none, header, footer, .sidebar {
-            display: none !important;
-        }
-
-        /* 7. Estilos visuais para papel */
-        .bg-light {
-            background-color: #f8f9fa !important;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
+        .print-full-width { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; margin: 0 !important; padding: 0 !important; }
+        .col-print-6 { width: 50% !important; float: right !important; margin-left: auto !important; }
+        .d-print-none, header, footer, .sidebar { display: none !important; }
         
-        .table-bordered th, .table-bordered td { 
-            border: 1px solid #000 !important; 
-        }
-
-        /* Reduzir fonte levemente se necessário para caber */
-        body {
-            font-size: 10pt;
-        }
-        
-        /* Flexbox Fix */
+        .bg-light { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .table-bordered th, .table-bordered td { border: 1px solid #000 !important; }
+        body { font-size: 10pt; }
         .d-flex { display: flex !important; }
         .justify-content-between { justify-content: space-between !important; }
         .align-items-end { align-items: flex-end !important; }
         .text-end { text-align: right !important; }
-        
-        /* Imagem */
         img { max-width: 200px !important; }
     }
 </style>

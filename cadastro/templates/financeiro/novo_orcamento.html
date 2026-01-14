@@ -12,6 +12,15 @@
         min-height: 38px;
         padding-top: 4px;
     }
+    /* Destaque para o campo de honorários (o campo verde) */
+    .input-honorario-destaque {
+        font-weight: bold;
+        color: #198754;
+        background-color: #f8fff9 !important;
+    }
+    .bg-dark-custom {
+        background-color: #212529 !important;
+    }
 </style>
 {% endblock %}
 
@@ -26,7 +35,7 @@
                 <h2 class="fw-bold mb-0 text-dark">
                     <i class="fas fa-file-invoice-dollar text-success me-2"></i> Novo Orçamento
                 </h2>
-                <a href="{% url 'dashboard' %}" class="btn btn-outline-secondary">Cancelar</a>
+                <a href="{% url 'listar_orcamentos' %}" class="btn btn-outline-secondary">Cancelar</a>
             </div>
 
             <div class="card shadow-sm border-0 mb-4">
@@ -50,9 +59,6 @@
                                 <option value="">Digite Nome, CPF/CNPJ ou Placa...</option>
                             </select>
                         </div>
-                        <div class="form-text text-muted small mt-1">
-                            O sistema buscará automaticamente em todos os campos.
-                        </div>
                     </div>
 
                     <div id="container_cliente_avulso" class="d-none">
@@ -60,10 +66,7 @@
                         <div class="input-group">
                             <span class="input-group-text bg-warning border-end-0 text-dark"><i class="fas fa-user-edit"></i></span>
                             <input type="text" name="cliente_nome_avulso" id="input_nome_avulso" 
-                                   class="form-control border-start-0 bg-light" placeholder="Digite o nome para sair no orçamento...">
-                        </div>
-                        <div class="form-text text-muted small mt-2">
-                            <i class="fas fa-info-circle me-1"></i> Use esta opção apenas para orçamentos rápidos. Este cliente <strong>não</strong> será salvo no banco de dados.
+                                   class="form-control border-start-0 bg-light" placeholder="Digite o nome para o orçamento...">
                         </div>
                     </div>
 
@@ -75,53 +78,45 @@
                         <div class="input-group">
                             <span class="input-group-text bg-white text-primary"><i class="fas fa-car-side"></i></span>
                             <select name="veiculo_id" id="select_veiculo_orcamento" class="form-select">
-                                <option value="">-- Selecione um Veículo do Cliente --</option>
-                                </select>
-                            <button type="button" class="btn btn-outline-secondary" id="btn_limpar_veiculo" title="Desmarcar Veículo">
+                                <option value="">-- Selecione um Veículo --</option>
+                            </select>
+                            <button type="button" class="btn btn-outline-secondary" id="btn_limpar_veiculo">
                                 <i class="fas fa-times"></i>
                             </button>
-                        </div>
-                        <div class="form-text text-muted small">
-                            <i class="fas fa-check-circle text-success me-1"></i> Se você selecionar um veículo aqui, o processo gerado já sairá vinculado à placa correta.
                         </div>
                     </div>
                 </div>
             </div>
 
             <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                    <h6 class="fw-bold mb-0 text-primary">2. Itens do Serviço</h6>
+                <div class="card-header bg-white py-3">
+                    <h6 class="fw-bold mb-0 text-primary">2. Itens / Taxas do Detran</h6>
                 </div>
                 <div class="card-body p-0">
                     <table class="table table-hover align-middle mb-0" id="tabela-itens">
                         <thead class="table-light small text-center">
                             <tr>
-                                <th class="text-start ps-4">Descrição do Serviço</th>
-                                <th width="150px">Valor Total (R$)</th>
+                                <th class="text-start ps-4">Descrição do Item</th>
+                                <th width="180px">Custo (Taxa R$)</th>
                                 <th width="50px"></th>
                             </tr>
                         </thead>
-                        
                         <tbody id="lista_itens_adicionados">
-                        </tbody>
-
+                            </tbody>
                         <tfoot class="bg-light">
                             <tr>
                                 <td colspan="3" class="p-3">
-                                    <label class="small text-muted fw-bold mb-1">Adicionar Serviço:</label>
+                                    <label class="small text-muted fw-bold mb-1">Adicionar Item (Taxa):</label>
                                     <div class="input-group">
-                                        <input class="form-control" list="datalistOptions" id="input_busca_servico" placeholder="Digite para buscar (ex: Licenciamento)...">
-                                        
+                                        <input class="form-control" list="datalistOptions" id="input_busca_servico" placeholder="Busque o serviço...">
                                         <datalist id="datalistOptions">
                                             {% for servico in servicos %}
                                                 <option value="{{ servico.nome }}" 
                                                         data-id="{{ servico.id }}" 
-                                                        data-honorario="{{ servico.honorarios }}"
                                                         data-taxa="{{ servico.valor_base }}">
                                                 </option>
                                             {% endfor %}
                                         </datalist>
-
                                         <button type="button" class="btn btn-primary px-4" id="btn-add-item">
                                             <i class="fas fa-plus me-1"></i> Adicionar
                                         </button>
@@ -133,53 +128,53 @@
                 </div>
             </div>
 
-            <div class="card shadow-sm border-0 mb-5 bg-dark text-white">
+            <div class="card shadow-sm border-0 mb-5 bg-dark-custom text-white">
                 <div class="card-body p-4">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <label class="form-label small text-white-50 fw-bold">Observações</label>
-                            <textarea name="observacoes" class="form-control bg-secondary text-white border-0" rows="4" placeholder="Condições de pagamento, prazos, validade..."></textarea>
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <label class="form-label small text-white-50 fw-bold">Observações do Orçamento</label>
+                            <textarea name="observacoes" class="form-control bg-secondary text-white border-0" rows="5" placeholder="Ex: Válido por 5 dias, forma de pagamento..."></textarea>
                         </div>
                         
-                        <div class="col-md-6 mt-3 mt-md-0">
-                            <div class="d-flex justify-content-between mb-1 text-white-50 small">
-                                <span>Total Taxas (Sem desconto):</span>
-                                <span id="lbl_taxas">R$ 0,00</span>
+                        <div class="col-md-6">
+                            <div class="d-flex justify-content-between mb-3 text-white-50 small align-items-center border-bottom border-secondary pb-2">
+                                <span>Total Taxas (Detran/Outros):</span>
+                                <span class="fs-5 text-white fw-bold" id="lbl_taxas">R$ 0,00</span>
                             </div>
-                            <div class="d-flex justify-content-between mb-2 text-white-50 small">
-                                <span>Total Honorários:</span>
-                                <span id="lbl_honorarios">R$ 0,00</span>
-                            </div>
-                            
-                            <hr class="border-white opacity-25 my-2">
 
-                            <div class="d-flex justify-content-between mb-2 align-items-center">
-                                <span>Subtotal:</span>
-                                <span class="fw-bold fs-5" id="lbl_subtotal">R$ 0,00</span>
-                            </div>
-                            
-                            <div class="d-flex justify-content-between align-items-center mb-3">
-                                <div>
-                                    <span>Desconto (R$):</span>
-                                    <br><small class="text-warning" style="font-size: 0.7rem;">*Apenas sobre honorários</small>
+                            <div class="mb-3">
+                                <label class="form-label small text-success fw-bold text-uppercase d-flex justify-content-between">
+                                    <span><i class="fas fa-hand-holding-usd me-1"></i> Seus Honorários</span>
+                                    <span class="text-white-50" style="text-transform: none; font-weight: normal;">(Pelo serviço)</span>
+                                </label>
+                                <div class="input-group input-group-lg">
+                                    <span class="input-group-text bg-success text-white border-0 fw-bold">R$</span>
+                                    <input type="text" name="honorarios_total" id="input_honorarios_total" 
+                                           class="form-control input-honorario-destaque text-end mask-money"
+                                           value="{{ user.perfilusuario.despachante.valor_honorario_padrao|floatformat:2 }}" required>
                                 </div>
-                                <input type="number" step="0.01" name="desconto" id="input_desconto" 
-                                       class="form-control form-control-sm text-end w-25" value="0.00">
                             </div>
                             
-                            <hr class="border-white opacity-25">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <span class="text-white-50 small">Desconto no Total (R$):</span>
+                                <div class="input-group input-group-sm w-50">
+                                    <span class="input-group-text bg-secondary text-white border-0">R$</span>
+                                    <input type="text" name="desconto" id="input_desconto" 
+                                           class="form-control bg-secondary text-white border-0 text-end mask-money" placeholder="0,00">
+                                </div>
+                            </div>
                             
-                            <div class="d-flex justify-content-between fs-3 fw-bold text-success">
-                                <span>Total Final:</span>
+                            <div class="d-flex justify-content-between fs-2 fw-bold text-success mt-2 p-3 bg-white rounded shadow-lg animate__animated animate__pulse animate__infinite">
+                                <span class="text-dark">TOTAL:</span>
                                 <span id="lbl_total">R$ 0,00</span>
-                                <input type="hidden" name="valor_total_hidden" id="valor_total_hidden" value="0.00">
+                                <input type="hidden" id="valor_total_hidden" value="0.00">
                             </div>
                         </div>
                     </div>
                 </div>
                 <div class="card-footer border-0 bg-success p-0">
                     <button type="submit" class="btn btn-success w-100 py-3 fw-bold fs-5 rounded-0 rounded-bottom">
-                        <i class="fas fa-check-circle me-2"></i> GERAR ORÇAMENTO
+                        <i class="fas fa-check-circle me-2"></i> FINALIZAR E GERAR ORÇAMENTO
                     </button>
                 </div>
             </div>
@@ -191,103 +186,49 @@
 
 {% block extra_js %}
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
 <script>
     $(document).ready(function() {
         
-        // --- 1. CONFIGURAÇÃO DO SELECT2 (CLIENTE) ---
-        $('#select_cliente_orcamento').select2({
-            theme: 'bootstrap-5',
-            width: '100%',
-            placeholder: 'Digite Nome, CPF/CNPJ ou Placa...',
-            allowClear: true,
-            language: {
-                inputTooShort: function() { return "Digite 3 caracteres..."; },
-                noResults: function() { return "Nenhum cliente encontrado."; },
-                searching: function() { return "Buscando..."; }
-            },
-            ajax: {
-                url: "{% url 'buscar_clientes' %}", 
-                dataType: 'json',
-                delay: 250,
-                data: function (params) {
-                    return { term: params.term };
-                },
-                processResults: function (data) {
-                    return { results: data.results };
-                },
-                cache: true
-            },
-            minimumInputLength: 3
-        });
+        // --- MÁSCARAS ---
+        $('.mask-money').mask('#.##0,00', {reverse: true});
 
-        // --- 2. LÓGICA DE VEÍCULOS ---
-        $('#select_cliente_orcamento').on('select2:select', function (e) {
-            var data = e.params.data;
-            var clienteId = data.id;
-
-            $('#container_veiculo_orcamento').removeClass('d-none');
-            var selectVeiculo = $('#select_veiculo_orcamento');
-            selectVeiculo.empty().append('<option value="">Carregando veículos...</option>');
-            
-            $.ajax({
-                url: '/api/veiculos-cliente/' + clienteId + '/', 
-                dataType: 'json',
-                success: function(veiculos) {
-                    selectVeiculo.empty();
-                    selectVeiculo.append('<option value="">-- Selecione um Veículo (Opcional) --</option>');
-                    
-                    if (veiculos.length > 0) {
-                        veiculos.forEach(function(v) {
-                            selectVeiculo.append(`<option value="${v.id}">${v.placa} - ${v.modelo}</option>`);
-                        });
-                    } else {
-                        selectVeiculo.append('<option value="" disabled>Cliente sem veículos cadastrados</option>');
-                    }
-                },
-                error: function() {
-                    selectVeiculo.empty().append('<option value="">Erro ao carregar veículos</option>');
-                }
-            });
-        });
-
-        $('#select_cliente_orcamento').on('select2:clear', function (e) {
-            $('#container_veiculo_orcamento').addClass('d-none');
-            $('#select_veiculo_orcamento').empty();
-        });
-
-        $('#btn_limpar_veiculo').click(function() {
-            $('#select_veiculo_orcamento').val('');
-        });
-
-
-        // --- 3. LÓGICA DE ALTERNÂNCIA (BUSCA vs AVULSO) ---
-        const switchAvulso = document.getElementById('switch_cliente_avulso');
-        const containerBanco = document.getElementById('container_busca_banco');
-        const containerAvulso = document.getElementById('container_cliente_avulso');
-        const inputNomeAvulso = document.getElementById('input_nome_avulso');
-        const containerVeiculo = document.getElementById('container_veiculo_orcamento');
-
-        switchAvulso.addEventListener('change', function() {
-            if (this.checked) {
-                containerBanco.classList.add('d-none');
-                containerAvulso.classList.remove('d-none');
-                containerVeiculo.classList.add('d-none'); 
-                inputNomeAvulso.focus();
-                $('#select_cliente_orcamento').val(null).trigger('change');
-            } else {
-                containerBanco.classList.remove('d-none');
-                containerAvulso.classList.add('d-none');
-                inputNomeAvulso.value = '';
-            }
-        });
-
-        // --- 4. LÓGICA DE CÁLCULO ATUALIZADA (TAXAS vs HONORÁRIOS) ---
         let totalTaxasGlobal = 0.00;
-        let totalHonorariosGlobal = 0.00;
 
-        document.getElementById('btn-add-item').addEventListener('click', function() {
+        // --- FUNÇÕES DE CONVERSÃO ---
+        function parseMoney(valor) {
+            if (!valor) return 0;
+            // Remove ponto de milhar e troca vírgula por ponto decimal
+            let limpo = valor.toString().replace(/\./g, '').replace(',', '.');
+            return parseFloat(limpo) || 0;
+        }
+
+        function formatMoney(valor) {
+            return valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // --- CÁLCULO DINÂMICO ---
+        function atualizarTotais() {
+            const honorarios = parseMoney($('#input_honorarios_total').val());
+            const desconto = parseMoney($('#input_desconto').val());
+
+            const subtotal = totalTaxasGlobal + honorarios;
+            let totalFinal = subtotal - desconto;
+            
+            if(totalFinal < 0) totalFinal = 0;
+
+            $('#lbl_taxas').text('R$ ' + formatMoney(totalTaxasGlobal));
+            $('#lbl_total').text('R$ ' + formatMoney(totalFinal));
+            $('#valor_total_hidden').val(totalFinal.toFixed(2));
+        }
+
+        // Eventos de Input
+        $('#input_honorarios_total, #input_desconto').on('input', atualizarTotais);
+
+        // --- ADICIONAR ITEM ---
+        $('#btn-add-item').on('click', function() {
             const input = document.getElementById('input_busca_servico');
             const datalist = document.getElementById('datalistOptions');
             const valorDigitado = input.value;
@@ -301,131 +242,98 @@
             }
 
             if (!servicoSelecionado) {
-                alert("Por favor, selecione um serviço válido da lista sugerida.");
+                alert("Por favor, selecione um serviço da lista.");
                 return;
             }
 
             const id = servicoSelecionado.getAttribute('data-id');
             const nome = servicoSelecionado.value;
+            let taxaRaw = servicoSelecionado.getAttribute('data-taxa'); 
             
-            // Tratamento de valores (substituir vírgula por ponto)
-            let rawHon = servicoSelecionado.getAttribute('data-honorario');
-            let rawTax = servicoSelecionado.getAttribute('data-taxa');
-            
-            if(typeof rawHon === 'string') rawHon = rawHon.replace(',', '.');
-            if(typeof rawTax === 'string') rawTax = rawTax.replace(',', '.');
-            
-            const honorario = parseFloat(rawHon) || 0;
-            const taxa = parseFloat(rawTax) || 0;
-            const totalItem = honorario + taxa;
+            const taxa = parseMoney(taxaRaw);
 
-            adicionarLinhaTabela(id, nome, honorario, taxa, totalItem);
-
+            adicionarLinhaTabela(id, nome, taxa);
+            
             input.value = '';
             input.focus();
         });
 
-        function adicionarLinhaTabela(id, nome, honorario, taxa, totalItem) {
+        function adicionarLinhaTabela(id, nome, taxa) {
             const tbody = document.getElementById('lista_itens_adicionados');
-            const novaLinha = document.createElement('tr');
+            const row = document.createElement('tr');
 
-            // --- AQUI ESTÁ A ATUALIZAÇÃO IMPORTANTE ---
-            // Agora enviamos 'honorarios[]' e 'taxas[]' separados para a View
-            novaLinha.innerHTML = `
-                <td class="ps-4">
+            row.innerHTML = `
+                <td class="ps-4 text-start">
                     <span class="fw-bold text-dark">${nome}</span>
-                    <br><small class="text-muted">Taxa: R$ ${taxa.toFixed(2)} | Hon: R$ ${honorario.toFixed(2)}</small>
-                    
                     <input type="hidden" name="servicos[]" value="${id}">
-                    <input type="hidden" name="precos[]" value="${totalItem.toFixed(2).replace('.', ',')}">
-                    
-                    <input type="hidden" name="honorarios[]" value="${honorario.toFixed(2).replace('.', ',')}">
-                    <input type="hidden" name="taxas[]" value="${taxa.toFixed(2).replace('.', ',')}">
+                    <input type="hidden" name="taxas_item[]" value="${formatMoney(taxa)}">
                 </td>
-                <td class="text-center fw-bold">
-                    R$ ${totalItem.toFixed(2).replace('.', ',')}
+                <td class="text-center fw-bold text-muted">
+                    R$ ${formatMoney(taxa)}
                 </td>
                 <td class="text-center">
-                    <button type="button" class="btn btn-sm text-danger" onclick="removerLinha(this, ${honorario}, ${taxa})">
+                    <button type="button" class="btn btn-sm text-danger btn-remove" data-taxa="${taxa}">
                         <i class="fas fa-trash"></i>
                     </button>
                 </td>
             `;
 
-            tbody.appendChild(novaLinha);
-            atualizarTotais(honorario, taxa);
+            tbody.appendChild(row);
+            totalTaxasGlobal += taxa;
+            atualizarTotais();
         }
 
-        window.removerLinha = function(botao, honorario, taxa) {
-            botao.closest('tr').remove();
-            atualizarTotais(-honorario, -taxa);
-        }
-
-        function atualizarTotais(honorarioDiff, taxaDiff) {
-            totalHonorariosGlobal += honorarioDiff;
-            totalTaxasGlobal += taxaDiff;
-            
-            // Evita negativos por erro de arredondamento
-            if(totalHonorariosGlobal < 0) totalHonorariosGlobal = 0;
+        // Remover linha
+        $(document).on('click', '.btn-remove', function() {
+            const taxa = parseFloat($(this).data('taxa'));
+            $(this).closest('tr').remove();
+            totalTaxasGlobal -= taxa;
             if(totalTaxasGlobal < 0) totalTaxasGlobal = 0;
+            atualizarTotais();
+        });
 
-            renderizarTotaisNaTela();
-        }
+        // --- CONFIGURAÇÃO DO SELECT2 ---
+        $('#select_cliente_orcamento').select2({
+            theme: 'bootstrap-5',
+            ajax: {
+                url: "{% url 'buscar_clientes' %}", 
+                dataType: 'json',
+                delay: 250,
+                data: function (params) { return { term: params.term }; },
+                processResults: function (data) { return { results: data.results }; },
+                cache: true
+            },
+            minimumInputLength: 3
+        });
 
-        function renderizarTotaisNaTela() {
-            const inputDesconto = document.getElementById('input_desconto');
-            let desconto = parseFloat(inputDesconto.value);
-            if (isNaN(desconto)) desconto = 0;
-
-            // REGRA: O desconto não pode ser maior que o total de honorários
-            if(desconto > totalHonorariosGlobal) {
-                desconto = totalHonorariosGlobal;
-                inputDesconto.value = desconto.toFixed(2);
-                // Opcional: alert("O desconto não pode ser maior que o valor dos honorários!");
-            }
-
-            const subtotal = totalTaxasGlobal + totalHonorariosGlobal;
-            const totalFinal = subtotal - desconto;
-
-            // Atualiza os labels
-            document.getElementById('lbl_taxas').innerText = 'R$ ' + totalTaxasGlobal.toFixed(2).replace('.', ',');
-            document.getElementById('lbl_honorarios').innerText = 'R$ ' + totalHonorariosGlobal.toFixed(2).replace('.', ',');
-            document.getElementById('lbl_subtotal').innerText = 'R$ ' + subtotal.toFixed(2).replace('.', ',');
-            document.getElementById('lbl_total').innerText = 'R$ ' + totalFinal.toFixed(2).replace('.', ',');
+        // Carregar veículos ao selecionar cliente
+        $('#select_cliente_orcamento').on('select2:select', function (e) {
+            const clienteId = e.params.data.id;
+            $('#container_veiculo_orcamento').removeClass('d-none');
+            const selectVeiculo = $('#select_veiculo_orcamento');
             
-            document.getElementById('valor_total_hidden').value = totalFinal.toFixed(2);
-        }
+            $.getJSON('/api/veiculos-cliente/' + clienteId + '/', function(veiculos) {
+                selectVeiculo.empty().append('<option value="">-- Selecione um Veículo --</option>');
+                veiculos.forEach(v => {
+                    selectVeiculo.append(`<option value="${v.id}">${v.placa} - ${v.modelo}</option>`);
+                });
+            });
+        });
 
-        document.getElementById('input_desconto').addEventListener('input', renderizarTotaisNaTela);
-
-        // --- 5. VALIDAÇÃO NO SUBMIT ---
-        document.getElementById('form-orcamento').addEventListener('submit', function(event) {
-            const isAvulso = switchAvulso.checked;
-            const clienteId = $('#select_cliente_orcamento').val();
-            const nomeAvulso = inputNomeAvulso.value.trim();
-            const total = parseFloat(document.getElementById('valor_total_hidden').value);
-
-            if (isAvulso) {
-                if (!nomeAvulso) {
-                    alert('Por favor, digite o nome do cliente avulso.');
-                    event.preventDefault();
-                    return false;
-                }
+        // Alternar Cliente Avulso
+        $('#switch_cliente_avulso').on('change', function() {
+            if (this.checked) {
+                $('#container_busca_banco, #container_veiculo_orcamento').addClass('d-none');
+                $('#container_cliente_avulso').removeClass('d-none');
+                $('#select_cliente_orcamento').val(null).trigger('change');
             } else {
-                if (!clienteId) {
-                    alert('Por favor, pesquise e selecione um cliente cadastrado.');
-                    event.preventDefault();
-                    return false;
-                }
-            }
-
-            if (total <= 0) {
-                if(!confirm("O valor total do orçamento está R$ 0,00. Deseja continuar mesmo assim?")) {
-                    event.preventDefault();
-                    return false;
-                }
+                $('#container_busca_banco').removeClass('d-none');
+                $('#container_cliente_avulso').addClass('d-none');
             }
         });
+
+        // Inicializar totais
+        atualizarTotais();
     });
 </script>
 {% endblock %}

@@ -864,6 +864,7 @@ def api_veiculos_cliente(request, cliente_id):
 # ==============================================================================
 # ORÇAMENTOS
 # ==============================================================================
+
 @login_required
 def novo_orcamento(request):
     perfil = request.user.perfilusuario
@@ -872,34 +873,68 @@ def novo_orcamento(request):
     if request.method == 'POST':
         try:
             with transaction.atomic():
+                # Função auxiliar robusta para converter moeda brasileira para Decimal
                 def limpar_valor(valor):
-                    if not valor: return 0.0
-                    v = str(valor).strip()
-                    if ',' in v:
-                        v = v.replace('.', '').replace(',', '.')
-                    return float(v)
+                    if not valor: 
+                        return Decimal('0.00')
+                    try:
+                        # Remove pontos de milhar e troca vírgula por ponto
+                        v = str(valor).strip().replace('.', '').replace(',', '.')
+                        return Decimal(v)
+                    except (InvalidOperation, ValueError):
+                        return Decimal('0.00')
 
+                # --- 1. CAPTURA DADOS DO FORMULÁRIO ---
                 desconto = limpar_valor(request.POST.get('desconto'))
-                valor_total = limpar_valor(request.POST.get('valor_total_hidden'))
+                honorarios_globais = limpar_valor(request.POST.get('honorarios_total'))
                 
                 cliente_id = request.POST.get('cliente_id')
                 nome_avulso = request.POST.get('cliente_nome_avulso')
                 observacoes = request.POST.get('observacoes')
                 veiculo_id = request.POST.get('veiculo_id')
                 
-                veiculo_obj = None
-                if veiculo_id:
-                    veiculo_obj = Veiculo.objects.filter(id=veiculo_id).first()
+                ids_servicos = request.POST.getlist('servicos[]')
+                valores_taxas_lista = request.POST.getlist('taxas_item[]')
 
+                if not ids_servicos:
+                    raise Exception("Adicione pelo menos um item ao orçamento.")
+
+                # --- 2. PROCESSA OS ITENS E SOMA AS TAXAS ---
+                itens_para_criar = []
+                soma_taxas = Decimal('0.00')
+
+                for servico_id, taxa_raw in zip(ids_servicos, valores_taxas_lista):
+                    servico_obj = TipoServico.objects.filter(id=servico_id).first()
+                    nome_servico = servico_obj.nome if servico_obj else "Serviço Avulso"
+                    
+                    valor_taxa_item = limpar_valor(taxa_raw)
+                    soma_taxas += valor_taxa_item
+
+                    # Preparamos o item para criação posterior
+                    itens_para_criar.append(ItemOrcamento(
+                        servico_nome=nome_servico,
+                        valor=valor_taxa_item
+                    ))
+
+                # --- 3. CÁLCULO DE SEGURANÇA NO SERVIDOR ---
+                # Total = (Soma das Taxas + Honorário Global) - Desconto
+                valor_total_calculado = (soma_taxas + honorarios_globais) - desconto
+
+                # --- 4. CRIAÇÃO DO OBJETO ORÇAMENTO ---
+                veiculo_obj = Veiculo.objects.filter(id=veiculo_id).first() if veiculo_id else None
+                
                 orcamento = Orcamento.objects.create(
                     despachante=perfil.despachante,
+                    veiculo=veiculo_obj,
                     observacoes=observacoes,
-                    desconto=desconto,
-                    valor_total=valor_total,
                     status='PENDENTE',
-                    veiculo=veiculo_obj 
+                    valor_honorarios=honorarios_globais,
+                    valor_taxas=soma_taxas,
+                    desconto=desconto,
+                    valor_total=valor_total_calculado
                 )
 
+                # Vincula cliente cadastrado ou nome avulso
                 if cliente_id:
                     orcamento.cliente = Cliente.objects.filter(id=cliente_id).first()
                 elif nome_avulso:
@@ -907,36 +942,17 @@ def novo_orcamento(request):
                 
                 orcamento.save()
 
-                # --- CAPTURA DAS LISTAS DO FORMULÁRIO ---
-                ids_servicos = request.POST.getlist('servicos[]') 
-                precos_servicos = request.POST.getlist('precos[]')
-                
-                # NOVOS DADOS: Honorários e Taxas separados
-                honorarios_lista = request.POST.getlist('honorarios[]')
-                taxas_lista = request.POST.getlist('taxas[]')
-                
-                if not ids_servicos:
-                    raise Exception("A lista de serviços está vazia.")
-
-                # O ZIP AGORA AGRUPA 4 LISTAS PARA SALVAR DETALHADO
-                for servico_id, preco_raw, hon_raw, tax_raw in zip(ids_servicos, precos_servicos, honorarios_lista, taxas_lista):
-                    servico_obj = TipoServico.objects.filter(id=servico_id).first()
-                    nome_servico = servico_obj.nome if servico_obj else "Serviço Avulso"
-                    
-                    ItemOrcamento.objects.create(
-                        orcamento=orcamento,
-                        servico_nome=nome_servico,
-                        valor=limpar_valor(preco_raw),          # Valor Total
-                        valor_honorario=limpar_valor(hon_raw),  # Novo Campo
-                        valor_taxa=limpar_valor(tax_raw)        # Novo Campo
-                    )
+                # --- 5. SALVA OS ITENS VINCULADOS ---
+                for item in itens_para_criar:
+                    item.orcamento = orcamento
+                    item.save()
 
                 messages.success(request, f"Orçamento #{orcamento.id} gerado com sucesso!")
                 return redirect('detalhe_orcamento', id=orcamento.id)
 
         except Exception as e:
-            print(f"Erro ao criar orçamento: {e}") # Debug no console
-            messages.error(request, f"Erro ao criar orçamento: {e}")
+            print(f"ERRO AO CRIAR ORÇAMENTO: {e}")
+            messages.error(request, f"Erro ao processar orçamento: {str(e)}")
             return redirect('novo_orcamento')
 
     return render(request, 'financeiro/novo_orcamento.html', {'servicos': servicos_disponiveis})
@@ -982,98 +998,83 @@ def aprovar_orcamento(request, id):
 
     try:
         with transaction.atomic():
-            # Atualiza status do orçamento
+            # 1. Atualiza status do orçamento
             orcamento.status = 'APROVADO'
             orcamento.save()
 
-            # --- SOMAS TOTAIS (Baseado no que foi salvo no item) ---
-            total_taxas_reais = Decimal('0.00')
-            total_honorarios_reais = Decimal('0.00')
-            total_custo_sindego = Decimal('0.00')
+            # 2. Pega os valores GLOBAIS que já estão salvos no orçamento (Muito mais fácil!)
+            total_taxas_reais = orcamento.valor_taxas
+            total_honorarios_reais = orcamento.valor_honorarios
+            desconto = orcamento.desconto
 
+            # 3. Monta a lista de serviços para salvar no histórico
             lista_descricoes = []
             detalhes_texto = []
+            total_custo_sindego = Decimal('0.00')
 
             for item in orcamento.itens.all():
                 lista_descricoes.append(item.servico_nome)
-                detalhes_texto.append(f"- {item.servico_nome}: Total R$ {item.valor} (Tx: {item.valor_taxa} | Hon: {item.valor_honorario})")
+                detalhes_texto.append(f"- {item.servico_nome}: Taxa R$ {item.valor}")
                 
-                # Soma direta dos valores salvos (Muito mais seguro!)
-                total_taxas_reais += (item.valor_taxa or 0)
-                total_honorarios_reais += (item.valor_honorario or 0)
-
                 # --- Cálculo da Taxa Sindicato (SINDEGO) ---
-                # Precisamos consultar o catálogo para ver a configuração de isenção/redução
                 servico_catalogo = TipoServico.objects.filter(
                     despachante=orcamento.despachante, 
                     nome__iexact=item.servico_nome
                 ).first()
 
                 if servico_catalogo:
-                    # 1. Prioridade: ISENÇÃO
                     if servico_catalogo.isenta_taxa_sindego:
                         total_custo_sindego += Decimal('0.00')
-                    
-                    # 2. Prioridade: TAXA REDUZIDA
                     elif servico_catalogo.usa_taxa_sindego_reduzida:
                         total_custo_sindego += despachante.valor_taxa_sindego_reduzida
-                    
-                    # 3. Padrão: TAXA CHEIA
                     else:
                         total_custo_sindego += despachante.valor_taxa_sindego_padrao
                 else:
-                    # Se não achar no catálogo (foi editado ou excluído), assume taxa padrão por segurança
+                    # Se for serviço avulso ou não achar, cobra padrão
                     total_custo_sindego += despachante.valor_taxa_sindego_padrao
 
-            # --- TRATAMENTO DE DESCONTO ---
-            desconto = orcamento.desconto or Decimal('0.00')
-            
-            # O desconto sempre sai do honorário
+            # 4. Cálculo de Lucro Líquido (Honorário - Desconto)
             honorario_liquido = total_honorarios_reais - desconto
-            if honorario_liquido < 0:
-                honorario_liquido = Decimal('0.00')
+            if honorario_liquido < 0: honorario_liquido = Decimal('0.00')
 
-            # --- CÁLCULO DE CUSTOS VARIÁVEIS ---
+            # 5. Cálculo de Custos Variáveis (Imposto e Banco)
             aliq_imposto = Decimal(str(despachante.aliquota_imposto or 0))
             aliq_banco = Decimal(str(despachante.taxa_bancaria_padrao or 0))
 
-            # Imposto sobre Honorário Líquido
+            # Imposto apenas sobre o Honorário Líquido (Nota Fiscal)
             custo_impostos = honorario_liquido * (aliq_imposto / 100)
             
-            # Taxa Bancária sobre o valor TOTAL transacionado (Taxas + Honorários)
+            # Taxa Bancária sobre o valor TOTAL transacionado (Cliente pagou tudo no cartão)
             valor_transacionado = total_taxas_reais + honorario_liquido
             custo_bancario = valor_transacionado * (aliq_banco / 100)
 
-            # --- DEFINIÇÃO DE QUEM PAGOU O DETRAN ---
-            # Se cobramos taxas no orçamento, o dinheiro entrou na nossa conta, 
-            # logo, o escritório paga o Detran (Reembolso).
-            if total_taxas_reais > 0:
-                quem_pagou = 'DESPACHANTE'
-            else:
-                quem_pagou = 'CLIENTE'
+            # 6. Definição de Pagador
+            # Se cobramos taxas no orçamento, o dinheiro entrou aqui -> Nós pagamos o Detran
+            quem_pagou = 'DESPACHANTE' if total_taxas_reais > 0 else 'CLIENTE'
 
-            # Montagem do texto de observação
-            nomes_agrupados = " + ".join(lista_descricoes)[:100]
+            # 7. Montagem do texto de observação do processo
+            nomes_agrupados = " + ".join(lista_descricoes)[:95] # Limita tamanho do título
+            if len(lista_descricoes) > 1:
+                nomes_agrupados += "..."
+
             obs_final = (
                 f"Origem: Orçamento #{orcamento.id}.\n"
                 f"Itens: {len(lista_descricoes)}\n"
-                f"Taxas Detran: R$ {total_taxas_reais}\n"
-                f"Honorários: R$ {total_honorarios_reais} (Desc: {desconto})\n"
                 f"----------------\n" + 
                 "\n".join(detalhes_texto) + 
                 f"\n\nObs Original: {orcamento.observacoes or ''}"
             )
 
-            # 4. CRIAÇÃO DO PROCESSO (ATENDIMENTO)
+            # 8. CRIAÇÃO DO PROCESSO (ATENDIMENTO)
             Atendimento.objects.create(
                 despachante=orcamento.despachante,
                 cliente=orcamento.cliente,
-                veiculo=orcamento.veiculo, 
+                veiculo=orcamento.veiculo,
                 
-                tipo_servico=None, # Múltiplos serviços
+                tipo_servico=None, # Múltiplos serviços = Null no tipo
                 servico=nomes_agrupados, 
                 
-                # Valores Monetários Exatos
+                # Valores Monetários
                 valor_taxas_detran=total_taxas_reais,
                 valor_honorarios=honorario_liquido, 
                 
@@ -1086,7 +1087,7 @@ def aprovar_orcamento(request, id):
                 quem_pagou_detran=quem_pagou,
                 
                 status='SOLICITADO',
-                data_solicitacao=timezone.now().date(),
+                data_solicitacao=timezone.now(), # Agora é DateTimeField
                 responsavel=request.user,
                 observacoes_internas=obs_final
             )
@@ -1098,6 +1099,15 @@ def aprovar_orcamento(request, id):
         print(f"ERRO CRÍTICO AO APROVAR ORÇAMENTO: {e}") 
         messages.error(request, f"Erro crítico ao gerar processo: {str(e)}")
         return redirect('detalhe_orcamento', id=id)
+
+        messages.success(request, f"Processo gerado com sucesso! Honorário Líquido: R$ {honorario_liquido}")
+        return redirect('dashboard')
+
+    except Exception as e:
+        print(f"ERRO CRÍTICO AO APROVAR ORÇAMENTO: {e}") 
+        messages.error(request, f"Erro crítico ao gerar processo: {str(e)}")
+        return redirect('detalhe_orcamento', id=id)
+    
     
 @login_required
 def listar_orcamentos(request):
@@ -1718,13 +1728,21 @@ def configuracoes_despachante(request):
     despachante = request.user.perfilusuario.despachante
 
     if request.method == 'POST':
-        # --- 1. LÓGICA ORIGINAL (Mantida) ---
+        # Porcentagens
         aliquota_imposto = request.POST.get('aliquota_imposto')
         taxa_bancaria = request.POST.get('taxa_bancaria_padrao')
         
+        # Valores Fixos
         taxa_sindego_padrao = request.POST.get('valor_taxa_sindego_padrao')
         taxa_sindego_reduzida = request.POST.get('valor_taxa_sindego_reduzida')
+        
+        # [NOVO] Honorário Padrão
+        honorario_padrao = request.POST.get('valor_honorario_padrao')
 
+        # Chave API
+        api_key_asaas = request.POST.get('asaas_api_key')
+
+        # --- PROCESSAMENTO ---
         if aliquota_imposto:
             despachante.aliquota_imposto = aliquota_imposto.replace(',', '.')
             
@@ -1737,18 +1755,16 @@ def configuracoes_despachante(request):
         if taxa_sindego_reduzida:
             despachante.valor_taxa_sindego_reduzida = taxa_sindego_reduzida.replace('.', '').replace(',', '.')
 
-        # --- 2. ATUALIZAÇÃO: SALVAR CHAVE ASAAS (Novo) ---
-        api_key_asaas = request.POST.get('asaas_api_key')
-        
-        # Verifica se o campo foi enviado no formulário
+        # [NOVO] Salva o Honorário Padrão
+        if honorario_padrao:
+            despachante.valor_honorario_padrao = honorario_padrao.replace('.', '').replace(',', '.')
+
         if api_key_asaas is not None:
-            # .strip() remove espaços em branco antes e depois (comum ao copiar e colar)
             despachante.asaas_api_key = api_key_asaas.strip()
 
-        # Salva tudo no banco de dados
         despachante.save()
         
-        messages.success(request, 'Configurações financeiras e integração atualizadas com sucesso!')
+        messages.success(request, 'Configurações atualizadas com sucesso!')
         return redirect('configuracoes_despachante')
 
     return render(request, 'cadastro/configuracoes_despachante.html', {'despachante': despachante})

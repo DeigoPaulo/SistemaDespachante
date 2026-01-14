@@ -9,7 +9,7 @@
 {% block content %}
 <div class="container-fluid mt-3">
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold text-dark"><i class="fas fa-tags text-primary me-2"></i> Tabela de Preços e Serviços</h2>
+        <h2 class="fw-bold text-dark"><i class="fas fa-tags text-primary me-2"></i> Tabela de Taxas e Serviços</h2>
     </div>
 
     <div class="row">
@@ -20,27 +20,25 @@
                     <h6 class="mb-0 fw-bold"><i class="fas fa-plus-circle me-2"></i> Adicionar Novo Serviço</h6>
                 </div>
                 <div class="card-body">
+                    <div class="alert alert-warning small mb-3">
+                        <i class="fas fa-info-circle me-1"></i> 
+                        O valor dos seus honorários é definido de forma <strong>Global</strong> nas Configurações do Escritório. Aqui você cadastra apenas as taxas do Detran.
+                    </div>
+
                     <form method="post">
                         {% csrf_token %}
                         <div class="mb-3">
                             <label class="form-label fw-bold small text-uppercase text-muted">Nome do Serviço</label>
                             <input type="text" name="nome" class="form-control" placeholder="Ex: Transferência de Propriedade" required>
                         </div>
-                        <div class="row">
-                            <div class="col-6 mb-3">
-                                <label class="form-label fw-bold small text-uppercase text-muted">Custo (Taxas)</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-light border-end-0">R$</span>
-                                    <input type="text" name="valor_base" class="form-control mask-money border-start-0" placeholder="0,00">
-                                </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold small text-uppercase text-muted">Custo (Taxas Detran/Orgãos)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">R$</span>
+                                <input type="text" name="valor_base" class="form-control mask-money border-start-0" placeholder="0,00">
                             </div>
-                            <div class="col-6 mb-3">
-                                <label class="form-label fw-bold small text-uppercase text-muted">Honorários</label>
-                                <div class="input-group">
-                                    <span class="input-group-text bg-success text-white border-success">R$</span>
-                                    <input type="text" name="honorarios" class="form-control mask-money border-success" placeholder="0,00" required>
-                                </div>
-                            </div>
+                            <div class="form-text small">Valor que você paga ao órgão para realizar este serviço.</div>
                         </div>
 
                         <div class="mb-3 p-3 border rounded bg-light">
@@ -69,13 +67,6 @@
                     </form>
                 </div>
             </div>
-            
-            <div class="alert alert-info d-flex align-items-center mt-3 shadow-sm" role="alert">
-                <i class="fas fa-info-circle me-3 fa-lg"></i>
-                <div class="small">
-                    Novos serviços aparecem automaticamente nas telas de Orçamento e Processo Rápido.
-                </div>
-            </div>
         </div>
         {% endif %}
 
@@ -91,8 +82,6 @@
                                 <tr>
                                     <th class="ps-3">Nome do Serviço</th>
                                     <th>Custo (Taxas)</th>
-                                    <th>Honorários</th>
-                                    <th>Preço Final</th>
                                     <th class="text-center">Taxa Sind.</th> 
                                     <th class="text-end pe-3">Ação</th>
                                 </tr>
@@ -101,27 +90,20 @@
                                 {% for servico in servicos %}
                                 <tr>
                                     <td class="ps-3 fw-bold text-dark">{{ servico.nome }}</td>
-                                    <td class="text-muted">R$ {{ servico.valor_base|floatformat:2 }}</td>
-                                    <td class="text-success fw-bold">R$ {{ servico.honorarios|floatformat:2 }}</td>
-                                    <td>
-                                        <span class="badge bg-light text-dark border px-3 py-2 fs-6">
-                                            R$ {{ servico.valor_total|floatformat:2 }}
-                                        </span>
-                                    </td>
+                                    <td class="text-danger fw-bold">R$ {{ servico.valor_base|floatformat:2 }}</td>
                                     
                                     <td class="text-center">
                                         {% if servico.isenta_taxa_sindego %}
                                             <span class="badge bg-success" title="Isento de Taxa (R$ 0,00)">ISENTO</span>
                                         {% elif servico.usa_taxa_sindego_reduzida %}
-                                            <span class="badge bg-info text-dark" title="Taxa Reduzida (R$ {{ user.perfilusuario.despachante.valor_taxa_sindego_reduzida }})">Reduzida</span>
+                                            <span class="badge bg-info text-dark" title="Taxa Reduzida">Reduzida</span>
                                         {% else %}
-                                            <span class="badge bg-secondary" title="Taxa Padrão (R$ {{ user.perfilusuario.despachante.valor_taxa_sindego_padrao }})">Padrão</span>
+                                            <span class="badge bg-secondary" title="Taxa Padrão">Padrão</span>
                                         {% endif %}
                                     </td>
 
                                     <td class="text-end pe-3">
                                         {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
-                                            
                                             <a href="{% url 'editar_servico' servico.id %}" 
                                                class="btn btn-sm btn-outline-primary border-0 me-1" 
                                                title="Editar Serviço">
@@ -134,7 +116,6 @@
                                                title="Excluir Serviço">
                                                 <i class="fas fa-trash-alt"></i>
                                             </a>
-
                                         {% else %}
                                             <i class="fas fa-lock text-muted opacity-25" title="Apenas leitura"></i>
                                         {% endif %}
@@ -159,21 +140,16 @@
 
 <script>
     $(document).ready(function(){
-        // 1. Máscara de Moeda (Padrão Brasileiro)
+        // 1. Máscara de Moeda
         $('.mask-money').mask('000.000.000,00', {reverse: true});
 
-        // 2. Lógica Visual dos Checkboxes (Exclusividade)
-        // Se marcar "Isento", desmarca "Reduzida" e vice-versa, para evitar confusão visual
+        // 2. Lógica Visual dos Checkboxes
         $('#taxaIsenta').change(function() {
-            if(this.checked) {
-                $('#taxaReduzida').prop('checked', false);
-            }
+            if(this.checked) { $('#taxaReduzida').prop('checked', false); }
         });
 
         $('#taxaReduzida').change(function() {
-            if(this.checked) {
-                $('#taxaIsenta').prop('checked', false);
-            }
+            if(this.checked) { $('#taxaIsenta').prop('checked', false); }
         });
 
         // 3. Ativa o DataTables
@@ -187,19 +163,12 @@
                 "sLoadingRecords": "Carregando...",
                 "sProcessing": "Processando...",
                 "sZeroRecords": "Nenhum registro encontrado",
-                "sSearch": "Pesquisar Serviço:", 
-                "oPaginate": {
-                    "sNext": "Próximo",
-                    "sPrevious": "Anterior",
-                    "sFirst": "Primeiro",
-                    "sLast": "Último"
-                }
+                "sSearch": "Pesquisar:", 
+                "oPaginate": { "sNext": "Próximo", "sPrevious": "Anterior" }
             },
             "pageLength": 10, 
             "order": [[ 0, "asc" ]], 
-            "columnDefs": [
-                { "orderable": false, "targets": 5 } 
-            ]
+            "columnDefs": [ { "orderable": false, "targets": 3 } ] 
         });
     });
 </script>

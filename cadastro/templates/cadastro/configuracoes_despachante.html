@@ -41,13 +41,28 @@
                 </div>
 
                 <div class="card-header bg-secondary text-white py-3 border-top">
-                    <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i> Taxas Fixas por Processo (R$)</h5>
+                    <h5 class="mb-0"><i class="fas fa-money-bill-wave me-2"></i> Valores Fixos por Processo (R$)</h5>
                 </div>
                 <div class="card-body p-4 bg-light">
+                    
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <label class="form-label fw-bold text-uppercase text-success"><i class="fas fa-hand-holding-usd me-1"></i> Honorário Padrão (Orçamentos)</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-success text-white border-end-0">R$</span>
+                                <input type="text" name="valor_honorario_padrao" class="form-control form-control-lg mask-money border-success border-start-0 fw-bold text-success" 
+                                       value="{{ despachante.valor_honorario_padrao|floatformat:2 }}" required>
+                            </div>
+                            <div class="form-text">Este valor virá preenchido automaticamente ao criar um novo orçamento (você poderá alterar na hora).</div>
+                        </div>
+                    </div>
+
+                    <hr class="text-muted opacity-25">
+
                     <div class="alert alert-info border-0 shadow-sm d-flex align-items-center mb-4">
                         <i class="fas fa-info-circle me-3"></i>
                         <div class="small">
-                            Esses valores são descontados do lucro em <strong>todo processo aprovado</strong>. Você define qual serviço usa a taxa reduzida na tela de "Cadastro de Serviços".
+                            As taxas abaixo são descontadas do lucro em <strong>todo processo aprovado</strong>. Você define qual serviço usa a taxa reduzida na tela de "Cadastro de Serviços".
                         </div>
                     </div>
 
@@ -56,7 +71,7 @@
                             <label class="form-label fw-bold text-uppercase small text-dark">Taxa SINDEGO (Padrão)</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white text-muted border-end-0">R$</span>
-                                <input type="text" name="valor_taxa_sindego_padrao" class="form-control form-control-lg mask-money border-start-0" 
+                                <input type="text" name="valor_taxa_sindego_padrao" class="form-control mask-money border-start-0" 
                                        value="{{ despachante.valor_taxa_sindego_padrao|floatformat:2 }}" required>
                             </div>
                             <div class="form-text mt-2">Valor cobrado na maioria dos processos (Ex: 13,00).</div>
@@ -66,7 +81,7 @@
                             <label class="form-label fw-bold text-uppercase small text-dark">Taxa SINDEGO (Reduzida)</label>
                             <div class="input-group">
                                 <span class="input-group-text bg-white text-muted border-end-0">R$</span>
-                                <input type="text" name="valor_taxa_sindego_reduzida" class="form-control form-control-lg mask-money border-start-0" 
+                                <input type="text" name="valor_taxa_sindego_reduzida" class="form-control mask-money border-start-0" 
                                        value="{{ despachante.valor_taxa_sindego_reduzida|floatformat:2 }}" required>
                             </div>
                             <div class="form-text mt-2">Para serviços específicos (Ex: 6,50).</div>
@@ -110,6 +125,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 <script>
     $(document).ready(function(){
         // Máscara para Porcentagem (ex: 05,00)
