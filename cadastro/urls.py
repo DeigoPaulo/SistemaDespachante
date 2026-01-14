@@ -25,6 +25,7 @@ urlpatterns = [
     path('atendimento/editar/<int:id>/', views.editar_atendimento, name='editar_atendimento'),
     path('atendimento/excluir/<int:id>/', views.excluir_atendimento, name='excluir_atendimento'),
     path('novo-processo-rapido/', views.cadastro_rapido, name='cadastro_rapido'),
+    path('r/<uuid:token>/', views.rastreio_publico, name='rastreio_publico'),
     
     # Configurações e Utilitários de Impressão
     path('configuracoes/', views.configuracoes_despachante, name='configuracoes_despachante'),

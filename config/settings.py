@@ -58,6 +58,7 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -105,11 +106,20 @@ WSGI_APPLICATION = 'config.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'sistema_despachante_db',  # Nome do banco que você criou
-        'USER': 'postgres',                # Seu usuário do Postgres (geralmente 'postgres')
-        'PASSWORD': '121166',      # A senha que você definiu ao instalar o Postgres
-        'HOST': 'localhost',               # Ou o IP do servidor
-        'PORT': '5432',                    # Porta padrão
+        # Tenta pegar do Docker, se não achar, usa 'sistema_despachante_db'
+        'NAME': os.environ.get('DB_NAME', 'sistema_despachante_db'),
+        
+        # Tenta pegar do Docker, se não achar, usa 'postgres'
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        
+        # Tenta pegar do Docker, se não achar, usa SUA SENHA '121166'
+        'PASSWORD': os.environ.get('DB_PASS', '121166'),
+        
+        # O PULO DO GATO: No Docker o host é 'db', no seu Windows é 'localhost'
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        
+        'PORT': '5432',
+        'CONN_MAX_AGE': 60, # Mantém a conexão rápida que configuramos
     }
 }
 
@@ -151,6 +161,8 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 STATICFILES_DIRS = [
     BASE_DIR / 'static',
 ]
+# Ativa o WhiteNoise para comprimir e servir os arquivos
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # --- CONFIGURAÇÃO DE MÍDIA (UPLOADS/LOGOS) ---
 MEDIA_URL = '/media/'

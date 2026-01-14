@@ -2,7 +2,7 @@ from locust import HttpUser, task, between
 
 class UsuarioDoSistema(HttpUser):
     # O tempo que o usuário espera entre um clique e outro (1 a 5 segundos)
-    wait_time = between(1, 5)
+    wait_time = between(5, 15)
 
     def on_start(self):
         """

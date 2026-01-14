@@ -2,7 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.validators import FileExtensionValidator
-
+import uuid
 # ==============================================================================
 # 1. CADASTRO DO ESCRITÓRIO (SaaS)
 # ==============================================================================
@@ -134,6 +134,7 @@ class Cliente(models.Model):
     rg = models.CharField(max_length=20, blank=True, null=True)
     orgao_expedidor = models.CharField(max_length=20, blank=True, null=True)
     uf_rg = models.CharField(max_length=2, blank=True, null=True, verbose_name="UF do RG")
+    data_nascimento = models.DateField(null=True, blank=True, verbose_name="Data de Nascimento")
     naturalidade = models.CharField(max_length=100, blank=True, null=True)
     filiacao = models.CharField(max_length=200, blank=True, null=True, verbose_name="Filiação (Mãe/Pai)")
     estado_civil = models.CharField(max_length=50, blank=True, null=True)
@@ -234,6 +235,7 @@ class Atendimento(models.Model):
     STATUS_CHOICES = (
         ('SOLICITADO', 'Solicitado'),
         ('EM_ANALISE', 'Em Análise'),
+        ('PENDENTE', 'Pendente (Com Pendência)'), # <--- NOVO STATUS
         ('APROVADO', 'Aprovado/Concluído'), 
         ('CANCELADO', 'Cancelado'),
     )
@@ -261,7 +263,7 @@ class Atendimento(models.Model):
         verbose_name="Responsável Técnico"
     )
 
-    # --- NOVO: VÍNCULO COM O CATÁLOGO (FOREIGN KEY) ---
+    # --- VÍNCULO COM O CATÁLOGO ---
     tipo_servico = models.ForeignKey(
         'TipoServico', 
         on_delete=models.SET_NULL, 
@@ -273,7 +275,13 @@ class Atendimento(models.Model):
 
     numero_atendimento = models.CharField(max_length=50, blank=True, null=True)
     
-    # --- SNAPSHOT: NOME DO SERVIÇO (HISTÓRICO) ---
+    # --- RASTREIO PÚBLICO (LINK SEGURO) ---
+    # Gera um código único (ex: 550e8400-e29b...) para o cliente acompanhar sem senha
+    token_rastreio = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+
+  
+
+    # --- SNAPSHOT: NOME DO SERVIÇO ---
     servico = models.CharField(
         max_length=100, 
         verbose_name="Nome do Serviço (No Processo)",
@@ -284,7 +292,18 @@ class Atendimento(models.Model):
         max_length=20, choices=STATUS_CHOICES, default='SOLICITADO'
     )
 
-    # --- FINANCEIRO: VALORES HERDADOS (SNAPSHOT) ---
+    # --- PENDÊNCIAS E OBSERVAÇÕES ---
+    observacoes_internas = models.TextField(blank=True, null=True)
+    
+    # Novo campo para travas do processo
+    motivo_pendencia = models.TextField(
+        blank=True, 
+        null=True, 
+        verbose_name="Motivo da Pendência",
+        help_text="Descreva o que falta para o processo andar (Ex: Falta assinatura, CNH vencida)."
+    )
+
+    # --- FINANCEIRO: VALORES HERDADOS ---
     valor_taxas_detran = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     valor_honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
@@ -296,11 +315,11 @@ class Atendimento(models.Model):
     custo_taxa_bancaria = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     custo_taxa_sindego = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     
-    # --- SITUAÇÃO ---
+    # --- SITUAÇÃO FINANCEIRA ---
     status_financeiro = models.CharField(max_length=15, choices=STATUS_FINANCEIRO, default='ABERTO')
     data_pagamento = models.DateField(null=True, blank=True)
 
-    # --- CAMPO NOVO PARA INTEGRAÇÃO ASAAS ---
+    # --- INTEGRAÇÃO ASAAS ---
     asaas_id = models.CharField(
         max_length=255, 
         blank=True, 
@@ -310,7 +329,6 @@ class Atendimento(models.Model):
         help_text="ID gerado automaticamente (ex: pay_58694038593)"
     )
 
-    observacoes_internas = models.TextField(blank=True, null=True)
     data_solicitacao = models.DateField(default=timezone.now)
     data_entrega = models.DateField(null=True, blank=True, verbose_name="Prazo de Entrega")
 
@@ -322,41 +340,34 @@ class Atendimento(models.Model):
             models.Index(fields=['despachante', 'status']),
             models.Index(fields=['despachante', 'data_solicitacao']),
             models.Index(fields=['despachante', 'status_financeiro']),
-            models.Index(fields=['tipo_servico']), # Novo índice para relatórios
+            models.Index(fields=['tipo_servico']),
             models.Index(fields=['veiculo']),
+            models.Index(fields=['token_rastreio']), # Índice para a busca pública ser rápida
         ]
 
     def __str__(self):
         return f"{self.numero_atendimento or 'S/N'} - {self.cliente}"
 
-    # --- LÓGICA DE SNAPSHOT (ATUALIZADA COM ISENÇÃO) ---
     def save(self, *args, **kwargs):
         # Se selecionou um Tipo de Serviço do catálogo...
         if self.tipo_servico:
-            # 1. Copia o nome se estiver vazio (garante o histórico)
+            # 1. Copia o nome se estiver vazio
             if not self.servico:
                 self.servico = self.tipo_servico.nome
             
-            # 2. Se os valores forem 0 (novo atendimento), puxa do catálogo
+            # 2. Se os valores forem 0, puxa do catálogo
             if self.pk is None or self.valor_honorarios == 0:
                 self.valor_honorarios = self.tipo_servico.honorarios
             
             if self.pk is None or self.valor_taxas_detran == 0:
                 self.valor_taxas_detran = self.tipo_servico.valor_base
             
-            # 3. Calcula a Taxa Sindego (ATUALIZADO AQUI)
-            # Só calcula se o custo estiver zerado para não sobrescrever ajustes manuais
+            # 3. Calcula a Taxa Sindego
             if self.custo_taxa_sindego == 0:
-                
-                # Prioridade 1: Isenção Total
                 if self.tipo_servico.isenta_taxa_sindego:
                     self.custo_taxa_sindego = 0.00
-                
-                # Prioridade 2: Taxa Reduzida
                 elif self.tipo_servico.usa_taxa_sindego_reduzida:
                     self.custo_taxa_sindego = self.despachante.valor_taxa_sindego_reduzida
-                
-                # Padrão: Taxa Cheia
                 else:
                     self.custo_taxa_sindego = self.despachante.valor_taxa_sindego_padrao
 
@@ -370,7 +381,7 @@ class Atendimento(models.Model):
     def lucro_liquido_real(self):
         custos = self.custo_impostos + self.custo_taxa_bancaria + self.custo_taxa_sindego
         return self.valor_honorarios - custos
-
+    
 # ==============================================================================
 # 5. COMERCIAL (ORÇAMENTOS)
 # ==============================================================================

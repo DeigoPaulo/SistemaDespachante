@@ -24,8 +24,7 @@
             <div class="card-body p-4">
                 <form method="post" enctype="multipart/form-data"> {% csrf_token %}
 
-                    {# --- CAMPOS OCULTOS PARA CÁLCULO AUTOMÁTICO --- #}
-                    {# Eles continuam aqui para serem enviados ao banco de dados #}
+                    {# --- CAMPOS OCULTOS --- #}
                     <input type="hidden" name="custo_impostos" value="{{ form.custo_impostos.value|stringformat:'s'|default:'0' }}">
                     <input type="hidden" name="custo_taxa_bancaria" value="{{ form.custo_taxa_bancaria.value|stringformat:'s'|default:'0' }}">
 
@@ -65,8 +64,54 @@
                                     {{ form.responsavel }}
                                 </div>
                                 {% endif %}
+                                
+                                {# --- CAMPO DE PENDÊNCIA (SÓ APARECE SE STATUS FOR PENDENTE) --- #}
+                                {% if form.motivo_pendencia %}
+                                <div class="col-12 mt-3" id="div-motivo-pendencia" style="display: none;">
+                                    <label class="form-label fw-bold text-danger small text-uppercase">
+                                        <i class="fas fa-exclamation-triangle me-1"></i> Motivo da Pendência (Obrigatório)
+                                    </label>
+                                    {{ form.motivo_pendencia }}
+                                    <div class="form-text text-muted small">Esse texto aparecerá em destaque para o cliente no link de rastreio.</div>
+                                </div>
+                                {% endif %}
+
+                                {# --- LINK DE RASTREIO --- #}
+                                {% if form.instance.token_rastreio %}
+                                <div class="col-12 mt-4 pt-3 border-top border-warning border-opacity-25">
+                                    <label class="form-label fw-bold text-dark small text-uppercase">
+                                        <i class="fas fa-share-alt me-1"></i> Link Público do Cliente
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="text" class="form-control bg-white" id="linkRastreio" 
+                                               value="{{ request.scheme }}://{{ request.get_host }}{% url 'rastreio_publico' form.instance.token_rastreio %}" readonly>
+                                        
+                                        <button class="btn btn-outline-secondary" type="button" onclick="copiarLink()">
+                                            <i class="fas fa-copy"></i> Copiar
+                                        </button>
+                                        
+                                        {% if form.instance.cliente.telefone %}
+                                        <a href="https://wa.me/55{{ form.instance.cliente.telefone|cut:' '|cut:'-'|cut:'('|cut:')' }}?text=Olá, acompanhe o andamento do seu processo aqui: {{ request.scheme }}://{{ request.get_host }}{% url 'rastreio_publico' form.instance.token_rastreio %}" 
+                                           target="_blank" class="btn btn-success text-white fw-bold">
+                                            <i class="fab fa-whatsapp"></i> Enviar
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
                             </div>
                         </div>
+                    </div>
+                    {% endif %}
+
+                    {# ================================================================= #}
+                    {#  1.5 OBSERVAÇÕES GERAIS (NOVO BLOCO)                              #}
+                    {# ================================================================= #}
+                    {% if form.observacoes_internas %}
+                    <div class="mb-4">
+                        <label class="form-label fw-bold small text-uppercase text-muted">Observações Internas</label>
+                        {{ form.observacoes_internas }}
+                        <div class="form-text small text-muted">Anotações visíveis apenas para a equipe do escritório.</div>
                     </div>
                     {% endif %}
 
@@ -80,7 +125,6 @@
                                 <i class="fas fa-wallet text-success me-2"></i> Gestão Financeira
                             </h6>
                             
-                            {# --- LINHA 1: VALORES DE ENTRADA --- #}
                             <div class="row g-3 mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold text-dark small text-uppercase">Taxas (Repasse)</label>
@@ -88,7 +132,6 @@
                                         <span class="input-group-text bg-white text-danger border-end-0">R$</span>
                                         {{ form.valor_taxas_detran }}
                                     </div>
-                                    <div class="form-text small text-muted">Valor pago ao órgão.</div>
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold text-dark small text-uppercase">Honorários (Lucro)</label>
@@ -96,17 +139,14 @@
                                         <span class="input-group-text bg-white text-success border-end-0">R$</span>
                                         {{ form.valor_honorarios }}
                                     </div>
-                                    <div class="form-text small text-muted">Valor do serviço.</div>
                                 </div>
                             </div>
 
-                            {# --- LINHA 2: PAGAMENTO --- #}
                             <div class="row g-3">
                                 <div class="col-md-4">
                                     <label class="form-label fw-bold text-dark small text-uppercase">Quem pagou?</label>
                                     {{ form.quem_pagou_detran }}
                                 </div>
-
                                 <div class="col-md-4">
                                     <label class="form-label fw-bold text-dark small text-uppercase">Situação</label>
                                     {{ form.status_financeiro }}
@@ -116,9 +156,6 @@
                                     {{ form.data_pagamento }}
                                 </div>
                             </div>
-                            
-                            {# REMOVI O BLOCO VISUAL DE IMPOSTOS/TAXAS AQUI #}
-
                         </div>
                     </div>
                     {% endif %}
@@ -127,8 +164,7 @@
                     {#  3. RESTANTE DOS CAMPOS                                           #}
                     {# ================================================================= #}
                     {% for field in form %}
-                        {% if field.name not in 'status,numero_atendimento,responsavel,valor_taxas_detran,valor_honorarios,quem_pagou_detran,status_financeiro,data_pagamento,custo_impostos,custo_taxa_bancaria' %}
-                        
+                        {% if field.name not in 'status,numero_atendimento,responsavel,valor_taxas_detran,valor_honorarios,quem_pagou_detran,status_financeiro,data_pagamento,custo_impostos,custo_taxa_bancaria,motivo_pendencia,observacoes_internas' %}
                             <div class="mb-3">
                                 <label for="{{ field.id_for_label }}" class="form-label fw-bold small text-uppercase text-muted">
                                     {{ field.label }}
@@ -138,9 +174,7 @@
                                 {% if field.field.widget.attrs.class %}
                                     {{ field }}
                                 {% elif "Select" in field.field.widget.constructor_name %}
-                                    <div class="input-group">
-                                        {{ field }}
-                                    </div>
+                                    <div class="input-group">{{ field }}</div>
                                 {% else %}
                                     {{ field }}
                                 {% endif %}
@@ -148,14 +182,10 @@
                                 {% if field.help_text %}
                                     <div class="form-text text-muted small">{{ field.help_text|safe }}</div>
                                 {% endif %}
-                                
                                 {% if field.errors %}
-                                    <div class="text-danger small mt-1">
-                                        <i class="fas fa-exclamation-circle me-1"></i> {{ field.errors.0 }}
-                                    </div>
+                                    <div class="text-danger small mt-1"><i class="fas fa-exclamation-circle me-1"></i> {{ field.errors.0 }}</div>
                                 {% endif %}
                             </div>
-                        
                         {% endif %}
                     {% endfor %}
 
@@ -170,7 +200,6 @@
                 </form>
             </div>
         </div>
-
     </div>
 </div>
 
@@ -186,9 +215,6 @@
                     </div>
                     <div class="modal-body">
                         <p>{{ texto_modal|default:"Tem certeza que deseja excluir este registro permanentemente?" }}</p>
-                        <div class="alert alert-warning small mb-0">
-                            <i class="fas fa-info-circle me-1"></i> <strong>Atenção:</strong> Esta ação não pode ser desfeita.
-                        </div>
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -203,61 +229,77 @@
     {% endif %}
 {% endif %}
 
-{# ================================================================= #}
-{# JAVASCRIPT - VERSÃO SIMPLIFICADA (SÓ ATUALIZA OS HIDDEN)          #}
-{# ================================================================= #}
 {% block extra_js %}
-<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
+<script>
+    if (typeof jQuery === 'undefined') {
+        document.write('<script src="https://code.jquery.com/jquery-3.7.1.min.js"><\/script>');
+        document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"><\/script>');
+    }
+</script>
 
 <script>
-    $(document).ready(function(){
-        // 1. ATIVAR MÁSCARA DE DINHEIRO
-        $('.mask-money').mask('000.000.000,00', {reverse: true});
+    // --- FUNÇÃO DE COPIAR LINK ---
+    function copiarLink() {
+        var copyText = document.getElementById("linkRastreio");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(copyText.value).then(function() {
+            var btn = event.target.closest('button');
+            var original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copiado!';
+            btn.classList.replace('btn-outline-secondary', 'btn-success');
+            setTimeout(function() {
+                btn.innerHTML = original;
+                btn.classList.replace('btn-success', 'btn-outline-secondary');
+            }, 2000);
+        });
+    }
 
-        // =================================================================
-        // CÁLCULO AUTOMÁTICO DE CUSTOS (Hidden Inputs)
-        // =================================================================
+    $(document).ready(function(){
+        // 1. MÁSCARA DINHEIRO
+        if ($('.mask-money').length > 0) $('.mask-money').mask('000.000.000,00', {reverse: true});
+
+        // 2. LÓGICA DE MOSTRAR/OCULTAR MOTIVO PENDÊNCIA
+        const $selectStatus = $('select[name="status"]');
+        const $divPendencia = $('#div-motivo-pendencia');
         
-        // Configurações vindas do Backend
+        function verificarStatus() {
+            if($selectStatus.val() === 'PENDENTE') {
+                $divPendencia.slideDown();
+                // Opcional: focar no campo se estiver vazio
+                if($divPendencia.find('textarea').val() === '') $divPendencia.find('textarea').focus();
+            } else {
+                $divPendencia.slideUp();
+            }
+        }
+
+        if ($selectStatus.length) {
+            $selectStatus.change(verificarStatus);
+            verificarStatus();
+        }
+
+        // 3. CÁLCULO CUSTOS
         const ALIQUOTA_PERCENTUAL = parseFloat("{{ user.perfilusuario.despachante.aliquota_imposto|default:0|stringformat:'f' }}".replace(',', '.'));
         const TAXA_PERCENTUAL = parseFloat("{{ user.perfilusuario.despachante.taxa_bancaria_padrao|default:0|stringformat:'f' }}".replace(',', '.'));
-
-        // Seletores
         const $inputHonorarios = $('input[name="valor_honorarios"]');
         const $hiddenImposto = $('input[name="custo_impostos"]');
         const $hiddenTaxa = $('input[name="custo_taxa_bancaria"]');
 
-        // Função de Converter Texto (R$ 1.000,00) para Float (1000.00)
-        function parseMoney(valor) {
-            if (!valor) return 0;
-            let limpo = valor.replace(/\./g, '').replace(',', '.');
-            return parseFloat(limpo) || 0;
-        }
-
-        // Função de Cálculo
         function calcularCustos() {
-            let honorario = parseMoney($inputHonorarios.val());
-
+            let valor = $inputHonorarios.val() || '0';
+            let honorario = parseFloat(valor.replace(/\./g, '').replace(',', '.'));
+            
             let imposto = honorario * (ALIQUOTA_PERCENTUAL / 100);
             let taxa = honorario * (TAXA_PERCENTUAL / 100);
 
-            // Atualiza os inputs ocultos com ponto decimal (formato banco de dados)
             $hiddenImposto.val(imposto.toFixed(2));
             $hiddenTaxa.val(taxa.toFixed(2));
         }
 
-        // Evento: Quando digitar no campo honorários
         if ($inputHonorarios.length) {
-            $inputHonorarios.on('input change', function() {
-                calcularCustos();
-            });
-            
-            // Roda uma vez ao carregar para garantir
-            setTimeout(calcularCustos, 500); 
+            $inputHonorarios.on('input change', calcularCustos);
         }
     });
 </script>
 {% endblock %}
-
 {% endblock %}

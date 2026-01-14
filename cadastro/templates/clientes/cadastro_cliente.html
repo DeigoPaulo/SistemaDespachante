@@ -33,10 +33,14 @@
                     <input type="text" name="rg" class="form-control text-uppercase">
                 </div>
                 <div class="col-md-3">
+                    <label class="form-label">Data de Nascimento</label>
+                    <input type="date" name="data_nascimento" class="form-control">
+                </div>
+                <div class="col-md-3">
                     <label class="form-label">Órgão Expedidor</label>
                     <input type="text" name="orgao_expedidor" class="form-control text-uppercase" placeholder="Ex: SSP, SPTC">
                 </div>
-                <div class="col-md-2">
+                <div class="col-md-3">
                     <label class="form-label">UF RG</label>
                     <select name="uf_rg" class="form-select">
                         <option value="GO" selected>GO</option>
@@ -50,12 +54,14 @@
                         <option value="">Outro</option>
                     </select>
                 </div>
-                <div class="col-md-4">
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-12">
                     <label class="form-label">Profissão</label>
                     <input type="text" name="profissao" class="form-control text-uppercase">
                 </div>
             </div>
-
             <div class="row mb-3">
                 <div class="col-md-12">
                     <label class="form-label">Filiação (Mãe/Pai)</label>
@@ -216,15 +222,11 @@
 
 {% block extra_js %}
 <script src="{% static 'js/custom.js' %}"></script>
-
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         var btnAdd = document.getElementById('btn-add-modal');
-        
-        // Sobrescreve/Adiciona evento clique especificamente para esta tela
         if (btnAdd) {
             btnAdd.onclick = function() {
-                // 1. Pega valores
                 var placa = document.getElementById('pop_placa').value.toUpperCase();
                 var renavam = document.getElementById('pop_renavam').value;
                 var chassi = document.getElementById('pop_chassi').value.toUpperCase();
@@ -235,14 +237,12 @@
                 var anoFab = document.getElementById('pop_ano_fabricacao').value;
                 var anoMod = document.getElementById('pop_ano_modelo').value;
 
-                // 2. Valida
                 if (!placa || placa.length < 7) {
                     document.getElementById('msg-erro-modal').classList.remove('d-none');
                     return;
                 }
                 document.getElementById('msg-erro-modal').classList.add('d-none');
 
-                // 3. Adiciona na Tabela Visual
                 var tbody = document.querySelector('#tabela-veiculos-visual tbody');
                 var linhaVazia = document.getElementById('linha-vazia');
                 if (linhaVazia) linhaVazia.remove();
@@ -256,14 +256,11 @@
                     <td>${anoFab}/${anoMod}</td>
                     <td>${tipo}</td>
                     <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-danger btn-remove-item">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <button type="button" class="btn btn-sm btn-danger btn-remove-item"><i class="fas fa-trash"></i></button>
                     </td>
                 `;
                 tbody.appendChild(tr);
 
-                // 4. Cria Inputs Ocultos para o POST
                 var container = document.getElementById('veiculos-inputs-container');
                 var divHidden = document.createElement('div');
                 divHidden.innerHTML = `
@@ -279,7 +276,6 @@
                 `;
                 container.appendChild(divHidden);
 
-                // 5. Botão Remover
                 tr.querySelector('.btn-remove-item').onclick = function() {
                     tr.remove();
                     divHidden.remove();
@@ -288,7 +284,6 @@
                     }
                 };
 
-                // 6. Limpa e Fecha
                 document.querySelectorAll('#modalVeiculo input').forEach(input => input.value = '');
                 var modalEl = document.getElementById('modalVeiculo');
                 var modalInstance = bootstrap.Modal.getInstance(modalEl);

@@ -5,12 +5,10 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2 class="fw-bold mb-0"><i class="fas fa-id-card text-primary me-2"></i> Ficha do Cliente</h2>
-    
     <div>
         <a href="{% url 'selecao_documento' %}?cliente_id={{ cliente.id }}" class="btn btn-outline-dark shadow-sm me-2">
             <i class="fas fa-file-signature me-1"></i> Documentos
         </a>
-
         <a href="{% url 'dashboard' %}" class="btn btn-secondary shadow-sm">
             <i class="fas fa-arrow-left me-1"></i> Voltar
         </a>
@@ -35,6 +33,12 @@
                     <label class="text-muted small text-uppercase fw-bold d-block">CPF / CNPJ</label>
                     <span class="text-dark">{{ cliente.cpf_cnpj }}</span>
                 </div>
+                
+                <div class="mb-3">
+                    <label class="text-muted small text-uppercase fw-bold d-block">Data de Nascimento</label>
+                    <span class="text-dark">{{ cliente.data_nascimento|date:"d/m/Y"|default:"Não informada" }}</span>
+                </div>
+
                 <div class="mb-3">
                     <label class="text-muted small text-uppercase fw-bold d-block">Telefone / WhatsApp</label>
                     <span class="text-dark">{{ cliente.telefone }}</span>

@@ -536,7 +536,13 @@ def novo_cliente(request):
             with transaction.atomic():
                 despachante = perfil.despachante
                 cpf_cnpj_raw = request.POST.get('cliente_cpf_cnpj', '')
-                
+
+                # 1. TRATAMENTO DA DATA DE NASCIMENTO
+                data_nasc = request.POST.get('data_nascimento')
+                if not data_nasc: 
+                    data_nasc = None
+
+                # 2. CRIA OU RECUPERA O CLIENTE
                 cliente, created = Cliente.objects.get_or_create(
                     cpf_cnpj=cpf_cnpj_raw, 
                     despachante=despachante,
@@ -545,6 +551,7 @@ def novo_cliente(request):
                         'telefone': request.POST.get('cliente_telefone'),
                         'email': request.POST.get('cliente_email'),
                         'rg': request.POST.get('rg'),
+                        'data_nascimento': data_nasc,  # <--- Salva a data
                         'orgao_expedidor': request.POST.get('orgao_expedidor'),
                         'profissao': request.POST.get('profissao'),
                         'filiacao': request.POST.get('filiacao'),
@@ -559,34 +566,62 @@ def novo_cliente(request):
                     }
                 )
 
+                # Se o cliente já existia, atualiza os dados principais
                 if not created:
                     cliente.nome = request.POST.get('cliente_nome')
                     cliente.telefone = request.POST.get('cliente_telefone')
                     cliente.email = request.POST.get('cliente_email')
+                    if data_nasc:
+                        cliente.data_nascimento = data_nasc
                     cliente.save()
 
+                # 3. SALVAMENTO COMPLETO DOS VEÍCULOS
+                # Captura todas as listas enviadas pelo JavaScript
                 placas = request.POST.getlist('veiculo_placa[]')
                 modelos = request.POST.getlist('veiculo_modelo[]')
                 renavams = request.POST.getlist('veiculo_renavam[]')
+                chassis = request.POST.getlist('veiculo_chassi[]')     # Novo
+                marcas = request.POST.getlist('veiculo_marca[]')       # Novo
+                cores = request.POST.getlist('veiculo_cor[]')          # Novo
+                tipos = request.POST.getlist('veiculo_tipo[]')         # Novo
+                anos_fab = request.POST.getlist('veiculo_ano_fabricacao[]') # Novo
+                anos_mod = request.POST.getlist('veiculo_ano_modelo[]')     # Novo
                 
                 for i in range(len(placas)):
                     placa_limpa = placas[i].replace('-', '').replace(' ', '').upper()
                     if not placa_limpa: continue
                     if len(placa_limpa) > 7: placa_limpa = placa_limpa[:7]
 
+                    # Helper para evitar erro de índice se a lista vier menor
+                    def get_val(lista, index):
+                        return lista[index] if index < len(lista) else ''
+
+                    # Helper para converter ano em número ou None (evita erro de string vazia)
+                    def get_int(lista, index):
+                        val = lista[index] if index < len(lista) else ''
+                        return int(val) if val.isdigit() else None
+
                     Veiculo.objects.get_or_create(
                         placa=placa_limpa,
                         despachante=despachante,
                         defaults={
                             'cliente': cliente, 
-                            'modelo': modelos[i] if i < len(modelos) else '',
-                            'renavam': renavams[i] if i < len(renavams) else ''
+                            'modelo': get_val(modelos, i),
+                            'renavam': get_val(renavams, i),
+                            # Campos novos sendo salvos agora:
+                            'chassi': get_val(chassis, i),
+                            'marca': get_val(marcas, i),
+                            'cor': get_val(cores, i),
+                            'tipo': get_val(tipos, i),
+                            'ano_fabricacao': get_int(anos_fab, i),
+                            'ano_modelo': get_int(anos_mod, i),
                         }
                     )
 
             return redirect('dashboard')
 
         except Exception as e:
+            # print(f"Erro: {e}") # Descomente para debug se precisar
             pass
 
     return render(request, 'clientes/cadastro_cliente.html')
@@ -603,7 +638,7 @@ def novo_veiculo(request):
     else:
         form = VeiculoForm(request.user)
     
-    return render(request, 'form_generico.html', {'form': form, 'titulo': 'Cadastrar Veículo'})
+    return render(request, 'veiculos/veiculo_form.html', {'form': form})
 
 @login_required
 def lista_clientes(request):
@@ -2273,3 +2308,42 @@ def gerar_cobranca_asaas(request, id):
         print(f"ERRO INTEGRAÇÃO ASAAS: {e}")
         messages.error(request, "Falha na comunicação com o Asaas. Verifique sua chave de API e conexão.")
         return redirect('fluxo_caixa')
+    
+def rastreio_publico(request, token):
+    # Busca o atendimento pelo Token seguro (UUID)
+    atendimento = get_object_or_404(Atendimento, token_rastreio=token)
+    
+    # Lógica Visual (Progresso e Cores)
+    progresso = 0
+    cor = 'secondary'
+    
+    if atendimento.status == 'SOLICITADO':
+        progresso = 10
+        cor = 'secondary' # Cinza: Apenas recebido
+        
+    elif atendimento.status == 'EM_ANALISE':
+        progresso = 40
+        cor = 'info'      # Azul Claro: Estão trabalhando
+        
+    elif atendimento.status == 'PENDENTE':
+        progresso = 40    # Trava no mesmo ponto da análise
+        cor = 'warning'   # AMARELO: Alerta visual para o cliente ver a mensagem
+        
+    elif atendimento.status == 'PROTOCOLADO': # Caso você use futuramente
+        progresso = 70
+        cor = 'primary'   # Azul Escuro: Já está no Detran
+        
+    elif atendimento.status == 'APROVADO':
+        progresso = 100
+        cor = 'success'   # Verde: Sucesso
+        
+    elif atendimento.status == 'CANCELADO':
+        progresso = 100
+        cor = 'danger'    # Vermelho: Falha
+
+    context = {
+        'atendimento': atendimento,
+        'progresso': progresso,
+        'cor': cor
+    }
+    return render(request, 'publico/rastreio.html', context)
