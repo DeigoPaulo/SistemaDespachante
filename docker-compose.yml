@@ -4,9 +4,10 @@ services:
   # Serviço do Site (Django)
   web:
     build: .
-    command: gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3
+    command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
+      - media_data:/app/media
     ports:
       - "8000:8000"
     depends_on:
@@ -22,6 +23,7 @@ services:
     image: postgres:15
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      
     environment:
       - POSTGRES_DB=sistema_despachante_db
       - POSTGRES_USER=postgres
@@ -29,3 +31,4 @@ services:
 
 volumes:
   postgres_data:
+  media_data:

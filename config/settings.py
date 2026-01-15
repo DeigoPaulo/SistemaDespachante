@@ -94,34 +94,34 @@ WSGI_APPLICATION = 'config.wsgi.application'
 # ==============================================================================
 # 5. BANCO DE DADOS
 # ==============================================================================
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
-}
+#DATABASES = {
+#    'default': {
+#        'ENGINE': 'django.db.backends.sqlite3',
+#        'NAME': BASE_DIR / 'db.sqlite3',
+#    }
+#}
 
 # --- OPÇÃO 2: POSTGRESQL (Produção / Alta Performance) ---
 # Para usar, certifique-se de ter criado o banco 'sistema_despachante_db' no pgAdmin.
-#DATABASES = {
-#    'default': {
-#        'ENGINE': 'django.db.backends.postgresql',
-#        # Tenta pegar do Docker, se não achar, usa 'sistema_despachante_db'
-#        'NAME': os.environ.get('DB_NAME', 'sistema_despachante_db'),
-#        
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        # Tenta pegar do Docker, se não achar, usa 'sistema_despachante_db'
+        'NAME': os.environ.get('DB_NAME', 'sistema_despachante_db'),
+        
         # Tenta pegar do Docker, se não achar, usa 'postgres'
-#        'USER': os.environ.get('DB_USER', 'postgres'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
         
         # Tenta pegar do Docker, se não achar, usa SUA SENHA '121166'
-#        'PASSWORD': os.environ.get('DB_PASS', '121166'),
+        'PASSWORD': os.environ.get('DB_PASS', '121166'),
         
         # O PULO DO GATO: No Docker o host é 'db', no seu Windows é 'localhost'
-#        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
         
-#        'PORT': '5432',
-#        'CONN_MAX_AGE': 60, # Mantém a conexão rápida que configuramos
-#    }
-#}
+        'PORT': '5432',
+        'CONN_MAX_AGE': 60, # Mantém a conexão rápida que configuramos
+    }
+}
 
 # ==============================================================================
 # 6. VALIDAÇÃO DE SENHA

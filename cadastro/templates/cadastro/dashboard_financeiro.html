@@ -4,14 +4,37 @@
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold text-dark"><i class="fas fa-chart-line text-primary me-2"></i> Dashboard de Resultados</h2>
+    
+    <div class="d-flex justify-content-between align-items-end mb-4 flex-wrap gap-3">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">
+                <i class="fas fa-chart-line text-primary me-2"></i> Dashboard Financeiro
+            </h2>
+            <small class="text-muted">Visão gerencial de lucros e despesas.</small>
+        </div>
+
+        <form method="get" class="d-flex gap-2 bg-white p-2 rounded shadow-sm border">
+            <div>
+                <label class="form-label small fw-bold mb-0 text-muted">De:</label>
+                <input type="date" name="data_inicio" class="form-control form-control-sm" value="{{ filtros.inicio }}">
+            </div>
+            <div>
+                <label class="form-label small fw-bold mb-0 text-muted">Até:</label>
+                <input type="date" name="data_fim" class="form-control form-control-sm" value="{{ filtros.fim }}">
+            </div>
+            <div class="align-self-end">
+                <button type="submit" class="btn btn-sm btn-primary fw-bold">
+                    <i class="fas fa-filter"></i> Filtrar
+                </button>
+            </div>
+        </form>
+
         <div class="btn-group shadow-sm">
-            <a href="{% url 'fluxo_caixa' %}" class="btn btn-primary">
-                <i class="fas fa-list me-1"></i> Fluxo de Caixa Detalhado
+            <a href="{% url 'fluxo_caixa' %}" class="btn btn-outline-primary bg-white">
+                <i class="fas fa-list me-1"></i> Fluxo Detalhado
             </a>
-            <a href="{% url 'configuracoes_despachante' %}" class="btn btn-outline-secondary">
-                <i class="fas fa-cog"></i> Configurar Taxas
+            <a href="{% url 'configuracoes_despachante' %}" class="btn btn-outline-secondary bg-white">
+                <i class="fas fa-cog"></i> Taxas
             </a>
         </div>
     </div>
@@ -19,17 +42,31 @@
     <div class="row g-3 mb-4">
         <div class="col-md-3">
             <div class="card border-0 shadow-sm p-3 h-100 border-start border-primary border-4">
-                <small class="text-muted fw-bold text-uppercase">Entrada Total (Líquida)</small>
-                <h3 class="fw-bold text-primary mb-0">R$ {{ resumo.bruto|floatformat:2 }}</h3>
-                <small class="text-muted" style="font-size: 0.75rem;">Soma Real (Honorários + Taxas)</small>
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <small class="text-muted fw-bold text-uppercase">Entrada Total</small>
+                        <h3 class="fw-bold text-primary mb-0">R$ {{ resumo.bruto|floatformat:2 }}</h3>
+                    </div>
+                    <div class="text-primary opacity-25"><i class="fas fa-wallet fa-2x"></i></div>
+                </div>
+                <small class="text-muted mt-2 d-block" style="font-size: 0.75rem;">
+                    Soma de tudo que entrou (Taxas + Honorários)
+                </small>
             </div>
         </div>
 
         <div class="col-md-3">
             <div class="card border-0 shadow-sm p-3 h-100 border-start border-danger border-4">
-                <small class="text-muted fw-bold text-uppercase">Repasse DETRAN</small>
-                <h3 class="fw-bold text-danger mb-0">R$ {{ resumo.detran|floatformat:2 }}</h3>
-                <small class="text-muted" style="font-size: 0.75rem;">Custo de Terceiros (Taxas)</small>
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <small class="text-muted fw-bold text-uppercase">Repasse DETRAN</small>
+                        <h3 class="fw-bold text-danger mb-0">R$ {{ resumo.detran|floatformat:2 }}</h3>
+                    </div>
+                    <div class="text-danger opacity-25"><i class="fas fa-university fa-2x"></i></div>
+                </div>
+                <small class="text-muted mt-2 d-block" style="font-size: 0.75rem;">
+                    Dinheiro do cliente para pagar taxas
+                </small>
             </div>
         </div>
 
@@ -37,23 +74,25 @@
             <div class="card border-0 shadow-sm p-3 h-100 border-start border-secondary border-4">
                 <small class="text-muted fw-bold text-uppercase">Custos Operacionais</small>
                 <h3 class="fw-bold text-secondary mb-0">R$ {{ resumo.custos_operacionais|floatformat:2 }}</h3>
-                <small class="text-muted" style="font-size: 0.7rem;">Impostos + Maquininha + Sindicato</small>
+                <small class="text-muted" style="font-size: 0.7rem;">Impostos + Banco + Sind.</small>
             </div>
         </div>
 
         <div class="col-md-2">
             <div class="card border-0 shadow-sm p-3 h-100 border-start border-success border-4 bg-success bg-opacity-10">
-                <small class="text-success fw-bold text-uppercase">Lucro Líquido Real</small>
+                <small class="text-success fw-bold text-uppercase">Lucro Líquido</small>
                 <h3 class="fw-bold text-success mb-0">R$ {{ resumo.lucro|floatformat:2 }}</h3>
-                <small class="text-success" style="font-size: 0.75rem;">Livre de todas as taxas</small>
+                <small class="text-success" style="font-size: 0.75rem;">
+                    <i class="fas fa-check-circle"></i> Dinheiro limpo no bolso
+                </small>
             </div>
         </div>
 
         <div class="col-md-2">
-            <div class="card border-0 shadow-sm p-3 h-100 bg-warning bg-opacity-10">
-                <small class="text-dark fw-bold text-uppercase">Pendentes</small>
+            <div class="card border-0 shadow-sm p-3 h-100 bg-warning bg-opacity-10 border-start border-warning border-4">
+                <small class="text-dark fw-bold text-uppercase">A Receber</small>
                 <h3 class="fw-bold text-dark mb-0">{{ resumo.pendente }}</h3>
-                <small class="text-dark" style="font-size: 0.75rem;">Processos aguardando baixa</small>
+                <small class="text-dark" style="font-size: 0.75rem;">Processos em aberto</small>
             </div>
         </div>
     </div>
@@ -61,8 +100,8 @@
     <div class="row">
         <div class="col-lg-8 mb-4">
             <div class="card border-0 shadow-sm h-100">
-                <div class="card-header bg-white fw-bold border-0 pt-3 pb-0">
-                    <i class="fas fa-chart-bar me-2 text-primary"></i> Evolução dos Honorários (Líquidos)
+                <div class="card-header bg-white fw-bold border-0 pt-3 pb-0 d-flex justify-content-between">
+                    <span><i class="fas fa-chart-bar me-2 text-primary"></i> Evolução de Honorários no Período</span>
                 </div>
                 <div class="card-body">
                     <canvas id="chartEvolucao" style="max-height: 300px;"></canvas>
@@ -73,22 +112,14 @@
         <div class="col-lg-4 mb-4">
             <div class="card border-0 shadow-sm h-100">
                 <div class="card-header bg-white fw-bold border-0 pt-3 pb-0">
-                    <i class="fas fa-chart-pie me-2 text-primary"></i> Composição Financeira
+                    <i class="fas fa-chart-pie me-2 text-primary"></i> Para onde foi o dinheiro?
                 </div>
                 <div class="card-body d-flex flex-column align-items-center justify-content-center">
                     <div style="width: 100%; max-width: 250px;">
                         <canvas id="chartComposicao"></canvas>
                     </div>
                     <div class="mt-4 small text-muted text-center px-3 border-top pt-3 w-100">
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Impostos (NF):</span> <strong>{{ user.perfilusuario.despachante.aliquota_imposto }}%</strong>
-                        </div>
-                        <div class="d-flex justify-content-between mb-1">
-                            <span>Taxa Bancária:</span> <strong>{{ user.perfilusuario.despachante.taxa_bancaria_padrao }}%</strong>
-                        </div>
-                        <div class="d-flex justify-content-between">
-                            <span>Taxa Sindicato:</span> <strong>Fixa por Processo</strong>
-                        </div>
+                        <p class="mb-1">Baseado nos processos <strong>APROVADOS</strong> dentro do período selecionado.</p>
                     </div>
                 </div>
             </div>
@@ -102,76 +133,54 @@
 <script>
     Chart.defaults.font.family = 'Segoe UI, system-ui, -apple-system, sans-serif';
 
-    // 1. Gráfico de Evolução (Barras)
+    // 1. Gráfico de Evolução
     const ctxEvolucao = document.getElementById('chartEvolucao').getContext('2d');
     new Chart(ctxEvolucao, {
         type: 'bar',
         data: {
             labels: {{ labels_meses|safe }},
             datasets: [{
-                label: 'Honorários Recebidos (R$)',
+                label: 'Honorários (R$)',
                 data: {{ valores_meses|safe }},
                 backgroundColor: '#0d6efd',
-                hoverBackgroundColor: '#0a58ca',
-                borderRadius: 4,
-                barPercentage: 0.6
+                borderRadius: 5,
             }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: false,
             plugins: { legend: { display: false } },
-            scales: { 
-                y: { 
-                    beginAtZero: true, 
-                    grid: { borderDash: [2, 2], drawBorder: false },
-                    ticks: { callback: function(value) { return 'R$ ' + value; } }
-                },
+            scales: {
+                y: { beginAtZero: true, ticks: { callback: v => 'R$ ' + v } },
                 x: { grid: { display: false } }
             }
         }
     });
 
-    // 2. Gráfico de Composição (Rosca)
-    // Dados vindos da View: [Lucro, Impostos, Taxas Bancárias, Sindicato]
+    // 2. Gráfico de Composição
     const ctxComposicao = document.getElementById('chartComposicao').getContext('2d');
     new Chart(ctxComposicao, {
         type: 'doughnut',
         data: {
-            labels: ['Lucro Líquido', 'Impostos (NF)', 'Taxas Bancárias', 'Sindicato (Fixo)'],
+            labels: ['Lucro Líquido', 'Impostos', 'Taxa Bancária', 'Sindicato'],
             datasets: [{
                 data: {{ pie_data|safe }},
-                backgroundColor: [
-                    '#198754', // Verde (Lucro)
-                    '#6c757d', // Cinza (Impostos)
-                    '#ffc107', // Amarelo (Banco)
-                    '#fd7e14'  // Laranja (Sindicato)
-                ],
+                backgroundColor: ['#198754', '#dc3545', '#ffc107', '#fd7e14'],
                 borderWidth: 2,
-                borderColor: '#ffffff',
-                hoverOffset: 8
+                hoverOffset: 10
             }]
         },
         options: {
             responsive: true,
-            cutout: '70%',
+            cutout: '65%',
             plugins: {
-                legend: { 
-                    position: 'bottom', 
-                    labels: { 
-                        padding: 15, 
-                        usePointStyle: true, 
-                        font: { size: 11 },
-                        boxWidth: 8
-                    } 
-                },
+                legend: { position: 'bottom', labels: { usePointStyle: true, padding: 15 } },
                 tooltip: {
                     callbacks: {
-                        label: function(context) {
-                            let label = context.label || '';
-                            if (label) { label += ': '; }
-                            if (context.parsed !== null) {
-                                label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.parsed);
+                        label: function(ctx) {
+                            let label = ctx.label || '';
+                            if (ctx.parsed !== null) {
+                                label += ': ' + new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ctx.parsed);
                             }
                             return label;
                         }

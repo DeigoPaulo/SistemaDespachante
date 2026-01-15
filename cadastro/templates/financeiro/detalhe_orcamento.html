@@ -10,15 +10,32 @@
             <i class="fas fa-arrow-left me-1"></i> Voltar à Lista
         </a>
         
-        <div>
+        <div class="d-flex gap-2 align-items-center">
             {% if orcamento.status == 'PENDENTE' %}
-            <a href="{% url 'aprovar_orcamento' orcamento.id %}" class="btn btn-success shadow-sm me-2">
-                <i class="fas fa-check me-2"></i> Aprovar e Gerar Processo
-            </a>
+                <a href="{% url 'aprovar_orcamento' orcamento.id %}" class="btn btn-success shadow-sm">
+                    <i class="fas fa-check-circle me-1"></i> Aprovar e Gerar Processo
+                </a>
+
+                <form action="{% url 'excluir_orcamento' orcamento.id %}" method="post" onsubmit="return confirm('Tem certeza que deseja excluir este orçamento permanentemente?');">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-outline-danger shadow-sm" title="Excluir Orçamento">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </form>
+
+            {% elif orcamento.status == 'APROVADO' %}
+                <div class="alert alert-success py-1 px-3 mb-0 fw-bold border-success">
+                    <i class="fas fa-check-double"></i> Já Aprovado / Processo Gerado
+                </div>
+
+            {% elif orcamento.status == 'CANCELADO' %}
+                <div class="alert alert-secondary py-1 px-3 mb-0 fw-bold">
+                    <i class="fas fa-ban"></i> Cancelado
+                </div>
             {% endif %}
             
-            <button onclick="window.print()" class="btn btn-primary shadow-sm">
-                <i class="fas fa-print me-2"></i> Imprimir / PDF
+            <button onclick="window.print()" class="btn btn-primary shadow-sm ms-2">
+                <i class="fas fa-print me-1"></i> Imprimir
             </button>
         </div>
     </div>
@@ -29,8 +46,9 @@
         <div class="card border-0 shadow-lg p-4 p-print-0" id="folha-orcamento">
             
             <div class="text-center border-bottom pb-3 mb-4">
+                
                 {% if user.perfilusuario.despachante.logo %}
-                    <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo" style="max-height: 80px; max-width: 250px; margin-bottom: 10px;">
+                    <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo" style="max-height: 100px; max-width: 300px; margin-bottom: 10px;">
                 {% else %}
                     <h2 class="fw-bold text-uppercase mb-1 text-dark">
                         {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
@@ -49,22 +67,22 @@
             <div class="d-flex justify-content-between align-items-end mb-4">
                 <div>
                     <small class="text-muted text-uppercase fw-bold">Orçamento para:</small>
+                    <h5 class="fw-bold mt-1 mb-0">{{ orcamento.nome_cliente_display }}</h5>
                     
                     {% if orcamento.cliente %}
-                        <h5 class="fw-bold mt-1 mb-0">{{ orcamento.cliente.nome }}</h5>
                         <p class="mb-0 small text-muted">
                             CPF/CNPJ: {{ orcamento.cliente.cpf_cnpj }} <br>
                             Tel: {{ orcamento.cliente.telefone }}
                         </p>
-                    {% elif orcamento.nome_cliente_avulso %}
-                        <h5 class="fw-bold mt-1 mb-0">{{ orcamento.nome_cliente_avulso }}</h5>
-                        <p class="mb-0 small text-muted text-uppercase">Cliente Avulso</p>
                     {% else %}
-                        <h5 class="fw-bold mt-1 text-danger">Cliente não identificado</h5>
+                        <p class="mb-0 small text-muted text-uppercase">Cliente Avulso</p>
                     {% endif %}
                     
                     <p class="mt-2 mb-0 small text-muted">
                         <strong>Emissão:</strong> {{ orcamento.data_criacao|date:"d/m/Y" }}
+                        {% if orcamento.veiculo %}
+                            <br><strong>Veículo:</strong> {{ orcamento.veiculo.modelo }} - {{ orcamento.veiculo.placa }}
+                        {% endif %}
                     </p>
                 </div>
                 
@@ -92,7 +110,7 @@
                         {% for item in orcamento.itens.all %}
                         <tr>
                             <td class="ps-3 fw-bold text-dark align-middle">{{ item.servico_nome }}</td>
-                            <td class="text-end pe-3 align-middle text-muted">R$ {{ item.valor }}</td>
+                            <td class="text-end pe-3 align-middle text-muted">R$ {{ item.valor|floatformat:2 }}</td>
                         </tr>
                         {% empty %}
                         <tr>
@@ -125,13 +143,13 @@
                         {% if orcamento.desconto and orcamento.desconto > 0 %}
                             <tr>
                                 <td class="text-danger text-end border-0">Desconto:</td>
-                                <td class="text-end text-danger border-0">- R$ {{ orcamento.desconto }}</td>
+                                <td class="text-end text-danger border-0">- R$ {{ orcamento.desconto|floatformat:2 }}</td>
                             </tr>
                         {% endif %}
                         
                         <tr class="bg-light border-top border-dark">
                             <td class="text-end fw-bold fs-5 pt-2 border-0">TOTAL GERAL:</td>
-                            <td class="text-end fw-bold fs-5 pt-2 text-success border-0">R$ {{ orcamento.valor_total }}</td>
+                            <td class="text-end fw-bold fs-5 pt-2 text-success border-0">R$ {{ orcamento.valor_total|floatformat:2 }}</td>
                         </tr>
                     </table>
                 </div>
@@ -145,7 +163,7 @@
             {% endif %}
 
             <div class="mt-5 pt-3 text-center text-muted small border-top">
-                <p class="mb-1">Este orçamento tem validade de 5 dias.</p>
+                <p class="mb-1">Este orçamento tem validade de 5 dias úteis.</p>
                 <p class="fw-bold">{{ user.perfilusuario.despachante.nome_fantasia }} agradece a preferência!</p>
             </div>
 
@@ -176,7 +194,7 @@
 
         .print-full-width { width: 100% !important; max-width: 100% !important; flex: 0 0 100% !important; margin: 0 !important; padding: 0 !important; }
         .col-print-6 { width: 50% !important; float: right !important; margin-left: auto !important; }
-        .d-print-none, header, footer, .sidebar { display: none !important; }
+        .d-print-none { display: none !important; }
         
         .bg-light { background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .table-bordered th, .table-bordered td { border: 1px solid #000 !important; }

@@ -5,7 +5,7 @@ from django.conf import settings
 
 # --- SUAS CHAVES ---
 # Chave mantida exatamente como você enviou
-ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmIwNzU1ZjdiLWZkNmMtNDg1OS1iMzM5LTI5ZGNjYmU1ZGQzMTo6JGFhY2hfODdhNGE1N2UtOWE4Yi00ODQzLWEwZDEtNGE3MjdjZDg2NzFl"
+ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmIwOGJiZmFjLWZhOGYtNDMxZC1hNDA3LTQ4NjIxZDEwMWFmNjo6JGFhY2hfZDBiMzE2MDgtYTFjNy00NDdjLTllMjItOWNmMThjNzEwMjAz"
 ASAAS_URL = "https://sandbox.asaas.com/api/v3"
 
 def headers():

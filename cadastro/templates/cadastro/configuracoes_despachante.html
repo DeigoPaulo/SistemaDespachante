@@ -18,14 +18,27 @@
                 </div>
                 <div class="card-body p-4">
                     <div class="row g-4">
+                        
                         <div class="col-md-6">
-                            <label class="form-label fw-bold text-uppercase small">Imposto sobre Honorário (ISS/NF)</label>
+                            <label class="form-label fw-bold text-uppercase small">Alíquota Total de Impostos</label>
                             <div class="input-group">
-                                <input type="text" name="aliquota_imposto" class="form-control form-control-lg mask-percent" 
+                                <span class="input-group-text bg-white border-end-0 text-primary cursor-help" 
+                                      data-bs-toggle="tooltip" 
+                                      data-bs-placement="top" 
+                                      title="Insira a porcentagem total que você paga sobre a Nota Fiscal. Ex: 6,00% (Simples Anexo III), 15,50% (Simples Anexo V) ou ~16,33% (Lucro Presumido).">
+                                    <i class="fas fa-info-circle"></i>
+                                </span>
+                                
+                                <input type="text" name="aliquota_imposto" 
+                                       class="form-control form-control-lg mask-percent border-start-0" 
                                        value="{{ despachante.aliquota_imposto }}" required>
+                                       
                                 <span class="input-group-text bg-light text-dark fw-bold">%</span>
                             </div>
-                            <div class="form-text mt-2">Calculado apenas sobre o valor dos seus honorários.</div>
+                            <div class="form-text mt-2 text-muted" style="font-size: 0.85rem;">
+                                <i class="fas fa-calculator me-1"></i>
+                                O sistema usará este valor para calcular seu <strong>Lucro Líquido</strong>.
+                            </div>
                         </div>
 
                         <div class="col-md-6">
@@ -129,11 +142,15 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
 <script>
     $(document).ready(function(){
-        // Máscara para Porcentagem (ex: 05,00)
+        // 1. Máscaras de Input
         $('.mask-percent').mask('00,00', {reverse: true});
-        
-        // Máscara para Dinheiro (ex: 1.200,50)
         $('.mask-money').mask('#.##0,00', {reverse: true});
+
+        // 2. Inicialização dos Tooltips do Bootstrap (Necessário para o ícone de info funcionar)
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
     });
 </script>
 {% endblock %}

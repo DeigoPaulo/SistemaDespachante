@@ -19,6 +19,10 @@ from decimal import Decimal
 from datetime import timedelta
 from django.core.paginator import Paginator
 import requests 
+from decimal import Decimal, InvalidOperation
+from django.db.models import Q, Sum, Count, Value, DecimalField
+from django.db.models import Q, Sum, Count, Value, DecimalField, F, ExpressionWrapper
+
 
 
 
@@ -1564,59 +1568,96 @@ def gerar_boleto_agrupado(request, cliente_id):
 def dashboard_financeiro(request):
     despachante = request.user.perfilusuario.despachante
     
-    # 1. Filtro Base (Mesma lógica do fluxo de caixa: Aprovado)
-    processos_fin = Atendimento.objects.filter(
-        despachante=despachante, 
-        status='APROVADO' 
+    # --- 1. DEFINIÇÃO DO PERÍODO (FILTROS) ---
+    # Se não vier data na URL, pega o mês atual inteiro (do dia 1 até hoje)
+    hoje = timezone.now().date()
+    inicio_mes = hoje.replace(day=1)
+    
+    data_inicio = request.GET.get('data_inicio', inicio_mes.strftime('%Y-%m-%d'))
+    data_fim = request.GET.get('data_fim', hoje.strftime('%Y-%m-%d'))
+
+    # --- 2. QUERYSET BASE ---
+    # Filtra tudo que é APROVADO dentro do período selecionado
+    processos = Atendimento.objects.filter(
+        despachante=despachante,
+        status='APROVADO',
+        data_solicitacao__range=[data_inicio, data_fim]
     ).exclude(status='CANCELADO')
 
-    # 2. Agregação de Valores (Soma segura)
+    # --- 3. CÁLCULOS NO BANCO DE DADOS (PostgreSQL faz a conta) ---
     zero = Value(0, output_field=DecimalField())
-    
-    agregados = processos_fin.aggregate(
-        total_taxas=Coalesce(Sum('valor_taxas_detran'), zero),
-        total_honorarios=Coalesce(Sum('valor_honorarios'), zero),
-        total_impostos=Coalesce(Sum('custo_impostos'), zero),
-        total_bancario=Coalesce(Sum('custo_taxa_bancaria'), zero),
-        total_sindego=Coalesce(Sum('custo_taxa_sindego'), zero) 
+
+    # Aqui a mágica acontece: O banco soma e subtrai as colunas
+    agregados = processos.aggregate(
+        # Receita
+        soma_taxas=Coalesce(Sum('valor_taxas_detran'), zero),
+        soma_honorarios=Coalesce(Sum('valor_honorarios'), zero),
+        
+        # Custos
+        soma_impostos=Coalesce(Sum('custo_impostos'), zero),
+        soma_bancario=Coalesce(Sum('custo_taxa_bancaria'), zero),
+        soma_sindego=Coalesce(Sum('custo_taxa_sindego'), zero),
+        
+        # Lucro Líquido calculado no SQL: Honorarios - (Impostos + Banco + Sindicato)
+        lucro_liquido_real=Coalesce(Sum(
+            F('valor_honorarios') - (
+                F('custo_impostos') + 
+                F('custo_taxa_bancaria') + 
+                F('custo_taxa_sindego')
+            )
+        ), zero)
     )
 
-    h_bruto = float(agregados['total_honorarios'])
-    taxas_detran = float(agregados['total_taxas'])
+    # --- 4. PREPARAÇÃO PARA O DASHBOARD ---
+    # Convertendo Decimal para Float para passar pro JSON/Template
+    total_taxas = float(agregados['soma_taxas'])
+    total_honorarios = float(agregados['soma_honorarios'])
+    total_bruto = total_taxas + total_honorarios
     
-    impostos = float(agregados['total_impostos'])
-    bancario = float(agregados['total_bancario'])
-    sindego = float(agregados['total_sindego'])
+    custos_ops = float(agregados['soma_impostos'] + agregados['soma_bancario'] + agregados['soma_sindego'])
+    lucro_real = float(agregados['lucro_liquido_real'])
 
-    custos_operacionais = impostos + bancario + sindego
-    lucro_liquido = h_bruto - custos_operacionais
+    # Dados para o Gráfico de Rosca (Composição)
+    pie_data = [
+        lucro_real, 
+        float(agregados['soma_impostos']), 
+        float(agregados['soma_bancario']), 
+        float(agregados['soma_sindego'])
+    ]
 
-    pie_data = [lucro_liquido, impostos, bancario, sindego]
+    # --- 5. GRÁFICO DE EVOLUÇÃO (Barras) ---
+    # Mostra a evolução mensal DENTRO do período selecionado
+    evolucao = processos.annotate(
+        mes=ExtractMonth('data_solicitacao')
+    ).values('mes').annotate(
+        total=Sum('valor_honorarios')
+    ).order_by('mes')
 
-    # 7. Gráfico de Evolução (Barras)
-    hoje = timezone.now()
-    meses_nomes = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez']
-    
-    grafico_evolucao = processos_fin.filter(data_solicitacao__year=hoje.year)\
-        .annotate(mes=ExtractMonth('data_solicitacao'))\
-        .values('mes')\
-        .annotate(total=Sum('valor_honorarios'))\
-        .order_by('mes')
+    meses_nomes = {
+        1: 'Jan', 2: 'Fev', 3: 'Mar', 4: 'Abr', 5: 'Mai', 6: 'Jun',
+        7: 'Jul', 8: 'Ago', 9: 'Set', 10: 'Out', 11: 'Nov', 12: 'Dez'
+    }
 
-    labels_meses = [meses_nomes[item['mes']-1] for item in grafico_evolucao]
-    valores_meses = [float(item['total']) for item in grafico_evolucao]
+    labels_meses = [meses_nomes.get(item['mes'], 'Mês') for item in evolucao]
+    valores_meses = [float(item['total']) for item in evolucao]
 
     context = {
         'resumo': {
-            'bruto': float(taxas_detran + h_bruto), 
-            'detran': taxas_detran,
-            'custos_operacionais': custos_operacionais, 
-            'lucro': lucro_liquido,
-            'pendente': processos_fin.filter(status_financeiro='ABERTO').count()
+            'bruto': total_bruto,
+            'detran': total_taxas,
+            'custos_operacionais': custos_ops,
+            'lucro': lucro_real,
+            'pendente': processos.filter(status_financeiro='ABERTO').count()
         },
         'pie_data': json.dumps(pie_data),
         'labels_meses': json.dumps(labels_meses),
         'valores_meses': json.dumps(valores_meses),
+        
+        # Devolvemos as datas para manter o input preenchido
+        'filtros': {
+            'inicio': data_inicio,
+            'fim': data_fim
+        }
     }
     
     return render(request, 'cadastro/dashboard_financeiro.html', context)
