@@ -10,6 +10,7 @@ from django.core.mail import send_mail
 from django.utils import timezone      
 from datetime import timedelta         
 from django.conf import settings
+from .models import BaseConhecimento
 
 from .models import Despachante, PerfilUsuario, Cliente, Veiculo, Atendimento
 from .asaas import criar_cliente_asaas, gerar_boleto_asaas
@@ -279,3 +280,23 @@ class AtendimentoAdmin(SaasFilterMixin, admin.ModelAdmin):
     list_filter = ('status', 'data_solicitacao', 'despachante')
     search_fields = ('numero_atendimento', 'cliente__nome', 'veiculo__placa')
     date_hierarchy = 'data_solicitacao'
+
+@admin.register(BaseConhecimento)
+class BaseConhecimentoAdmin(admin.ModelAdmin):
+    list_display = ('titulo', 'categoria', 'data_atualizacao', 'ativo')
+    list_filter = ('categoria', 'ativo')
+    search_fields = ('titulo', 'conteudo', 'palavras_chave')
+    
+    # Campo para visualização rápida no admin
+    readonly_fields = ('data_atualizacao',)
+
+    # Opcional: Adiciona uma nota no topo para você lembrar como escrever
+    fieldsets = (
+        ('Identificação', {
+            'fields': ('titulo', 'categoria', 'palavras_chave', 'ativo')
+        }),
+        ('O Conhecimento (Cérebro da IA)', {
+            'description': 'Escreva aqui EXATAMENTE o procedimento correto. A IA usará este texto para responder o usuário.',
+            'fields': ('conteudo',)
+        }),
+    )

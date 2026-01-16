@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+
+{% block title %}Sucesso - Processos Gerados{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="text-center mb-5">
+        <div class="mb-3 text-success">
+            <i class="fas fa-check-circle fa-5x animate__animated animate__bounceIn"></i>
+        </div>
+        <h2 class="fw-bold text-success mb-2">Lançamento Concluído!</h2>
+        <p class="lead text-muted">{{ qtd }} processos foram gerados com sucesso.</p>
+        <p class="small text-muted mb-0">Clique em "Imprimir Capa" para definir o número do atendimento e gerar o envelope.</p>
+    </div>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="list-group shadow-sm border-0">
+                {% for proc in processos %}
+                <div class="list-group-item list-group-item-action d-flex justify-content-between align-items-center p-4 border-bottom">
+                    <div>
+                        <div class="d-flex align-items-center mb-1">
+                            <span class="badge bg-primary me-2 fs-6">{{ proc.veiculo.placa }}</span>
+                            <h5 class="mb-0 fw-bold text-dark">{{ proc.servico }}</h5>
+                        </div>
+                        <small class="text-muted text-uppercase fw-bold">
+                            <i class="fas fa-user me-1"></i> {{ proc.cliente.nome }}
+                        </small>
+                    </div>
+                    
+                    <a href="{% url 'imprimir_capa_processo' proc.id %}" target="_blank" class="btn btn-outline-dark px-4 py-2 fw-bold shadow-sm">
+                        <i class="fas fa-file-alt me-2"></i> IMPRIMIR CAPA A4
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="d-grid gap-3 mt-5 d-md-flex justify-content-md-center">
+                <a href="{% url 'dashboard' %}" class="btn btn-primary btn-lg px-5 shadow">
+                    <i class="fas fa-home me-2"></i> Ir para o Painel
+                </a>
+                <a href="{% url 'cadastro_rapido' %}" class="btn btn-outline-secondary btn-lg px-5">
+                    <i class="fas fa-plus me-2"></i> Lançar Mais
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

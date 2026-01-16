@@ -22,7 +22,7 @@
             </div>
 
             <div class="card-body p-4">
-                <form method="post" enctype="multipart/form-data"> {% csrf_token %}
+                <form method="post" enctype="multipart/form-data" id="form-atendimento"> {% csrf_token %}
 
                     {# --- CAMPOS OCULTOS --- #}
                     <input type="hidden" name="custo_impostos" value="{{ form.custo_impostos.value|stringformat:'s'|default:'0' }}">
@@ -85,11 +85,11 @@
                                     <div class="input-group">
                                         <input type="text" class="form-control bg-white" id="linkRastreio" 
                                                value="{{ request.scheme }}://{{ request.get_host }}{% url 'rastreio_publico' form.instance.token_rastreio %}" readonly>
-                                        
+                                    
                                         <button class="btn btn-outline-secondary" type="button" onclick="copiarLink()">
                                             <i class="fas fa-copy"></i> Copiar
                                         </button>
-                                        
+                                    
                                         {% if form.instance.cliente.telefone %}
                                         <a href="https://wa.me/55{{ form.instance.cliente.telefone|cut:' '|cut:'-'|cut:'('|cut:')' }}?text=Olá, acompanhe o andamento do seu processo aqui: {{ request.scheme }}://{{ request.get_host }}{% url 'rastreio_publico' form.instance.token_rastreio %}" 
                                            target="_blank" class="btn btn-success text-white fw-bold">
@@ -105,7 +105,7 @@
                     {% endif %}
 
                     {# ================================================================= #}
-                    {#  1.5 OBSERVAÇÕES GERAIS (NOVO BLOCO)                              #}
+                    {#  1.5 OBSERVAÇÕES GERAIS                                           #}
                     {# ================================================================= #}
                     {% if form.observacoes_internas %}
                     <div class="mb-4">
@@ -193,7 +193,7 @@
                         <a href="{{ url_voltar|default:'javascript:history.back()' }}" class="btn btn-secondary me-md-2">
                             <i class="fas fa-arrow-left me-1"></i> Voltar
                         </a>
-                        <button type="submit" class="btn btn-success px-4 shadow fw-bold">
+                        <button type="submit" class="btn btn-success px-4 shadow fw-bold" id="btn-salvar-processo">
                             <i class="fas fa-save me-1"></i> Salvar Alterações
                         </button>
                     </div>
@@ -266,7 +266,6 @@
         function verificarStatus() {
             if($selectStatus.val() === 'PENDENTE') {
                 $divPendencia.slideDown();
-                // Opcional: focar no campo se estiver vazio
                 if($divPendencia.find('textarea').val() === '') $divPendencia.find('textarea').focus();
             } else {
                 $divPendencia.slideUp();
@@ -299,6 +298,47 @@
         if ($inputHonorarios.length) {
             $inputHonorarios.on('input change', calcularCustos);
         }
+
+        // =========================================================
+        // 4. VALIDAÇÃO: BLOQUEIA SE MUDAR STATUS SEM NÚMERO DO PROCESSO
+        // =========================================================
+        $('#form-atendimento').on('submit', function(e) {
+            const statusSelecionado = $selectStatus.val();
+            const $numeroInput = $('input[name="numero_atendimento"]');
+            const numeroDigitado = $numeroInput.val() ? $numeroInput.val().trim() : '';
+
+            // Se o status for "EM ANALISE" ou "SOLICITADO"
+            // (Ajuste as strings abaixo conforme estão no seu banco de dados, ex: 'EM_ANALISE' ou 'Em Análise')
+            const statusQueExigemCapa = ['EM_ANALISE', 'SOLICITADO'];
+
+            if (statusQueExigemCapa.includes(statusSelecionado)) {
+                if (!numeroDigitado) {
+                    e.preventDefault(); // Impede o envio
+                    alert('⚠️ ATENÇÃO!\n\nPara iniciar o processo (Status: Em Análise/Solicitado), é OBRIGATÓRIO informar o Número do Atendimento para gerar a CAPA.\n\nPor favor, digite o número.');
+                    
+                    // Destaca o campo visualmente
+                    $numeroInput.addClass('is-invalid');
+                    $numeroInput.focus();
+                    
+                    // Remove o vermelho quando ele começar a digitar
+                    $numeroInput.one('input', function() {
+                        $(this).removeClass('is-invalid');
+                    });
+                    
+                    return false;
+                }
+            }
+        });
+
+        // 5. ABRE A CAPA AUTOMATICAMENTE APÓS SALVAR (Se instruído pelo Backend)
+        {% if request.session.abrir_capa_id %}
+            // Verifica se é o mesmo ID para não abrir errado
+            if ("{{ request.session.abrir_capa_id }}" == "{{ form.instance.id }}") {
+                let urlCapa = "{% url 'imprimir_capa_processo' request.session.abrir_capa_id %}";
+                window.open(urlCapa, "_blank");
+                // (Opcional) Faz uma chamada AJAX para limpar a sessão e não abrir de novo se der F5
+            }
+        {% endif %}
     });
 </script>
 {% endblock %}

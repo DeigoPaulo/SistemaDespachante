@@ -200,6 +200,23 @@
                                 <i class="fas fa-users-cog me-2"></i> Gerenciar Logins
                             </a>
                         </li>
+
+                        <li><hr class="dropdown-divider bg-secondary"></li>
+                        <li>
+                            <h6 class="dropdown-header text-uppercase small text-muted fw-bold">
+                                <i class="fas fa-robot me-1"></i> Inteligência Artificial
+                            </h6>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'master_listar_conhecimento' %}">
+                                <i class="fas fa-brain me-2 text-warning"></i> Base de Conhecimento
+                            </a>
+                        </li>
+                        <li>
+                            <a class="dropdown-item" href="{% url 'master_criar_conhecimento' %}">
+                                <i class="fas fa-plus-circle me-2 text-success"></i> Nova Resposta
+                            </a>
+                        </li>
                     </ul>
                 </li>
                 {% endif %}
@@ -252,5 +269,6 @@
 <script src="{% static 'js/custom.js' %}"></script>
 
 {% block extra_js %}{% endblock %}
+{% include 'includes/chatbot_ia.html' %}
 </body>
 </html>

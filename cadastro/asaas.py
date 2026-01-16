@@ -1,3 +1,4 @@
+import os
 import requests
 import re
 from datetime import date, timedelta
@@ -5,7 +6,7 @@ from django.conf import settings
 
 # --- SUAS CHAVES ---
 # Chave mantida exatamente como você enviou
-ASAAS_API_KEY = "$aact_hmlg_000MzkwODA2MWY2OGM3MWRlMDU2NWM3MzJlNzZmNGZhZGY6OmIwOGJiZmFjLWZhOGYtNDMxZC1hNDA3LTQ4NjIxZDEwMWFmNjo6JGFhY2hfZDBiMzE2MDgtYTFjNy00NDdjLTllMjItOWNmMThjNzEwMjAz"
+ASAAS_API_KEY = os.getenv("ASAAS_API_KEY")
 ASAAS_URL = "https://sandbox.asaas.com/api/v3"
 
 def headers():

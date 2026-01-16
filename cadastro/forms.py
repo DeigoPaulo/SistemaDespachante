@@ -1,14 +1,11 @@
 from django import forms
 from django.contrib.auth.models import User
 from .models import Atendimento, Cliente, Veiculo, Despachante, PerfilUsuario
+from .models import BaseConhecimento 
 
 # ==============================================================================
 # FORMULÁRIOS OPERACIONAIS
 # ==============================================================================
-
-from django import forms
-from django.contrib.auth.models import User
-from .models import Atendimento, Cliente, Veiculo
 
 class AtendimentoForm(forms.ModelForm):
     class Meta:
@@ -46,7 +43,7 @@ class AtendimentoForm(forms.ModelForm):
             'valor_honorarios': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'quem_pagou_detran': forms.Select(attrs={'class': 'form-select'}),
             
-            # ATUALIZADO: Widgets de Custo agora são protegidos (ReadOnly)
+            # Widgets de Custo protegidos (ReadOnly)
             'custo_impostos': forms.NumberInput(attrs={
                 'class': 'form-control bg-light', 
                 'step': '0.01', 
@@ -65,29 +62,23 @@ class AtendimentoForm(forms.ModelForm):
     def __init__(self, user, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # --- CORREÇÃO PRINCIPAL AQUI ---
-        # Define que esses campos NÃO são obrigatórios na validação do formulário.
-        # Isso permite salvar o form mesmo se o HTML enviar vazio (pois será calculado na View).
+        # Campos não obrigatórios na validação (calculados na View)
         self.fields['custo_impostos'].required = False
         self.fields['custo_taxa_bancaria'].required = False
 
         if user and hasattr(user, 'perfilusuario'):
             despachante = user.perfilusuario.despachante
             
-            # Filtros de Segurança por Despachante
             self.fields['cliente'].queryset = Cliente.objects.filter(despachante=despachante)
             self.fields['veiculo'].queryset = Veiculo.objects.filter(despachante=despachante)
             
-            # FILTRO DO RESPONSÁVEL
             self.fields['responsavel'].queryset = User.objects.filter(
                 perfilusuario__despachante=despachante
             ).order_by('first_name')
             
-            # Labels e Estilização
             self.fields['responsavel'].label_from_instance = lambda obj: f"{obj.get_full_name() or obj.username}".upper()
             self.fields['responsavel'].label = "Responsável Técnico"
 
-            # Reforço visual de que impostos são calculados pelo sistema
             self.fields['custo_impostos'].help_text = "Calculado automaticamente sobre o honorário."
             self.fields['custo_taxa_bancaria'].help_text = "Taxa operacional provisionada pelo sistema."
 
@@ -196,6 +187,16 @@ class DespachanteForm(forms.ModelForm):
             'valor_taxa_sindego_reduzida': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
         }
 
+    # --- CORREÇÃO IMPORTANTE: Lógica para remover a logo ---
+    def clean(self):
+        cleaned_data = super().clean()
+        
+        # Verifica se o checkbox "Remover Logo" foi marcado no template
+        if self.data.get('logo-clear') == 'on':
+            cleaned_data['logo'] = False  # False indica ao Django para limpar o campo
+            
+        return cleaned_data
+
 
 class UsuarioMasterForm(forms.Form):
     """Formulário manual para criar usuários com senha já criptografada na View"""
@@ -225,11 +226,32 @@ class UsuarioMasterForm(forms.Form):
     )
 
 class UsuarioMasterEditForm(UsuarioMasterForm):
-    username = forms.CharField(label="Login", widget=forms.TextInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
-    email = forms.EmailField(label="E-mail", widget=forms.EmailInput(attrs={'class': 'form-control', 'readonly': 'readonly'}))
+    # AQUI MANTIDO: Sem 'readonly' para permitir editar o Login
+    username = forms.CharField(
+        label="Login", 
+        widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+    
+    # Mantive o email bloqueado conforme seu código anterior
+    email = forms.EmailField(
+        label="E-mail", 
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'readonly': 'readonly'})
+    )
     
     password = forms.CharField(
         label="Nova Senha", 
         required=False, 
         widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Deixe em branco para manter a atual'})
     )
+
+class BaseConhecimentoForm(forms.ModelForm):
+    class Meta:
+        model = BaseConhecimento
+        fields = ['titulo', 'categoria', 'conteudo', 'palavras_chave', 'ativo']
+        widgets = {
+            'titulo': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: Como resolver crítica de chassi...'}),
+            'categoria': forms.Select(attrs={'class': 'form-select'}),
+            'conteudo': forms.Textarea(attrs={'class': 'form-control', 'rows': 6, 'placeholder': 'Explique o procedimento detalhadamente aqui...'}),
+            'palavras_chave': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Ex: chassi, erro 404, remarcação (ajuda na busca)'}),
+            'ativo': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }

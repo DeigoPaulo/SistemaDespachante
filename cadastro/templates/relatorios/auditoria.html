@@ -4,14 +4,46 @@
 
 {% block extra_css %}
 <style>
-    /* Estilos exclusivos para quando for imprimir ou gerar PDF */
+    /* --- ESTILOS DE TELA --- */
+    
+    /* Container da Tabela com Rolagem */
+    .table-wrapper {
+        max-height: 650px; /* Altura ajustada para exibir +/- 20 registros sem estourar a tela */
+        overflow-y: auto;  /* Habilita a rolagem vertical */
+        position: relative;
+        scrollbar-width: thin; /* Barra fina no Firefox */
+    }
+
+    /* Cabeçalho Fixo (Sticky Header) */
+    .table-wrapper thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background-color: #f8f9fa; /* Mesma cor do bg-light */
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    /* Avatar do Usuário */
+    .avatar-circle {
+        transition: transform 0.2s;
+    }
+    .avatar-circle:hover {
+        transform: scale(1.1);
+    }
+
+    /* --- ESTILOS DE IMPRESSÃO --- */
     @media print {
-        /* Esconde elementos desnecessários no papel */
-        .navbar, .btn, .no-print, form, .card-footer, .page-title-area {
+        /* Esconde elementos desnecessários */
+        .navbar, .btn, .no-print, form, .card-footer, .page-title-area, .sidebar {
             display: none !important;
         }
         
-        /* Remove sombras e bordas para economizar tinta e ficar limpo */
+        /* Remove a rolagem na impressão para sair tudo */
+        .table-wrapper {
+            max-height: none !important;
+            overflow: visible !important;
+        }
+
         .card {
             border: none !important;
             box-shadow: none !important;
@@ -21,23 +53,23 @@
             padding: 0 !important;
         }
 
-        /* Garante que a tabela ocupe 100% e as letras fiquem pretas */
         table {
             width: 100% !important;
             color: #000 !important;
+            font-size: 10pt;
         }
         
-        /* Adiciona um cabeçalho simples na impressão */
+        /* Cabeçalho simples na impressão */
         body::before {
             content: "Relatório de Auditoria - DespachaPro";
-            font-size: 18pt;
+            font-size: 16pt;
             font-weight: bold;
             display: block;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             text-align: center;
+            padding-top: 10px;
         }
         
-        /* Ajusta badges para ficarem legíveis em preto e branco */
         .badge {
             border: 1px solid #000 !important;
             color: #000 !important;
@@ -103,7 +135,7 @@
                 </div>
 
                 <div class="col-md-1 d-grid">
-                    <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i></button>
+                    <button type="submit" class="btn btn-primary btn-sm" title="Filtrar"><i class="fas fa-search"></i></button>
                 </div>
             </form>
         </div>
@@ -111,7 +143,8 @@
 
     <div class="card shadow mb-4">
         <div class="card-body p-0">
-            <div class="table-responsive">
+            
+            <div class="table-responsive table-wrapper">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="bg-light">
                         <tr>
@@ -129,30 +162,32 @@
                                 <small class="text-muted">{{ log.data|date:"H:i:s" }}</small>
                             </td>
                             
-                            <td style="width: 150px;">
+                            <td style="width: 180px;">
                                 <div class="d-flex align-items-center">
-                                    <div class="avatar-circle bg-secondary text-white me-2 d-flex align-items-center justify-content-center rounded-circle" style="width: 30px; height: 30px; font-size: 12px;">
+                                    <div class="avatar-circle bg-secondary text-white me-2 d-flex align-items-center justify-content-center rounded-circle shadow-sm" style="width: 32px; height: 32px; font-size: 12px; min-width: 32px;">
                                         {{ log.usuario.username|slice:":2"|upper }}
                                     </div>
-                                    <span class="fw-bold text-dark small">{{ log.usuario.first_name|default:log.usuario.username }}</span>
+                                    <div class="text-truncate" style="max-width: 130px;">
+                                        <span class="fw-bold text-dark small">{{ log.usuario.first_name|default:log.usuario.username }}</span>
+                                    </div>
                                 </div>
                             </td>
 
-                            <td style="width: 120px;">
+                            <td style="width: 130px;">
                                 {% if log.acao == 'CRIACAO' %}
-                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill">CRIAÇÃO</span>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-2">CRIAÇÃO</span>
                                 {% elif log.acao == 'EDICAO' %}
-                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill">EDIÇÃO</span>
+                                    <span class="badge bg-primary bg-opacity-10 text-primary border border-primary rounded-pill px-2">EDIÇÃO</span>
                                 {% elif log.acao == 'EXCLUSAO' %}
-                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill">EXCLUSÃO</span>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill px-2">EXCLUSÃO</span>
                                 {% elif log.acao == 'FINANCEIRO' %}
-                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill">FINANCEIRO</span>
+                                    <span class="badge bg-warning bg-opacity-10 text-warning border border-warning rounded-pill px-2">FINANCEIRO</span>
                                 {% else %}
-                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary rounded-pill">{{ log.get_acao_display|upper }}</span>
+                                    <span class="badge bg-secondary bg-opacity-10 text-secondary border border-secondary rounded-pill px-2">{{ log.get_acao_display|upper }}</span>
                                 {% endif %}
                             </td>
 
-                            <td class="text-secondary small">
+                            <td class="text-secondary small py-3">
                                 {{ log.descricao }}
                             </td>
                         </tr>
@@ -160,7 +195,7 @@
                         <tr>
                             <td colspan="4" class="text-center py-5 text-muted">
                                 <i class="fas fa-search fa-2x mb-3 opacity-25"></i>
-                                <p>Nenhum registro encontrado com os filtros atuais.</p>
+                                <p class="mb-0">Nenhum registro encontrado com os filtros atuais.</p>
                             </td>
                         </tr>
                         {% endfor %}
@@ -170,29 +205,33 @@
         </div>
         
         {% if logs.has_other_pages %}
-        <div class="card-footer bg-white py-3 no-print">
+        <div class="card-footer bg-white py-3 no-print border-top">
             <nav>
                 <ul class="pagination justify-content-center mb-0 pagination-sm">
                     {% if logs.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ logs.previous_page_number }}&busca={{ busca }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&acao={{ acao_filtro }}&usuario={{ usuario_filtro }}">Anterior</a>
+                            <a class="page-link" href="?page={{ logs.previous_page_number }}&busca={{ busca }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&acao={{ acao_filtro }}&usuario={{ usuario_filtro }}">
+                                <i class="fas fa-chevron-left me-1"></i> Anterior
+                            </a>
                         </li>
                     {% else %}
-                        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                        <li class="page-item disabled"><span class="page-link"><i class="fas fa-chevron-left me-1"></i> Anterior</span></li>
                     {% endif %}
                     
                     <li class="page-item disabled">
-                        <span class="page-link bg-light text-dark fw-bold">
+                        <span class="page-link bg-light text-dark fw-bold border-start-0 border-end-0">
                             Página {{ logs.number }} de {{ logs.paginator.num_pages }}
                         </span>
                     </li>
 
                     {% if logs.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ logs.next_page_number }}&busca={{ busca }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&acao={{ acao_filtro }}&usuario={{ usuario_filtro }}">Próxima</a>
+                            <a class="page-link" href="?page={{ logs.next_page_number }}&busca={{ busca }}&data_inicio={{ data_inicio }}&data_fim={{ data_fim }}&acao={{ acao_filtro }}&usuario={{ usuario_filtro }}">
+                                Próxima <i class="fas fa-chevron-right ms-1"></i>
+                            </a>
                         </li>
                     {% else %}
-                        <li class="page-item disabled"><span class="page-link">Próxima</span></li>
+                        <li class="page-item disabled"><span class="page-link">Próxima <i class="fas fa-chevron-right ms-1"></i></span></li>
                     {% endif %}
                 </ul>
             </nav>

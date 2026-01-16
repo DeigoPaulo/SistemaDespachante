@@ -33,12 +33,33 @@
                         </h6>
                         
                         <div class="row g-3 mb-4">
+                            
                             <div class="col-12 mb-3">
                                 <label class="form-label fw-bold">Logo do Escritório</label>
-                                {{ form.logo }}
-                                <div class="form-text small text-muted">
-                                    <i class="fas fa-image me-1"></i> Recomendado: Arquivo <strong>.PNG com fundo transparente</strong> para sair perfeito no recibo.
+                                <div class="card bg-light border-0 p-3">
+                                    <div class="d-flex align-items-center">
+                                        {% if form.instance.logo %}
+                                            <div class="me-4 text-center">
+                                                <img src="{{ form.instance.logo.url }}" alt="Logo Atual" class="img-thumbnail mb-2" style="max-height: 80px;">
+                                                <br>
+                                                <div class="form-check form-check-inline">
+                                                    <input class="form-check-input" type="checkbox" name="logo-clear" id="logo-clear_id">
+                                                    <label class="form-check-label text-danger small fw-bold" for="logo-clear_id">Remover Logo</label>
+                                                </div>
+                                            </div>
+                                        {% endif %}
+                                        
+                                        <div class="flex-grow-1">
+                                            <input type="file" name="logo" class="form-control" accept="image/*">
+                                            <div class="form-text small text-muted mt-2">
+                                                <i class="fas fa-image me-1"></i> Recomendado: Arquivo <strong>.PNG com fundo transparente</strong>.
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+                                {% if form.logo.errors %}
+                                    <div class="text-danger small mt-1">{{ form.logo.errors }}</div>
+                                {% endif %}
                             </div>
 
                             <div class="col-md-6">
@@ -96,6 +117,12 @@
                                 <div class="form-text">Onde o boleto será enviado.</div>
                             </div>
                         </div>
+
+                        {% if form.non_field_errors %}
+                            <div class="alert alert-danger mt-3">
+                                {{ form.non_field_errors }}
+                            </div>
+                        {% endif %}
 
                         <div class="d-flex justify-content-end gap-2 mt-5">
                             <a href="{% url 'master_listar_despachantes' %}" class="btn btn-outline-secondary px-4">Cancelar</a>

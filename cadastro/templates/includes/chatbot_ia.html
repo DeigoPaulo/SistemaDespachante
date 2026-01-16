@@ -1,0 +1,186 @@
+<div id="chatbot-trigger" class="shadow-lg" onclick="toggleChat()">
+    <i class="fas fa-robot fa-lg"></i>
+</div>
+
+<div id="chatbot-window" class="shadow-lg d-none">
+    <div class="chat-header bg-primary text-white p-3 d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center">
+            <div class="bg-white text-primary rounded-circle d-flex justify-content-center align-items-center me-2" style="width: 35px; height: 35px;">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div>
+                <h6 class="mb-0 fw-bold">IA DespachaPro</h6>
+                <small style="font-size: 0.75rem;">Base de Conhecimento Detran</small>
+            </div>
+        </div>
+        <button onclick="toggleChat()" class="btn btn-sm text-white"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div id="chat-messages" class="p-3 bg-light">
+        <div class="msg-bot">
+            Olá! Sou sua IA especialista em procedimentos do Detran. 
+            <br><br>
+            Como posso ajudar você hoje com dúvidas operacionais?
+        </div>
+    </div>
+
+    <div class="chat-footer p-2 bg-white border-top">
+        <form id="chat-form" onsubmit="enviarMensagem(event)" class="d-flex gap-2">
+            <input type="text" id="user-input" class="form-control border-0 bg-light" placeholder="Digite sua dúvida..." autocomplete="off">
+            <button type="submit" class="btn btn-primary rounded-circle" style="width: 40px; height: 40px;">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* Estilos do Botão Flutuante */
+    #chatbot-trigger {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 60px;
+        height: 60px;
+        background: linear-gradient(135deg, #0d6efd, #0a58ca);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        z-index: 9999;
+        transition: transform 0.3s ease;
+    }
+    #chatbot-trigger:hover { transform: scale(1.1); }
+
+    /* Estilos da Janela */
+    #chatbot-window {
+        position: fixed;
+        bottom: 100px;
+        right: 30px;
+        width: 350px;
+        height: 500px;
+        background-color: white;
+        border-radius: 15px;
+        overflow: hidden;
+        z-index: 9999;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid rgba(0,0,0,0.1);
+        /* Animação de entrada */
+        animation: slideUp 0.3s ease-out;
+    }
+
+    /* Área de rolagem das mensagens */
+    #chat-messages {
+        flex-grow: 1;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    /* Balões de Mensagem */
+    .msg-bot, .msg-user {
+        max-width: 80%;
+        padding: 10px 15px;
+        border-radius: 15px;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        word-wrap: break-word;
+    }
+
+    .msg-bot {
+        align-self: flex-start;
+        background-color: white;
+        color: #333;
+        border-bottom-left-radius: 2px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+    }
+
+    .msg-user {
+        align-self: flex-end;
+        background-color: #0d6efd; /* Cor Primária */
+        color: white;
+        border-bottom-right-radius: 2px;
+    }
+
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+</style>
+
+<script>
+    function toggleChat() {
+        const chatWindow = document.getElementById('chatbot-window');
+        chatWindow.classList.toggle('d-none');
+        
+        // Foca no input quando abre
+        if (!chatWindow.classList.contains('d-none')) {
+            document.getElementById('user-input').focus();
+        }
+    }
+
+    function enviarMensagem(e) {
+        e.preventDefault();
+        const input = document.getElementById('user-input');
+        const texto = input.value.trim();
+        if (!texto) return;
+
+        // 1. Adiciona a mensagem do usuário na tela
+        adicionarSalao(texto, 'user');
+        input.value = '';
+
+        // 2. Mostra "Digitando..." (Placeholder visual)
+        const idDigitando = mostrarDigitando();
+
+        // 3. Simulação de envio para o Backend (Vamos conectar no próximo passo)
+        // Aqui usaremos AJAX/Fetch para falar com o Python
+        fetch('/api/chatbot-responder/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}' 
+            },
+            body: JSON.stringify({ 'pergunta': texto })
+        })
+        .then(response => response.json())
+        .then(data => {
+            removerDigitando(idDigitando);
+            adicionarSalao(data.resposta, 'bot');
+        })
+        .catch(error => {
+            removerDigitando(idDigitando);
+            adicionarSalao("Desculpe, tive um erro de conexão. Tente novamente.", 'bot');
+            console.error('Erro:', error);
+        });
+    }
+
+    function adicionarSalao(texto, tipo) {
+        const area = document.getElementById('chat-messages');
+        const div = document.createElement('div');
+        div.className = tipo === 'user' ? 'msg-user' : 'msg-bot';
+        div.innerHTML = texto.replace(/\n/g, '<br>'); // Quebra de linha
+        area.appendChild(div);
+        area.scrollTop = area.scrollHeight; // Rola para o final
+    }
+
+    function mostrarDigitando() {
+        const area = document.getElementById('chat-messages');
+        const id = 'digitando-' + Date.now();
+        const div = document.createElement('div');
+        div.id = id;
+        div.className = 'msg-bot text-muted fst-italic';
+        div.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i> Analisando base de dados...';
+        area.appendChild(div);
+        area.scrollTop = area.scrollHeight;
+        return id;
+    }
+
+    function removerDigitando(id) {
+        const elemento = document.getElementById(id);
+        if (elemento) elemento.remove();
+    }
+</script>

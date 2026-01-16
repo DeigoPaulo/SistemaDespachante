@@ -56,6 +56,7 @@ urlpatterns = [
     path('orcamento/<int:id>/', views.detalhe_orcamento, name='detalhe_orcamento'),
     path('orcamento/<int:id>/aprovar/', views.aprovar_orcamento, name='aprovar_orcamento'),
     path('orcamento/<int:id>/excluir/', views.excluir_orcamento, name='excluir_orcamento'),
+    path('atendimento/<int:id>/capa/', views.imprimir_capa_processo, name='imprimir_capa_processo'),
 
     # ==========================================================================
     # 5. FERRAMENTAS E UTILITÁRIOS
@@ -114,4 +115,15 @@ urlpatterns = [
     
     # Gera cobrança agrupada (vários atendimentos de um cliente) <-- AQUI ESTAVA FALTANDO
     path('financeiro/boleto-agrupado/<int:cliente_id>/', views.gerar_boleto_agrupado, name='gerar_boleto_agrupado'),
+
+    # ==========================================================================
+    # 9. CHATBOT COM IA (GEMINI RAG)
+    # ==========================================================================
+    
+    path('api/chatbot-responder/', views.chatbot_responder, name='api_chatbot_responder'),
+
+    # GESTÃO DA IA (MASTER)
+    path('master/ia/conhecimento/', views.master_listar_conhecimento, name='master_listar_conhecimento'),
+    path('master/ia/conhecimento/novo/', views.master_editar_conhecimento, name='master_criar_conhecimento'),
+    path('master/ia/conhecimento/editar/<int:id>/', views.master_editar_conhecimento, name='master_editar_conhecimento'),
 ]

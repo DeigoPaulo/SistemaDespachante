@@ -117,7 +117,7 @@
                     <th>Serviço</th>
                     <th>Data / Prazo</th>
                     <th>Status</th>
-                    <th class="text-center">Ação</th>
+                    <th class="text-center" width="120px">Ações</th>
                 </tr>
             </thead>
             <tbody class="border-top-0">
@@ -191,12 +191,19 @@
                     </td>
 
                     <td class="text-center">
-                        <a href="{% url 'editar_atendimento' processo.id %}"
-                           class="btn btn-sm btn-outline-primary border-0 rounded-circle"
-                           style="width: 32px; height: 32px; line-height: 20px;"
-                           title="Atualizar Status">
-                            <i class="fas fa-sync-alt"></i>
-                        </a>
+                        <div class="btn-group">
+                            <a href="{% url 'imprimir_capa_processo' processo.id %}" target="_blank"
+                               class="btn btn-sm btn-outline-dark" 
+                               title="Imprimir Capa do Envelope">
+                                <i class="fas fa-file-alt"></i>
+                            </a>
+
+                            <a href="{% url 'editar_atendimento' processo.id %}"
+                               class="btn btn-sm btn-outline-primary"
+                               title="Editar / Mudar Status">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                        </div>
                     </td>
                 </tr>
                 {% empty %}
@@ -222,6 +229,8 @@
         </table>
     </div>
 </div>
+
+{% include 'includes/chatbot_ia.html' %}
 
 {% endblock %}
 
@@ -249,4 +258,15 @@
         box-shadow: 0 1px 2px rgba(0,0,0,0.1); /* Sombra suave para separar */
     }
 </style>
+{% endblock %}
+
+{% block extra_js %}
+{% if request.session.abrir_capa_id %}
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        let urlCapa = "{% url 'imprimir_capa_processo' request.session.abrir_capa_id %}";
+        window.open(urlCapa, "_blank");
+    });
+</script>
+{% endif %}
 {% endblock %}

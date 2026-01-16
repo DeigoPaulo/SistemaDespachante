@@ -1,3 +1,4 @@
+import os
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.utils import timezone
@@ -20,8 +21,13 @@ from datetime import timedelta
 from django.core.paginator import Paginator
 import requests 
 from decimal import Decimal, InvalidOperation
-from django.db.models import Q, Sum, Count, Value, DecimalField
 from django.db.models import Q, Sum, Count, Value, DecimalField, F, ExpressionWrapper
+from django.views.decorators.http import require_POST
+from django.contrib.auth.decorators import login_required
+from django.conf import settings
+from .models import BaseConhecimento
+from .forms import BaseConhecimentoForm
+from groq import Groq
 
 
 
@@ -375,6 +381,30 @@ def excluir_atendimento(request, id):
 
     return redirect('dashboard')
 
+@login_required
+def imprimir_capa_processo(request, id):
+    atendimento = get_object_or_404(Atendimento, id=id, despachante=request.user.perfilusuario.despachante)
+
+    # Lógica: Se enviou um POST, é porque está salvando o número
+    if request.method == 'POST':
+        novo_numero = request.POST.get('numero_atendimento')
+        if novo_numero:
+            atendimento.numero_atendimento = novo_numero
+            atendimento.save()
+            # Redireciona para a mesma página (GET) para imprimir agora
+            return redirect('imprimir_capa_processo', id=id)
+
+    # Se NÃO tem número gravado, mostra tela de bloqueio pedindo o número
+    if not atendimento.numero_atendimento:
+        return render(request, 'documentos/bloqueio_capa.html', {'atendimento': atendimento})
+
+    # Se JÁ tem número, renderiza a capa A4
+    context = {
+        'atendimento': atendimento,
+        'hoje': timezone.now()
+    }
+    return render(request, 'documentos/print_capa_processo.html', context)
+
 # ==============================================================================
 # CADASTRO RÁPIDO (LOTE)
 # ==============================================================================
@@ -393,7 +423,7 @@ def cadastro_rapido(request):
     if request.method == 'POST':
         try:
             with transaction.atomic():
-                # --- [Bloco de Responsável e Cliente] ---
+                # --- [Bloco de Responsável e Cliente] (Mantido) ---
                 responsavel_id = request.POST.get('responsavel') or request.POST.get('responsavel_id')
                 responsavel_obj = request.user 
                 if responsavel_id:
@@ -418,89 +448,63 @@ def cadastro_rapido(request):
                 obs_geral = request.POST.get('observacoes', '')
                 prazo_input = request.POST.get('prazo_entrega')
 
+                # LISTA PARA O RESUMO (NOVIDADE)
+                processos_criados = []
+
                 for i in range(len(placas)):
                     placa_limpa = placas[i].replace('-', '').replace(' ', '').upper()
                     if not placa_limpa: continue
 
-                    # 1. Cria ou Pega o Veículo
+                    # 1. Cria ou Pega o Veículo (Mantido)
                     veiculo, _ = Veiculo.objects.get_or_create(
                         placa=placa_limpa,
                         despachante=despachante,
                         defaults={'cliente': cliente, 'modelo': modelos[i].upper()}
                     )
 
-                    # ==========================================================
-                    # 2. SOMATÓRIA DOS SERVIÇOS (USANDO DECIMAL)
-                    # ==========================================================
+                    # 2. SOMATÓRIA DOS SERVIÇOS (Mantido)
                     nomes_selecionados = [s.strip() for s in servicos_str_lista[i].split('+')]
                     
-                    # Inicializa com Decimal para precisão monetária
                     total_taxas_detran = Decimal('0.00')
                     total_honorarios = Decimal('0.00')
                     total_custo_sindego = Decimal('0.00')
                     tipo_servico_vinculado = None
 
                     for nome_s in nomes_selecionados:
-                        # Busca case-insensitive
                         s_base = servicos_db.filter(nome__iexact=nome_s).first()
                         
                         if s_base:
-                            # Converte e soma (Garante que não use float)
                             total_taxas_detran += s_base.valor_base
                             total_honorarios += s_base.honorarios
 
-                            # CÁLCULO EXPLÍCITO DA TAXA SINDEGO (Corrige o erro de combos)
                             if s_base.usa_taxa_sindego_reduzida:
                                 total_custo_sindego += despachante.valor_taxa_sindego_reduzida
                             else:
                                 total_custo_sindego += despachante.valor_taxa_sindego_padrao
 
-                            # Se for item único, vincula o ID para relatórios
                             if len(nomes_selecionados) == 1:
                                 tipo_servico_vinculado = s_base
 
-                    # ==========================================================
-                    # 3. CÁLCULO DE IMPOSTOS E TAXAS (COM LOG DE DEBUG)
-                    # ==========================================================
-                    
-                    # Converte configurações do despachante para Decimal
-                    # str() é usado para garantir conversão segura de Float/None para Decimal
+                    # 3. CÁLCULO DE IMPOSTOS (Mantido)
                     aliquota_db = Decimal(str(despachante.aliquota_imposto or 0))
                     taxa_maq_db = Decimal(str(despachante.taxa_bancaria_padrao or 0))
                     
-                    # --- DEBUG VISUAL (OLHE O TERMINAL) ---
-                    print(f"\n--- DEBUG FINANCEIRO (PLACA: {placa_limpa}) ---")
-                    print(f"Honorários Base: R$ {total_honorarios}")
-                    print(f"Alíquota Configurada (DB): {aliquota_db}%")
-                    print(f"Taxa Maquininha (DB): {taxa_maq_db}%")
-
-                    # Cálculo Seguro: (Valor * Porcentagem) / 100
                     custo_imp = total_honorarios * (aliquota_db / 100)
                     custo_ban = total_honorarios * (taxa_maq_db / 100)
 
-                    print(f"-> Custo Imposto Calculado: R$ {custo_imp}")
-                    print(f"-> Custo Banco Calculado: R$ {custo_ban}")
-                    print(f"----------------------------------------------\n")
-
-                    # ==========================================================
-                    # 4. CRIAÇÃO DO ATENDIMENTO
-                    # ==========================================================
-                    Atendimento.objects.create(
+                    # 4. CRIAÇÃO DO ATENDIMENTO (Mantido)
+                    atendimento = Atendimento.objects.create(
                         despachante=despachante,
                         cliente=cliente,
                         veiculo=veiculo,
-                        
                         tipo_servico=tipo_servico_vinculado, 
                         servico=servicos_str_lista[i], 
-                        
                         responsavel=responsavel_obj,
                         numero_atendimento=atendimentos[i] if i < len(atendimentos) else '',
                         
-                        # Valores Monetários (Já estão em Decimal)
                         valor_taxas_detran=total_taxas_detran,
                         valor_honorarios=total_honorarios,
                         
-                        # Custos calculados na View
                         custo_impostos=custo_imp,
                         custo_taxa_bancaria=custo_ban,
                         custo_taxa_sindego=total_custo_sindego,
@@ -511,12 +515,18 @@ def cadastro_rapido(request):
                         data_entrega=prazo_input if prazo_input else None,
                         observacoes_internas=f"{obs_geral}\nGerado via Cadastro Rápido."
                     )
+                    
+                    # ADICIONA À LISTA DE RESUMO
+                    processos_criados.append(atendimento)
 
-            messages.success(request, f"{len(placas)} processos criados com financeiro calculado!")
-            return redirect('dashboard')
+            # --- REDIRECIONAMENTO NOVO ---
+            # Em vez de voltar pro dashboard, vai pro resumo pra imprimir capas
+            return render(request, 'processos/resumo_lote.html', {
+                'processos': processos_criados,
+                'qtd': len(processos_criados)
+            })
 
         except Exception as e:
-            # Imprime o erro completo no console para ajudar a debugar
             print(f"ERRO CRÍTICO NO CADASTRO RÁPIDO: {e}")
             messages.error(request, f"Erro ao processar lote: {e}")
             return redirect('cadastro_rapido')
@@ -2171,42 +2181,45 @@ def master_editar_usuario(request, id):
 
 
 @login_required
-@user_passes_test(is_admin_or_superuser, login_url='/dashboard/') # Bloqueia operadores comuns
+@user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def relatorio_auditoria(request):
     try:
         perfil = request.user.perfilusuario
     except:
         return redirect('dashboard')
     
-    # 1. Base: Logs do despachante, ordenados do mais recente para o mais antigo
+    # 1. Base: Logs do despachante
     logs = LogAtividade.objects.filter(
         despachante=perfil.despachante
     ).select_related('usuario').order_by('-data')
 
-    # 2. Captura dos Filtros da URL
-    data_inicio = request.GET.get('data_inicio')
-    data_fim = request.GET.get('data_fim')
-    acao = request.GET.get('acao')
-    busca = request.GET.get('busca')
-    usuario_id = request.GET.get('usuario')
+    # --- CORREÇÃO AQUI: Função para limpar parâmetros sujos ---
+    def validar_param(valor):
+        if valor in [None, '', 'None', 'Mm', 'dd', 'yyyy']: # Filtra 'None' e lixo comum
+            return None
+        return valor
 
-    # --- Aplicação dos Filtros ---
+    # 2. Captura dos Filtros (Usando a validação)
+    data_inicio = validar_param(request.GET.get('data_inicio'))
+    data_fim = validar_param(request.GET.get('data_fim'))
+    acao = validar_param(request.GET.get('acao'))
+    busca = validar_param(request.GET.get('busca'))
+    usuario_id = validar_param(request.GET.get('usuario'))
+
+    # --- Aplicação dos Filtros (Só entra se tiver valor válido) ---
     
-    # Filtro por Data
     if data_inicio:
         logs = logs.filter(data__date__gte=data_inicio)
+    
     if data_fim:
         logs = logs.filter(data__date__lte=data_fim)
 
-    # Filtro por Tipo de Ação (Criação, Edição, Exclusão...)
     if acao:
         logs = logs.filter(acao=acao)
         
-    # Filtro por Usuário Específico
     if usuario_id:
         logs = logs.filter(usuario_id=usuario_id)
 
-    # Busca Textual Inteligente (Descrição, Nome do Cliente ou Login do Usuário)
     if busca:
         logs = logs.filter(
             Q(descricao__icontains=busca) |
@@ -2215,33 +2228,28 @@ def relatorio_auditoria(request):
             Q(usuario__first_name__icontains=busca)
         )
 
-    # 3. Paginação (20 itens por página)
+    # 3. Paginação
     paginator = Paginator(logs, 20) 
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
     
-    # Lista de usuários para o filtro (dropdown)
     usuarios_equipe = PerfilUsuario.objects.filter(despachante=perfil.despachante).select_related('user')
 
     context = {
-        'logs': page_obj, # O template percorre isso
+        'logs': page_obj,
         'usuarios_equipe': usuarios_equipe,
         
-        # Passamos os filtros de volta para manter o formulário preenchido
-        'busca': busca,
-        'data_inicio': data_inicio,
-        'data_fim': data_fim,
-        'acao_filtro': acao,
-        'usuario_filtro': usuario_id,
+        # Passa os valores limpos para o template
+        'busca': busca if busca else '',
+        'data_inicio': data_inicio if data_inicio else '',
+        'data_fim': data_fim if data_fim else '',
+        'acao_filtro': acao if acao else '',
+        'usuario_filtro': usuario_id if usuario_id else '',
         
         'opcoes_acao': LogAtividade.ACAO_CHOICES,
     }
     
     return render(request, 'relatorios/auditoria.html', context)
-
-from django.views.decorators.csrf import csrf_exempt
-from django.http import JsonResponse, HttpResponse
-import json
 
 # ==============================================================================
 # WEBHOOKS (INTEGRAÇÃO ASAAS)
@@ -2404,3 +2412,140 @@ def rastreio_publico(request, token):
         'cor': cor
     }
     return render(request, 'publico/rastreio.html', context)
+
+# ==============================================================================
+# CHATBOT COM IA (MIGRAÇÃO PARA GROQ / LLAMA 3)
+# ==============================================================================
+
+# COLE SUA CHAVE 'gsk_...' DENTRO DAS ASPAS ABAIXO
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+# Inicializa o cliente
+client = Groq(api_key=GROQ_API_KEY)
+
+@login_required
+@require_POST
+def chatbot_responder(request):
+    try:
+        # 1. Ler a pergunta
+        data = json.loads(request.body)
+        pergunta_usuario = data.get('pergunta', '').strip()
+
+        if not pergunta_usuario:
+            return JsonResponse({'resposta': 'Por favor, digite uma pergunta.'})
+
+        # 2. BUSCA INTELIGENTE (RAG)
+        termos = pergunta_usuario.split()
+        query = Q()
+        for termo in termos:
+            if len(termo) > 3: 
+                query |= Q(titulo__icontains=termo) | \
+                         Q(conteudo__icontains=termo) | \
+                         Q(palavras_chave__icontains=termo)
+        
+        resultados = BaseConhecimento.objects.filter(query, ativo=True).distinct()[:5]
+
+        # 3. MONTAR O CONTEXTO
+        contexto_banco = ""
+        if resultados.exists():
+            contexto_banco = "\n\n".join([f"ASSUNTO: {r.titulo}\nSOLUÇÃO: {r.conteudo}" for r in resultados])
+        else:
+            contexto_banco = "Nenhuma informação técnica específica encontrada."
+
+        # 4. DEFINIÇÃO DA PERSONALIDADE (Direta e Seca)
+        system_prompt = f"""
+        Você é a "IA DespachaPro".
+        
+        --- FONTES TÉCNICAS ---
+        {contexto_banco}
+        --- FIM FONTES ---
+
+        DIRETRIZES DE ESTILO (IMPORTANTE):
+        1. **SEJA DIRETA:** Não use frases de enchimento como "Entendo sua dúvida". Vá direto para a resposta.
+        2. **Social:** Se for "Oi", responda curto: "Olá! Em que posso ajudar?".
+        3. **Técnico:** Use as FONTES TÉCNICAS acima. Se a resposta estiver lá, entregue apenas o procedimento. 
+           - Exemplo BOM: "Faça X. Em seguida, anexe Y."
+        4. **Sem Resposta:** Se não tiver no banco, diga apenas: "Não encontrei esse procedimento no manual interno. Favor contatar o suporte."
+        
+        Responda em Português do Brasil.
+        """
+
+        # 5. LÓGICA DE FALLBACK (PLANO A -> PLANO B)
+        resposta_texto = ""
+        
+        try:
+            # TENTATIVA 1: O "Einstein" (Modelo 70b - Mais inteligente)
+            # Use este como padrão pela qualidade
+            chat_completion = client.chat.completions.create(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": pergunta_usuario}
+                ],
+                model="llama-3.3-70b-versatile",
+                temperature=0.3,
+                max_tokens=500,
+            )
+            resposta_texto = chat_completion.choices[0].message.content
+            
+        except Exception as e_principal:
+            print(f"⚠️ Erro no modelo principal (70b): {e_principal}")
+            print("🔄 Alternando para modelo de backup (8b)...")
+            
+            # TENTATIVA 2: O "Ligeirinho" (Modelo 8b - Mais rápido, limite 5x maior)
+            # Entra em ação se o 70b falhar ou estourar a cota
+            try:
+                chat_completion = client.chat.completions.create(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": pergunta_usuario}
+                    ],
+                    model="llama-3.1-8b-instant",
+                    temperature=0.3,
+                    max_tokens=500,
+                )
+                resposta_texto = chat_completion.choices[0].message.content
+            except Exception as e_backup:
+                print(f"❌ Erro total (ambos falharam): {e_backup}")
+                return JsonResponse({'resposta': 'Sistema temporariamente indisponível.'}, status=503)
+
+        return JsonResponse({'resposta': resposta_texto})
+
+    except Exception as e:
+        print(f"Erro Geral no Chatbot: {e}")
+        return JsonResponse({'resposta': 'Erro de comunicação.'}, status=500)
+# ==============================================================================
+# PAINEL MASTER - BASE DE CONHECIMENTO  
+# ==============================================================================
+@login_required
+@user_passes_test(lambda u: u.is_superuser) # BLOQUEIO TOTAL: Só você entra aqui
+def master_listar_conhecimento(request):
+    # Busca tudo, ordenado pelos mais recentes
+    itens = BaseConhecimento.objects.all().order_by('-data_atualizacao')
+    
+    # Filtro simples de busca na tela
+    busca = request.GET.get('busca')
+    if busca:
+        itens = itens.filter(titulo__icontains=busca)
+
+    return render(request, 'master/lista_conhecimento.html', {'itens': itens})
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def master_editar_conhecimento(request, id=None):
+    if id:
+        item = get_object_or_404(BaseConhecimento, id=id)
+        titulo_pag = "Editar Conhecimento"
+    else:
+        item = None
+        titulo_pag = "Novo Conhecimento"
+
+    if request.method == 'POST':
+        form = BaseConhecimentoForm(request.POST, instance=item)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Base de conhecimento atualizada com sucesso!")
+            return redirect('master_listar_conhecimento')
+    else:
+        form = BaseConhecimentoForm(instance=item)
+
+    return render(request, 'master/form_conhecimento.html', {'form': form, 'titulo': titulo_pag})

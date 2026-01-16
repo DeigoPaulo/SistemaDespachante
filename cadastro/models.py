@@ -490,3 +490,30 @@ class LogAtividade(models.Model):
 
     def __str__(self):
         return f"{self.usuario} - {self.acao} - {self.data}"
+
+# Em cadastro/models.py
+
+class BaseConhecimento(models.Model):
+    CATEGORIAS = [
+        ('CRITICA', 'Resolução de Críticas/Erros'),
+        ('PROCEDIMENTO', 'Procedimento Detran'),
+        ('DOCUMENTACAO', 'Documentação Necessária'),
+        ('GERAL', 'Assuntos Gerais'),
+    ]
+
+    titulo = models.CharField(max_length=200, help_text="Ex: Como resolver crítica de Chassi não confere")
+    conteudo = models.TextField(help_text="A resposta exata e técnica que a IA deve basear-se.")
+    categoria = models.CharField(max_length=20, choices=CATEGORIAS, default='GERAL')
+    
+    # Palavras-chave ajudam a IA a achar esse texto mais rápido
+    palavras_chave = models.CharField(max_length=255, blank=True, help_text="Ex: chassi, remarcação, vistoria, erro 404")
+    
+    ativo = models.BooleanField(default=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"[{self.get_categoria_display()}] {self.titulo}"
+
+    class Meta:
+        verbose_name = "Manual do Detran (IA)"
+        verbose_name_plural = "Manual do Detran (IA)"

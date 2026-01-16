@@ -1,0 +1,70 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ titulo }}{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            
+            <div class="card border-0 shadow-lg mt-3">
+                <div class="card-header bg-dark text-white py-3">
+                    <h5 class="mb-0"><i class="fas fa-lightbulb me-2 text-warning"></i> {{ titulo }}</h5>
+                </div>
+                <div class="card-body p-4">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="form-label fw-bold">Título do Tópico</label>
+                                {{ form.titulo }}
+                                <div class="form-text">Ex: "Como transferir veículo com gravame"</div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Categoria</label>
+                                {{ form.categoria }}
+                            </div>
+
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold">Palavras-Chave (Tags)</label>
+                                {{ form.palavras_chave }}
+                                <div class="form-text">Ajuda a IA a encontrar este texto.</div>
+                            </div>
+
+                            <div class="col-12">
+                                <label class="form-label fw-bold text-primary">Conteúdo Técnico (A Resposta)</label>
+                                {{ form.conteudo }}
+                                <div class="alert alert-info d-flex align-items-center mt-2 py-2 small">
+                                    <i class="fas fa-robot me-2 fs-4"></i>
+                                    <div>
+                                        <strong>Dica para a IA:</strong> Escreva de forma clara e direta. A IA vai ler isso aqui e usar para responder o cliente. Se colocar passo-a-passo, melhor.
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-12">
+                                <div class="form-check form-switch">
+                                    {{ form.ativo }}
+                                    <label class="form-check-label fw-bold" for="{{ form.ativo.id_for_label }}">
+                                        Conteúdo Ativo (Visível para a IA)
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4 border-top pt-3">
+                            <a href="{% url 'master_listar_conhecimento' %}" class="btn btn-outline-secondary px-4">Cancelar</a>
+                            <button type="submit" class="btn btn-success fw-bold px-5">
+                                <i class="fas fa-save me-2"></i> Salvar Conhecimento
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
