@@ -19,6 +19,7 @@ import base64
 from decimal import Decimal
 from datetime import timedelta
 from django.core.paginator import Paginator
+from dotenv import load_dotenv
 import requests 
 from decimal import Decimal, InvalidOperation
 from django.db.models import Q, Sum, Count, Value, DecimalField, F, ExpressionWrapper
@@ -28,6 +29,7 @@ from django.conf import settings
 from .models import BaseConhecimento
 from .forms import BaseConhecimentoForm
 from groq import Groq
+from pathlib import Path
 
 
 
@@ -2416,6 +2418,10 @@ def rastreio_publico(request, token):
 # ==============================================================================
 # CHATBOT COM IA (MIGRAÇÃO PARA GROQ / LLAMA 3)
 # ==============================================================================
+# 1. Força o carregamento do .env buscando na pasta raiz do projeto
+BASE_DIR = Path(__file__).resolve().parent.parent
+env_path = BASE_DIR / '.env'
+load_dotenv(env_path)
 
 # COLE SUA CHAVE 'gsk_...' DENTRO DAS ASPAS ABAIXO
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
