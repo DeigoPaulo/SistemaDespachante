@@ -127,6 +127,11 @@ class VeiculoForm(forms.ModelForm):
             'ano_modelo': forms.NumberInput(attrs={'class': 'form-control'}),
             'tipo': forms.Select(attrs={'class': 'form-select'}),
             'cliente': forms.Select(attrs={'class': 'form-select'}),
+            
+            # --- NOVOS CAMPOS (PROPRIETÁRIO/CONDUTOR) ---
+            'proprietario_nome': forms.TextInput(attrs={'class': 'form-control text-uppercase', 'placeholder': 'Nome do proprietário legal'}),
+            'proprietario_cpf': forms.TextInput(attrs={'class': 'form-control mask-cpf-cnpj'}),
+            'proprietario_telefone': forms.TextInput(attrs={'class': 'form-control mask-phone'}),
         }
 
     def __init__(self, user, *args, **kwargs):

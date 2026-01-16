@@ -82,22 +82,26 @@
                 {% else %}
                     Resultados da Pesquisa
                 {% endif %}
+                <span class="badge bg-light text-dark border ms-2">{{ processos|length }} Registros</span>
             </h6>
         </div>
+        
         <div class="card-body p-0">
-            <div class="table-responsive">
+            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
                 <table class="table table-hover align-middle mb-0">
-                    <thead class="table-light small text-uppercase">
+                    
+                    <thead class="table-light small text-uppercase position-sticky top-0" style="z-index: 1;">
                         <tr>
-                            <th class="ps-4">Data Solicit.</th>
-                            <th>Cliente / Veículo / Processo</th> 
-                            <th class="text-end">Taxas DETRAN</th>
-                            <th class="text-end">Honorário</th>
-                            <th class="text-end text-success">Lucro Real</th>
-                            <th class="text-center">Status</th>
-                            <th class="text-end pe-4">Ação</th>
+                            <th class="ps-4 shadow-sm">Data Solicit.</th>
+                            <th class="shadow-sm">Cliente / Veículo / Processo</th> 
+                            <th class="text-end shadow-sm">Taxas DETRAN</th>
+                            <th class="text-end shadow-sm">Honorário</th>
+                            <th class="text-end text-success shadow-sm">Lucro Real</th>
+                            <th class="text-center shadow-sm">Status</th>
+                            <th class="text-end pe-4 shadow-sm">Ação</th>
                         </tr>
                     </thead>
+                    
                     <tbody class="small">
                         {% for p in processos %}
                         <tr>
@@ -106,13 +110,20 @@
                             </td>
                             <td>
                                 <div class="fw-bold text-dark text-uppercase">{{ p.cliente.nome }}</div>
-                                <div class="d-flex align-items-center gap-1 mt-1">
+                                <div class="d-flex align-items-center gap-1 mt-1 flex-wrap">
                                     <span class="badge bg-light text-primary border small">
                                         <i class="fas fa-car me-1"></i>{{ p.veiculo.placa|default:"S/P" }}
                                     </span>
                                     <span class="badge bg-light text-muted border small">
                                         <i class="fas fa-hashtag me-1"></i>{{ p.numero_atendimento|default:"S/N" }}
                                     </span>
+                                    
+                                    {% if p.veiculo.proprietario_nome %}
+                                        <span class="badge bg-light text-secondary border small" title="Proprietário no Doc.">
+                                            <i class="fas fa-user-tag me-1"></i>{{ p.veiculo.proprietario_nome|truncatechars:15 }}
+                                        </span>
+                                    {% endif %}
+
                                     {% if p.asaas_id %}
                                         <span class="badge bg-info text-white border small" title="Cobrança Asaas Gerada">
                                             ASAAS

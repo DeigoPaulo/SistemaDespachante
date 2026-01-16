@@ -59,12 +59,29 @@
                         <h5 class="fw-bold mt-1 text-danger">Cliente não identificado</h5>
                     {% endif %}
                     
-                    <p class="mt-3 mb-0 small text-muted">
-                        <strong>Emissão:</strong> {{ orcamento.data_criacao|date:"d/m/Y" }}
-                        {% if orcamento.veiculo %}
-                        <br><strong>Veículo:</strong> {{ orcamento.veiculo.modelo }} - {{ orcamento.veiculo.placa }}
-                        {% endif %}
-                    </p>
+                    <div class="mt-3 p-2 bg-light rounded border border-light" style="max-width: 300px;">
+                        <p class="mb-0 small text-dark lh-sm">
+                            <strong>Emissão:</strong> {{ orcamento.data_criacao|date:"d/m/Y" }}
+                            
+                            {% if orcamento.veiculo %}
+                                <br>
+                                <span class="d-block mt-1 pt-1 border-top border-secondary">
+                                    <i class="fas fa-car me-1 text-muted"></i> 
+                                    <strong>{{ orcamento.veiculo.modelo }}</strong>
+                                </span>
+                                <span class="d-block text-muted">
+                                    Placa: <strong>{{ orcamento.veiculo.placa }}</strong>
+                                    
+                                    {% if orcamento.veiculo.proprietario_nome %}
+                                        <br>
+                                        <span class="text-danger fw-bold" style="font-size: 0.85em;">
+                                            (Doc. em nome de: {{ orcamento.veiculo.proprietario_nome }})
+                                        </span>
+                                    {% endif %}
+                                </span>
+                            {% endif %}
+                        </p>
+                    </div>
                 </div>
                 
                 <div class="text-end">
@@ -202,6 +219,9 @@
         .row { display: flex !important; flex-wrap: wrap; margin-right: -15px; margin-left: -15px; }
         /* Ajuste do tamanho da coluna de totais na impressão */
         .col-md-5 { width: 45% !important; margin-left: auto; }
+
+        /* Ajuste para ícones FontAwesome na impressão (opcional, as vezes somem) */
+        .fas { display: inline-block !important; }
 
         @page { size: auto; margin: 0mm; }
     }

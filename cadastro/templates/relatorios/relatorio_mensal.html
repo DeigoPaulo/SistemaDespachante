@@ -66,6 +66,8 @@
         <h4 class="mt-4 fw-bold text-uppercase">Relatório de Produção Operacional</h4>
         <p class="text-muted small">
             Período: <strong>{% if filtros.data_inicio %}{{ filtros.data_inicio|date:"d/m/Y" }}{% else %}Início{% endif %} até {% if filtros.data_fim %}{{ filtros.data_fim|date:"d/m/Y" }}{% else %}Hoje{% endif %}</strong>
+            <br>
+            Página {{ processos.number }} de {{ processos.paginator.num_pages }}
         </p>
     </div>
 
@@ -113,10 +115,37 @@
                 </tbody>
             </table>
         </div>
+        
+        {% if processos.has_other_pages %}
+        <div class="d-print-none mt-4">
+            <nav aria-label="Navegação de página">
+                <ul class="pagination justify-content-center">
+                    {% if processos.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ processos.previous_page_number }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&cliente_placa={{ filtros.cliente_placa }}&responsavel={{ filtros.responsavel }}">Anterior</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                    {% endif %}
+
+                    <li class="page-item active"><span class="page-link">{{ processos.number }}</span></li>
+
+                    {% if processos.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ processos.next_page_number }}&data_inicio={{ filtros.data_inicio }}&data_fim={{ filtros.data_fim }}&cliente_placa={{ filtros.cliente_placa }}&responsavel={{ filtros.responsavel }}">Próxima</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">Próxima</span></li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+
     </div>
 
-    <div class="mt-4 p-3 bg-light rounded border border-secondary border-opacity-10">
-        <h6 class="fw-bold text-uppercase small text-muted mb-3 border-bottom pb-2">Resumo de Produção por Status</h6>
+    <div class="mt-4 p-3 bg-light rounded border border-secondary border-opacity-10 page-break-inside-avoid">
+        <h6 class="fw-bold text-uppercase small text-muted mb-3 border-bottom pb-2">Resumo Geral de Produção (Total do Período)</h6>
         <div class="row g-2">
             {% for item in resumo_status %}
             <div class="col-auto">
@@ -185,6 +214,11 @@
         .table {
             width: 100% !important;
             border-collapse: collapse !important;
+        }
+        
+        /* Evita quebrar o quadro de resumo no meio */
+        .page-break-inside-avoid {
+            page-break-inside: avoid;
         }
     }
 </style>

@@ -200,7 +200,6 @@
         // --- FUNÇÕES DE CONVERSÃO ---
         function parseMoney(valor) {
             if (!valor) return 0;
-            // Remove ponto de milhar e troca vírgula por ponto decimal
             let limpo = valor.toString().replace(/\./g, '').replace(',', '.');
             return parseFloat(limpo) || 0;
         }
@@ -224,7 +223,6 @@
             $('#valor_total_hidden').val(totalFinal.toFixed(2));
         }
 
-        // Eventos de Input
         $('#input_honorarios_total, #input_desconto').on('input', atualizarTotais);
 
         // --- ADICIONAR ITEM ---
@@ -249,11 +247,9 @@
             const id = servicoSelecionado.getAttribute('data-id');
             const nome = servicoSelecionado.value;
             let taxaRaw = servicoSelecionado.getAttribute('data-taxa'); 
-            
             const taxa = parseMoney(taxaRaw);
 
             adicionarLinhaTabela(id, nome, taxa);
-            
             input.value = '';
             input.focus();
         });
@@ -283,7 +279,6 @@
             atualizarTotais();
         }
 
-        // Remover linha
         $(document).on('click', '.btn-remove', function() {
             const taxa = parseFloat($(this).data('taxa'));
             $(this).closest('tr').remove();
@@ -292,7 +287,7 @@
             atualizarTotais();
         });
 
-        // --- CONFIGURAÇÃO DO SELECT2 ---
+        // --- 1. CONFIGURAÇÃO DO SELECT2 PARA CLIENTE (COM AJAX) ---
         $('#select_cliente_orcamento').select2({
             theme: 'bootstrap-5',
             ajax: {
@@ -303,21 +298,58 @@
                 processResults: function (data) { return { results: data.results }; },
                 cache: true
             },
-            minimumInputLength: 3
+            minimumInputLength: 3,
+            placeholder: 'Digite nome, CPF ou placa...'
         });
 
-        // Carregar veículos ao selecionar cliente
+        // --- 2. CONFIGURAÇÃO DO SELECT2 PARA VEÍCULO (BUSCA DINÂMICA) ---
+        // Inicializa o Select2 vazio, mas pronto para busca local
+        $('#select_veiculo_orcamento').select2({
+            theme: 'bootstrap-5',
+            placeholder: '-- Selecione um Veículo --',
+            allowClear: true,
+            language: {
+                noResults: function() { return "Nenhum veículo encontrado"; }
+            }
+        });
+
+        // --- CARREGAR VEÍCULOS AO SELECIONAR CLIENTE ---
         $('#select_cliente_orcamento').on('select2:select', function (e) {
             const clienteId = e.params.data.id;
             $('#container_veiculo_orcamento').removeClass('d-none');
             const selectVeiculo = $('#select_veiculo_orcamento');
             
+            // Limpa e avisa que está carregando
+            selectVeiculo.empty().append('<option value="">Carregando...</option>');
+            selectVeiculo.trigger('change'); // Atualiza visual
+
             $.getJSON('/api/veiculos-cliente/' + clienteId + '/', function(veiculos) {
                 selectVeiculo.empty().append('<option value="">-- Selecione um Veículo --</option>');
+                
+                if (veiculos.length === 0) {
+                    selectVeiculo.append('<option value="" disabled>Nenhum veículo encontrado</option>');
+                }
+
                 veiculos.forEach(v => {
-                    selectVeiculo.append(`<option value="${v.id}">${v.placa} - ${v.modelo}</option>`);
+                    let textoOpcao = `${v.placa} - ${v.modelo}`;
+                    if (v.proprietario_nome) {
+                        textoOpcao += ` (Prop: ${v.proprietario_nome})`;
+                    }
+                    selectVeiculo.append(new Option(textoOpcao, v.id));
                 });
+
+                // --- PULO DO GATO: AVISA O SELECT2 QUE A LISTA MUDOU ---
+                selectVeiculo.trigger('change'); 
+            })
+            .fail(function() {
+                selectVeiculo.empty().append('<option value="">Erro ao carregar</option>');
+                selectVeiculo.trigger('change');
             });
+        });
+
+        // Botão para limpar veículo selecionado
+        $('#btn_limpar_veiculo').on('click', function() {
+            $('#select_veiculo_orcamento').val(null).trigger('change');
         });
 
         // Alternar Cliente Avulso
@@ -332,7 +364,6 @@
             }
         });
 
-        // Inicializar totais
         atualizarTotais();
     });
 </script>

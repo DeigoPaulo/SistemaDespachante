@@ -50,17 +50,36 @@
     </div>
 </div>
 
-<div class="print-header text-center mb-4" style="display: none;">
-    <h2 class="fw-bold text-uppercase mb-1">Extrato Final de Serviços e Honorários</h2>
-    <h5 class="text-muted">{{ user.perfilusuario.despachante.nome_fantasia|upper }}</h5>
-    <div class="row mt-3 border-top border-bottom py-2">
-        <div class="col-6 text-start">
-            <small><strong>Período:</strong> 
-                {% if filtros.data_inicio %}{{ filtros.data_inicio }}{% else %}Início{% endif %} até {% if filtros.data_fim %}{{ filtros.data_fim }}{% else %}Hoje{% endif %}
-            </small>
-        </div>
-        <div class="col-6 text-end">
-            <small><strong>Emissão:</strong> {% now "d/m/Y H:i" %}</small>
+<div class="print-header text-center mb-2" style="display: none;">
+    
+    <div class="mb-2">
+        {% if user.perfilusuario.despachante.logo %}
+            <img src="{{ user.perfilusuario.despachante.logo.url }}" alt="Logo" style="max-height: 90px; max-width: 90%; margin-bottom: 2px;">
+        {% else %}
+            <h2 class="fw-bold text-uppercase text-dark mb-0">
+                {{ user.perfilusuario.despachante.nome_fantasia|default:"SEU DESPACHANTE" }}
+            </h2>
+        {% endif %}
+    </div>
+
+    <p class="text-muted small mb-2" style="font-size: 0.85rem;">
+        {{ user.perfilusuario.despachante.endereco_completo }} <br>
+        <i class="fas fa-phone-alt me-1"></i> {{ user.perfilusuario.despachante.telefone }} 
+        {% if user.perfilusuario.despachante.email %}
+            | <i class="fas fa-envelope me-1"></i> {{ user.perfilusuario.despachante.email }}
+        {% endif %}
+    </p>
+
+    <div class="border-top border-bottom py-1">
+        <h5 class="fw-bold text-uppercase mb-1 mt-1">Extrato Final de Serviços e Honorários</h5>
+        <div class="row small text-muted">
+            <div class="col-6 text-start">
+                <strong>Período:</strong> 
+                {% if filtros.data_inicio %}{{ filtros.data_inicio|date:"d/m/Y" }}{% else %}Início{% endif %} até {% if filtros.data_fim %}{{ filtros.data_fim|date:"d/m/Y" }}{% else %}Hoje{% endif %}
+            </div>
+            <div class="col-6 text-end">
+                <strong>Emissão:</strong> {% now "d/m/Y H:i" %}
+            </div>
         </div>
     </div>
 </div>
@@ -69,9 +88,9 @@
     {% if relatorio_agrupado %}
         
         {% for cliente_id, dados in relatorio_agrupado.items %}
-        <div class="cliente-container mb-4 pb-3 border-bottom page-break-inside-avoid">
+        <div class="cliente-container mb-4 pb-3 border-bottom">
             
-            <div class="mb-3 d-flex justify-content-between align-items-start">
+            <div class="mb-2 d-flex justify-content-between align-items-start">
                 <div>
                     <h5 class="fw-bold mb-0 text-uppercase text-primary">{{ dados.dados_cliente.nome }}</h5>
                     <small class="text-muted">
@@ -129,10 +148,19 @@
                     <tr style="border-bottom: 1px solid #eee;">
                         <td class="align-middle">{{ item.data|date:"d/m/Y" }}</td>
                         <td class="align-middle">
-                            <strong>{{ item.placa }}</strong><br>
-                            <span class="badge bg-light text-muted border small p-1 mt-1">
-                                <i class="fas fa-hashtag me-1"></i>{{ item.numero_atendimento|default:"S/N" }}
-                            </span>
+                            <strong>{{ item.placa }}</strong>
+                            
+                            {% if item.proprietario_nome %}
+                                <div class="text-danger fw-bold small mt-1" style="font-size: 0.7rem; line-height: 1.1;">
+                                    <i class="fas fa-user-tag me-1"></i>{{ item.proprietario_nome }}
+                                </div>
+                            {% endif %}
+
+                            <div class="mt-1">
+                                <span class="badge bg-light text-muted border small p-1">
+                                    <i class="fas fa-hashtag me-1"></i>{{ item.numero_atendimento|default:"S/N" }}
+                                </span>
+                            </div>
                         </td>
                         <td class="align-middle">
                             {{ item.servico_nome }}<br>
@@ -171,7 +199,7 @@
         </div>
         {% endfor %}
 
-        <div class="resumo-geral mt-5 p-3 border border-dark rounded break-inside-avoid bg-light">
+        <div class="resumo-geral mt-4 p-3 border border-dark rounded break-inside-avoid bg-light">
             <h6 class="fw-bold text-uppercase border-bottom pb-2 mb-3">Resumo Geral do Extrato Final</h6>
             <div class="row text-center">
                 <div class="col-4">
@@ -211,16 +239,30 @@
 <style>
     @media print {
         @page { size: A4; margin: 10mm 15mm; }
-        body { background-color: #fff !important; font-family: Arial, sans-serif; font-size: 11pt; color: #000 !important; }
+        body { background-color: #fff !important; font-family: Arial, sans-serif; font-size: 10pt; color: #000 !important; }
+        
         .d-print-none, header, nav, footer, .btn, .card-header, form { display: none !important; }
-        .print-header { display: block !important; }
+        .print-header { display: block !important; margin-bottom: 10px !important; }
+        
         .container, .container-fluid { width: 100% !important; padding: 0 !important; max-width: none !important; }
+        
+        /* Tabela Ajustada */
         .custom-print-table { width: 100% !important; border-collapse: collapse; }
-        .custom-print-table td { padding: 8px 4px !important; border-bottom: 1px solid #eee !important; }
-        .badge, .bg-light { border: none !important; color: #555 !important; padding: 0 !important; font-weight: normal; }
-        .resumo-geral { border: 2px solid #000 !important; background-color: #f8f9fa !important; -webkit-print-color-adjust: exact; }
-        .cliente-container { page-break-inside: avoid; break-inside: avoid; border-bottom: 2px solid #000 !important; }
-        .text-primary { color: #000 !important; }
+        .custom-print-table td { padding: 4px 2px !important; border-bottom: 1px solid #ccc !important; font-size: 0.9rem; }
+        
+        /* Evita quebra de linha no meio da tabela */
+        tr { page-break-inside: avoid; }
+        
+        /* Permite que o container do cliente quebre, mas tenta manter unido se for pequeno */
+        .cliente-container { 
+            page-break-inside: auto; 
+            border-bottom: 2px solid #000 !important; 
+            margin-bottom: 15px !important; 
+        }
+
+        .badge, .bg-light { border: none !important; color: #000 !important; padding: 0 !important; font-weight: bold; }
+        .resumo-geral { border: 2px solid #000 !important; background-color: #eee !important; -webkit-print-color-adjust: exact; page-break-inside: avoid; }
+        .text-primary, .text-success, .text-danger, .text-muted { color: #000 !important; }
     }
 </style>
 {% endblock %}

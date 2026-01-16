@@ -129,7 +129,7 @@
                 <table class="table table-bordered table-hover" id="tabela-veiculos-visual">
                     <thead class="table-light small">
                         <tr>
-                            <th style="width: 15%;">Placa</th>
+                            <th style="width: 20%;">Placa / Proprietário</th>
                             <th>Modelo</th>
                             <th>Marca</th>
                             <th>Cor</th>
@@ -166,6 +166,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body">
+                
                 <div class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label fw-bold">Placa <span class="text-danger">*</span></label>
@@ -209,6 +210,28 @@
                         <input type="text" id="pop_ano_modelo" class="form-control mask-year">
                     </div>
                 </div>
+
+                <hr class="my-4 border-secondary opacity-25">
+                <h6 class="text-primary fw-bold mb-3"><i class="fas fa-user-tag me-2"></i>Proprietário no Documento / Condutor</h6>
+                <div class="alert alert-light border small text-muted mb-3 py-2">
+                    <i class="fas fa-info-circle me-1"></i> Preencha apenas se o veículo estiver em nome de terceiros (ex: Funcionário ou Cliente da Revenda).
+                </div>
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Nome do Proprietário/Condutor</label>
+                        <input type="text" id="pop_proprietario_nome" class="form-control text-uppercase" placeholder="Nome que consta no documento">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">CPF/CNPJ</label>
+                        <input type="text" id="pop_proprietario_cpf" class="form-control mask-cpf-cnpj">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Telefone</label>
+                        <input type="text" id="pop_proprietario_fone" class="form-control mask-phone">
+                    </div>
+                </div>
+
                 <div class="alert alert-danger mt-3 d-none" id="msg-erro-modal">Preencha a Placa corretamente.</div>
             </div>
             <div class="modal-footer">
@@ -220,76 +243,3 @@
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script src="{% static 'js/custom.js' %}"></script>
-<script>
-    document.addEventListener("DOMContentLoaded", function() {
-        var btnAdd = document.getElementById('btn-add-modal');
-        if (btnAdd) {
-            btnAdd.onclick = function() {
-                var placa = document.getElementById('pop_placa').value.toUpperCase();
-                var renavam = document.getElementById('pop_renavam').value;
-                var chassi = document.getElementById('pop_chassi').value.toUpperCase();
-                var marca = document.getElementById('pop_marca').value.toUpperCase();
-                var modelo = document.getElementById('pop_modelo').value.toUpperCase();
-                var cor = document.getElementById('pop_cor').value.toUpperCase();
-                var tipo = document.getElementById('pop_tipo').value;
-                var anoFab = document.getElementById('pop_ano_fabricacao').value;
-                var anoMod = document.getElementById('pop_ano_modelo').value;
-
-                if (!placa || placa.length < 7) {
-                    document.getElementById('msg-erro-modal').classList.remove('d-none');
-                    return;
-                }
-                document.getElementById('msg-erro-modal').classList.add('d-none');
-
-                var tbody = document.querySelector('#tabela-veiculos-visual tbody');
-                var linhaVazia = document.getElementById('linha-vazia');
-                if (linhaVazia) linhaVazia.remove();
-
-                var tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td class="fw-bold text-primary">${placa}</td>
-                    <td>${modelo}</td>
-                    <td>${marca}</td>
-                    <td>${cor}</td>
-                    <td>${anoFab}/${anoMod}</td>
-                    <td>${tipo}</td>
-                    <td class="text-center">
-                        <button type="button" class="btn btn-sm btn-danger btn-remove-item"><i class="fas fa-trash"></i></button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-
-                var container = document.getElementById('veiculos-inputs-container');
-                var divHidden = document.createElement('div');
-                divHidden.innerHTML = `
-                    <input type="hidden" name="veiculo_placa[]" value="${placa}">
-                    <input type="hidden" name="veiculo_renavam[]" value="${renavam}">
-                    <input type="hidden" name="veiculo_chassi[]" value="${chassi}">
-                    <input type="hidden" name="veiculo_marca[]" value="${marca}">
-                    <input type="hidden" name="veiculo_modelo[]" value="${modelo}">
-                    <input type="hidden" name="veiculo_cor[]" value="${cor}">
-                    <input type="hidden" name="veiculo_tipo[]" value="${tipo}">
-                    <input type="hidden" name="veiculo_ano_fabricacao[]" value="${anoFab}">
-                    <input type="hidden" name="veiculo_ano_modelo[]" value="${anoMod}">
-                `;
-                container.appendChild(divHidden);
-
-                tr.querySelector('.btn-remove-item').onclick = function() {
-                    tr.remove();
-                    divHidden.remove();
-                    if (tbody.children.length === 0) {
-                        tbody.innerHTML = '<tr id="linha-vazia"><td colspan="7" class="text-center text-muted small py-2">Nenhum veículo adicionado.</td></tr>';
-                    }
-                };
-
-                document.querySelectorAll('#modalVeiculo input').forEach(input => input.value = '');
-                var modalEl = document.getElementById('modalVeiculo');
-                var modalInstance = bootstrap.Modal.getInstance(modalEl);
-                modalInstance.hide();
-            };
-        }
-    });
-</script>
-{% endblock %}

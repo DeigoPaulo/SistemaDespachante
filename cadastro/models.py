@@ -3,6 +3,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.validators import FileExtensionValidator
 import uuid
+
 # ==============================================================================
 # 1. CADASTRO DO ESCRITÓRIO (SaaS)
 # ==============================================================================
@@ -197,6 +198,27 @@ class Veiculo(models.Model):
         ('REBOQUE', 'Reboque'),
     )
     tipo = models.CharField(max_length=20, choices=TIPO_VEICULO_CHOICES)
+
+    # --- NOVOS CAMPOS: PROPRIETÁRIO / CONDUTOR (QUANDO DIFERENTE DO CLIENTE) ---
+    proprietario_nome = models.CharField(
+        max_length=255, 
+        blank=True, 
+        null=True, 
+        verbose_name="Nome do Proprietário (Doc)"
+    )
+    proprietario_cpf = models.CharField(
+        max_length=18, 
+        blank=True, 
+        null=True, 
+        verbose_name="CPF/CNPJ do Proprietário"
+    )
+    proprietario_telefone = models.CharField(
+        max_length=20, 
+        blank=True, 
+        null=True, 
+        verbose_name="Telefone do Proprietário"
+    )
+    # ---------------------------------------------------------------------------
 
     class Meta:
         unique_together = ('despachante', 'placa')

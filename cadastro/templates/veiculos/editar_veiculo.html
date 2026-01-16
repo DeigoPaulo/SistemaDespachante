@@ -68,11 +68,37 @@
                             {{ form.ano_modelo }}
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label fw-bold small text-uppercase text-muted">Proprietário Atual</label>
+                            <label class="form-label fw-bold small text-uppercase text-muted">Cliente (Pagador)</label>
                             {{ form.cliente }}
                         </div>
                     </div>
 
+                    <hr class="my-4 border-secondary opacity-25">
+                    
+                    <div class="d-flex align-items-center mb-3">
+                        <h6 class="text-primary fw-bold mb-0">
+                            <i class="fas fa-user-tag me-2"></i> Proprietário no Documento / Condutor
+                        </h6>
+                    </div>
+                    
+                    <div class="alert alert-light border small text-muted mb-3 py-2">
+                        <i class="fas fa-info-circle me-1"></i> Preencha estes campos apenas se o veículo estiver em nome de terceiros.
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small text-uppercase text-muted">Nome do Proprietário</label>
+                            {{ form.proprietario_nome }} 
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-uppercase text-muted">CPF/CNPJ</label>
+                            {{ form.proprietario_cpf }}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-bold small text-uppercase text-muted">Telefone</label>
+                            {{ form.proprietario_telefone }}
+                        </div>
+                    </div>
                     <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4 border-top pt-3">
                         <a href="{% url 'dashboard' %}" class="btn btn-secondary me-md-2">
                             <i class="fas fa-arrow-left me-1"></i> Voltar

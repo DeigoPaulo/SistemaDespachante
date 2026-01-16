@@ -82,6 +82,13 @@
                         <strong>Emissão:</strong> {{ orcamento.data_criacao|date:"d/m/Y" }}
                         {% if orcamento.veiculo %}
                             <br><strong>Veículo:</strong> {{ orcamento.veiculo.modelo }} - {{ orcamento.veiculo.placa }}
+                            
+                            {% if orcamento.veiculo.proprietario_nome %}
+                                <br>
+                                <span class="fw-bold text-dark" style="font-size: 0.9em;">
+                                    (Doc. em nome de: {{ orcamento.veiculo.proprietario_nome }})
+                                </span>
+                            {% endif %}
                         {% endif %}
                     </p>
                 </div>

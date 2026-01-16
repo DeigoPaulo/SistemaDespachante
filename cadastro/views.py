@@ -567,7 +567,7 @@ def novo_cliente(request):
                         'telefone': request.POST.get('cliente_telefone'),
                         'email': request.POST.get('cliente_email'),
                         'rg': request.POST.get('rg'),
-                        'data_nascimento': data_nasc,  # <--- Salva a data
+                        'data_nascimento': data_nasc,
                         'orgao_expedidor': request.POST.get('orgao_expedidor'),
                         'profissao': request.POST.get('profissao'),
                         'filiacao': request.POST.get('filiacao'),
@@ -596,12 +596,17 @@ def novo_cliente(request):
                 placas = request.POST.getlist('veiculo_placa[]')
                 modelos = request.POST.getlist('veiculo_modelo[]')
                 renavams = request.POST.getlist('veiculo_renavam[]')
-                chassis = request.POST.getlist('veiculo_chassi[]')     # Novo
-                marcas = request.POST.getlist('veiculo_marca[]')       # Novo
-                cores = request.POST.getlist('veiculo_cor[]')          # Novo
-                tipos = request.POST.getlist('veiculo_tipo[]')         # Novo
-                anos_fab = request.POST.getlist('veiculo_ano_fabricacao[]') # Novo
-                anos_mod = request.POST.getlist('veiculo_ano_modelo[]')     # Novo
+                chassis = request.POST.getlist('veiculo_chassi[]')
+                marcas = request.POST.getlist('veiculo_marca[]')
+                cores = request.POST.getlist('veiculo_cor[]')
+                tipos = request.POST.getlist('veiculo_tipo[]')
+                anos_fab = request.POST.getlist('veiculo_ano_fabricacao[]')
+                anos_mod = request.POST.getlist('veiculo_ano_modelo[]')
+                
+                # --- NOVAS LISTAS CAPTURADAS (PROPRIETÁRIO/CONDUTOR) ---
+                props_nomes = request.POST.getlist('veiculo_proprietario_nome[]')
+                props_cpfs = request.POST.getlist('veiculo_proprietario_cpf[]')
+                props_fones = request.POST.getlist('veiculo_proprietario_fone[]')
                 
                 for i in range(len(placas)):
                     placa_limpa = placas[i].replace('-', '').replace(' ', '').upper()
@@ -612,7 +617,7 @@ def novo_cliente(request):
                     def get_val(lista, index):
                         return lista[index] if index < len(lista) else ''
 
-                    # Helper para converter ano em número ou None (evita erro de string vazia)
+                    # Helper para converter ano em número ou None
                     def get_int(lista, index):
                         val = lista[index] if index < len(lista) else ''
                         return int(val) if val.isdigit() else None
@@ -624,20 +629,25 @@ def novo_cliente(request):
                             'cliente': cliente, 
                             'modelo': get_val(modelos, i),
                             'renavam': get_val(renavams, i),
-                            # Campos novos sendo salvos agora:
                             'chassi': get_val(chassis, i),
                             'marca': get_val(marcas, i),
                             'cor': get_val(cores, i),
                             'tipo': get_val(tipos, i),
                             'ano_fabricacao': get_int(anos_fab, i),
                             'ano_modelo': get_int(anos_mod, i),
+                            
+                            # --- NOVOS CAMPOS SALVOS NO BANCO ---
+                            # Se vier vazio, salva string vazia '' ou None (depende do seu model, aqui assume string vazia)
+                            'proprietario_nome': get_val(props_nomes, i),
+                            'proprietario_cpf': get_val(props_cpfs, i),
+                            'proprietario_telefone': get_val(props_fones, i),
                         }
                     )
 
             return redirect('dashboard')
 
         except Exception as e:
-            # print(f"Erro: {e}") # Descomente para debug se precisar
+            # print(f"Erro: {e}") 
             pass
 
     return render(request, 'clientes/cadastro_cliente.html')
@@ -860,7 +870,13 @@ def buscar_clientes(request):
 
 @login_required
 def api_veiculos_cliente(request, cliente_id):
+    # Garante segurança: só busca se o usuário estiver logado e vinculado a um despachante
+    if not hasattr(request.user, 'perfilusuario'):
+        return JsonResponse([], safe=False)
+
     despachante = request.user.perfilusuario.despachante
+    
+    # Filtra veiculos do cliente, mas APENAS deste despachante (segurança)
     veiculos = Veiculo.objects.filter(cliente_id=cliente_id, despachante=despachante)
     
     data = [{
@@ -872,7 +888,13 @@ def api_veiculos_cliente(request, cliente_id):
         'cor': v.cor,
         'ano_fab': v.ano_fabricacao,
         'ano_mod': v.ano_modelo,
-        'tipo': v.tipo
+        'tipo': v.tipo,
+        
+        # --- NOVOS CAMPOS ADICIONADOS ---
+        # O 'or ""' garante que se estiver vazio no banco, vai uma string vazia para o JSON
+        'proprietario_nome': v.proprietario_nome or '', 
+        'proprietario_cpf': v.proprietario_cpf or '',
+        'proprietario_telefone': v.proprietario_telefone or ''
     } for v in veiculos]
     
     return JsonResponse(data, safe=False)
@@ -1204,48 +1226,54 @@ def excluir_orcamento(request, id):
 # ==============================================================================
 # RELATÓRIOS
 # ==============================================================================
+from django.core.paginator import Paginator
+from django.db.models import Count
+
 @login_required
 def relatorio_mensal(request):
     despachante = request.user.perfilusuario.despachante
     
-    hoje = timezone.now().date()
-    data_inicio_padrao = hoje.replace(day=1).strftime('%Y-%m-%d')
-    data_fim_padrao = hoje.strftime('%Y-%m-%d')
-
-    data_inicio = request.GET.get('data_inicio', data_inicio_padrao)
-    data_fim = request.GET.get('data_fim', data_fim_padrao)
-    cliente_placa = request.GET.get('cliente_placa')
+    # 1. Filtros
+    data_inicio = request.GET.get('data_inicio')
+    data_fim = request.GET.get('data_fim')
+    termo = request.GET.get('cliente_placa')
     responsavel_id = request.GET.get('responsavel')
 
-    # Otimização de query
-    processos = Atendimento.objects.filter(despachante=despachante)\
-        .select_related('cliente', 'veiculo', 'responsavel', 'tipo_servico')\
-        .order_by('-data_solicitacao')
+    # 2. Query Base
+    processos = Atendimento.objects.filter(despachante=despachante).select_related('cliente', 'veiculo', 'responsavel').order_by('-data_solicitacao')
 
-    if data_inicio and data_fim:
-        processos = processos.filter(data_solicitacao__range=[data_inicio, data_fim])
+    # 3. Aplica Filtros
+    if data_inicio: processos = processos.filter(data_solicitacao__gte=data_inicio)
+    if data_fim: processos = processos.filter(data_solicitacao__lte=data_fim)
     
-    if cliente_placa:
-        processos = processos.filter(Q(cliente__nome__icontains=cliente_placa) | Q(veiculo__placa__icontains=cliente_placa))
+    if termo:
+        processos = processos.filter(
+            Q(cliente__nome__icontains=termo) | 
+            Q(veiculo__placa__icontains=termo)
+        )
     
     if responsavel_id:
         processos = processos.filter(responsavel_id=responsavel_id)
 
-    resumo_raw = processos.values('status').annotate(total=Count('id'))
-    status_dict = dict(Atendimento.STATUS_CHOICES)
-    
-    resumo_status = []
-    for item in resumo_raw:
-        resumo_status.append({'status': status_dict.get(item['status'], item['status']), 'total': item['total']})
+    # 4. Cálculos de Resumo (Totais Globais - Antes da Paginação)
+    # Isso garante que os cards mostrem o total real do filtro
+    resumo_status = processos.values('status').annotate(total=Count('status')).order_by('status')
+    total_qtd = processos.count()
 
-    equipe = PerfilUsuario.objects.filter(despachante=despachante).select_related('user')
+    # 5. Paginação (20 por página)
+    paginator = Paginator(processos, 20)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # 6. Contexto
+    equipe = PerfilUsuario.objects.filter(despachante=despachante) # Para o select de operadores
 
     context = {
-        'processos': processos, # Considere paginar se crescer muito
-        'equipe': equipe,
+        'processos': page_obj, # Apenas os 20 da página atual
         'resumo_status': resumo_status,
-        'total_qtd': processos.count(),
-        'filtros': {'data_inicio': data_inicio, 'data_fim': data_fim, 'cliente_placa': cliente_placa, 'responsavel': responsavel_id}
+        'total_qtd': total_qtd,
+        'filtros': request.GET,
+        'equipe': equipe
     }
     
     return render(request, 'relatorios/relatorio_mensal.html', context)
@@ -1286,6 +1314,9 @@ def relatorio_servicos(request):
             
             placa = item.veiculo.placa if item.veiculo else "S/P"
             modelo = item.veiculo.modelo if item.veiculo else "---"
+            
+            # --- NOVO: Captura o nome do Proprietário se existir ---
+            proprietario_nome = item.veiculo.proprietario_nome if (item.veiculo and item.veiculo.proprietario_nome) else None
 
             cliente_id = item.cliente.id
             
@@ -1303,7 +1334,7 @@ def relatorio_servicos(request):
                     'subtotal_taxas': 0,
                     'subtotal_honorarios': 0,
                     'subtotal_valor': 0,
-                    'subtotal_aberto': 0 # <--- NOVO CAMPO: Soma apenas o que falta pagar
+                    'subtotal_aberto': 0
                 }
 
             # Adiciona dados do item na lista
@@ -1312,18 +1343,26 @@ def relatorio_servicos(request):
                 'data': item.data_solicitacao,
                 'placa': placa,
                 'modelo': modelo,
+                # --- ENVIA O PROPRIETÁRIO PARA O TEMPLATE ---
+                'proprietario_nome': proprietario_nome, 
+                
                 'numero_atendimento': item.numero_atendimento,
                 'servico_nome': item.servico,
                 'taxas': taxas,
                 'honorario': honorarios,
                 'valor_total': valor_total_item,
                 'status_fin': item.get_status_financeiro_display(),
-                'status_code': item.status_financeiro, # <--- IMPORTANTE: Usado no HTML para filtrar
+                'status_code': item.status_financeiro, 
                 'asaas_id': item.asaas_id
             })
 
-            # Formata linha para WhatsApp
+            # Formata linha para WhatsApp (Aqui também pode ser útil mostrar o dono se quiser)
             linha_formatada = f"• {item.servico} ({placa}) - R$ {valor_total_item:.2f}"
+            
+            # (Opcional) Adiciona o nome do dono na mensagem de WhatsApp se existir
+            # if proprietario_nome:
+            #     linha_formatada += f" [Prop: {proprietario_nome}]"
+
             relatorio_agrupado[cliente_id]['linhas_zap'].append(linha_formatada)
 
             # Somas Totais do Cliente
@@ -1358,6 +1397,10 @@ def relatorio_servicos(request):
     }
     return render(request, 'relatorios/relatorio_servicos.html', context)
 
+# Função auxiliar para verificar permissão (caso não tenha importado)
+def is_admin_or_superuser(user):
+    return user.is_superuser or (hasattr(user, 'perfilusuario') and user.perfilusuario.tipo_usuario == 'ADMIN')
+
 @login_required
 @user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def fluxo_caixa(request):
@@ -1369,28 +1412,36 @@ def fluxo_caixa(request):
     cliente_nome = request.GET.get('cliente')
     status_fin = request.GET.get('status_financeiro')
 
-    # QuerySet Base
+    # QuerySet Base (Otimizada)
+    # Adicionamos 'tipo_servico' no select_related para evitar queries extras na tabela
     processos = Atendimento.objects.filter(
         despachante=despachante, 
         status='APROVADO'
-    ).select_related('cliente', 'veiculo').order_by('-data_solicitacao')
+    ).select_related('cliente', 'veiculo', 'tipo_servico').order_by('-data_solicitacao')
 
     # Aplicação dos Filtros
     if not any([data_inicio, data_fim, cliente_nome, status_fin]):
+        # Se não tem filtro, mostra o mês atual
         hoje = timezone.now().date()
         processos = processos.filter(data_solicitacao__month=hoje.month, data_solicitacao__year=hoje.year)
     else:
         if data_inicio: processos = processos.filter(data_solicitacao__gte=data_inicio)
         if data_fim: processos = processos.filter(data_solicitacao__lte=data_fim)
+        
         if cliente_nome: 
+            # --- ATUALIZAÇÃO AQUI ---
+            # Agora busca também pelo nome do Proprietário do Veículo
             processos = processos.filter(
                 Q(cliente__nome__icontains=cliente_nome) | 
                 Q(veiculo__placa__icontains=cliente_nome) |
-                Q(numero_atendimento__icontains=cliente_nome)
+                Q(numero_atendimento__icontains=cliente_nome) |
+                Q(veiculo__proprietario_nome__icontains=cliente_nome) # <--- Nova linha
             )
+            
         if status_fin: processos = processos.filter(status_financeiro=status_fin)
 
-    # --- AGREGAÇÃO DE VALORES ---
+    # --- AGREGAÇÃO DE VALORES (Cálculo via Banco de Dados) ---
+    # Isso é mais rápido que somar no Python quando se usa paginação
     dados_financeiros = processos.aggregate(
         total_taxas=Sum('valor_taxas_detran'),
         total_honorarios=Sum('valor_honorarios'),
@@ -1399,6 +1450,7 @@ def fluxo_caixa(request):
         total_sindego=Sum('custo_taxa_sindego') 
     )
 
+    # Prepara o resumo tratando valores None como 0
     resumo = {
         'total_pendentes': processos.filter(status_financeiro='ABERTO').count(),
         'valor_taxas': dados_financeiros['total_taxas'] or 0,
@@ -1420,13 +1472,14 @@ def fluxo_caixa(request):
     resumo['lucro_liquido_total'] = resumo['valor_honorarios_bruto'] - resumo['total_custos_operacionais']
 
     # Paginação para não travar fluxo de caixa
-    paginator = Paginator(processos, 50)
+    # Usei 100 itens para testar o scroll, mas você pode manter 50
+    paginator = Paginator(processos, 50) 
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
     return render(request, 'financeiro/fluxo_caixa.html', { 
-        'processos': page_obj, 
-        'resumo': resumo, 
+        'processos': page_obj,  # Envia a página atual
+        'resumo': resumo,       # Envia o resumo TOTAL da busca (não só da página)
         'filtros': request.GET
     })
 
