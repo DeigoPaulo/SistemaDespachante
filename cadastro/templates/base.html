@@ -42,6 +42,16 @@
             max-height: 40px;
             width: auto;
         }
+        
+        /* Estilo para item bloqueado */
+        .nav-link.disabled-upgrade {
+            color: #6c757d !important;
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .nav-link.disabled-upgrade:hover {
+            color: #adb5bd !important;
+        }
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -101,46 +111,56 @@
                 </li>
 
                 {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
-                <li class="nav-item dropdown ms-lg-2 mt-2 mt-lg-0">
-                    <a class="btn btn-nav-dark btn-sm px-3 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
-                        <i class="fas fa-wallet me-1 text-warning"></i> Financeiro
-                    </a>
-                    <ul class="dropdown-menu dropdown-menu-dark-custom shadow">
-                        <li>
-                            <a class="dropdown-item fw-bold text-info" href="{% url 'dashboard_financeiro' %}">
-                                <i class="fas fa-chart-line me-2"></i> Dashboard de Resultados
-                            </a>
-                        </li>
-                        <li><hr class="dropdown-divider bg-secondary"></li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'fluxo_caixa' %}">
-                                <i class="fas fa-exchange-alt me-2"></i> Fluxo de Caixa (Baixas)
-                            </a>
-                        </li>
-                        
-                        <li>
-                            <a class="dropdown-item" href="{% url 'relatorio_contabil' %}">
-                                <i class="fas fa-file-contract me-2"></i> Relatório Contábil (Mensal)
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'relatorio_servicos' %}">
-                                <i class="fas fa-file-invoice-dollar me-2"></i> Extrato por Cliente
-                            </a>
-                        </li>
-                        <li>
-                            <a class="dropdown-item text-danger fw-bold" href="{% url 'relatorio_inadimplencia' %}">
-                                <i class="fas fa-exclamation-triangle me-2"></i> Inadimplência
-                            </a>
-                        </li>
-                        <li><hr class="dropdown-divider bg-secondary"></li>
-                        <li>
-                            <a class="dropdown-item" href="{% url 'configuracoes_despachante' %}">
-                                <i class="fas fa-cog me-2 text-secondary"></i> Parâmetros Financeiros
-                            </a>
-                        </li>
-                    </ul>
-                </li>
+                    
+                    {% if user.perfilusuario.despachante.plano == 'MEDIO' or user.perfilusuario.despachante.plano == 'PREMIUM' or user.is_superuser %}
+                    <li class="nav-item dropdown ms-lg-2 mt-2 mt-lg-0">
+                        <a class="btn btn-nav-dark btn-sm px-3 dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-wallet me-1 text-warning"></i> Financeiro
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-dark-custom shadow">
+                            <li>
+                                <a class="dropdown-item fw-bold text-info" href="{% url 'dashboard_financeiro' %}">
+                                    <i class="fas fa-chart-line me-2"></i> Dashboard de Resultados
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider bg-secondary"></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'fluxo_caixa' %}">
+                                    <i class="fas fa-exchange-alt me-2"></i> Fluxo de Caixa (Baixas)
+                                </a>
+                            </li>
+                            
+                            <li>
+                                <a class="dropdown-item" href="{% url 'relatorio_contabil' %}">
+                                    <i class="fas fa-file-contract me-2"></i> Relatório Contábil (Mensal)
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'relatorio_servicos' %}">
+                                    <i class="fas fa-file-invoice-dollar me-2"></i> Extrato por Cliente
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item text-danger fw-bold" href="{% url 'relatorio_inadimplencia' %}">
+                                    <i class="fas fa-exclamation-triangle me-2"></i> Inadimplência
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider bg-secondary"></li>
+                            <li>
+                                <a class="dropdown-item" href="{% url 'configuracoes_despachante' %}">
+                                    <i class="fas fa-cog me-2 text-secondary"></i> Parâmetros Financeiros
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item ms-lg-2 mt-2 mt-lg-0">
+                        <a class="btn btn-nav-dark btn-sm px-3 text-muted" href="#" onclick="alert('🔒 Recurso exclusivo do Plano MÉDIO. Fale com o suporte para upgrade!')">
+                            <i class="fas fa-lock me-1"></i> Financeiro <small>(Upgrade)</small>
+                        </a>
+                    </li>
+                    {% endif %}
+
                 {% endif %}
 
                 <li class="nav-item dropdown ms-lg-2 mt-2 mt-lg-0">
@@ -169,11 +189,26 @@
                         
                         {% if user.is_superuser or user.perfilusuario.tipo_usuario == 'ADMIN' %}
                         <li><hr class="dropdown-divider bg-secondary"></li>
+                        
+                        {% if user.perfilusuario.despachante.plano == 'PREMIUM' or user.is_superuser %}
                         <li>
                             <a class="dropdown-item" href="{% url 'relatorio_auditoria' %}">
                                 <i class="fas fa-shield-alt me-2"></i> Auditoria / Logs
                             </a>
                         </li>
+                        <li>
+                            <a class="dropdown-item text-warning" href="#" onclick="document.querySelector('.chatbot-toggler').click();">
+                                <i class="fas fa-robot me-2"></i> IA DespachaPro
+                            </a>
+                        </li>
+                        {% else %}
+                        <li>
+                            <a class="dropdown-item text-muted" href="#" onclick="alert('🔒 IA e Auditoria são exclusivos do Plano PREMIUM!')">
+                                <i class="fas fa-lock me-2"></i> IA / Auditoria (Upgrade)
+                            </a>
+                        </li>
+                        {% endif %}
+
                         {% endif %}
                     </ul>
                 </li>
@@ -269,6 +304,10 @@
 <script src="{% static 'js/custom.js' %}"></script>
 
 {% block extra_js %}{% endblock %}
-{% include 'includes/chatbot_ia.html' %}
+
+{% if user.is_authenticated and user.perfilusuario.despachante.plano == 'PREMIUM' or user.is_superuser %}
+    {% include 'includes/chatbot_ia.html' %}
+{% endif %}
+
 </body>
 </html>

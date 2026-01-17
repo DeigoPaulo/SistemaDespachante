@@ -9,6 +9,13 @@ import uuid
 # ==============================================================================
 
 class Despachante(models.Model):
+    # --- PLANOS DE ASSINATURA (NOVO) ---
+    PLANOS_CHOICES = (
+        ('BASICO', 'Básico (Cadastros + Orçamentos)'),
+        ('MEDIO', 'Médio (Financeiro + Boletos)'),
+        ('PREMIUM', 'Premium (IA + Tudo)'),
+    )
+
     nome_fantasia = models.CharField(max_length=255)
     razao_social = models.CharField(max_length=255)
     cnpj = models.CharField(max_length=18, unique=True)
@@ -18,6 +25,14 @@ class Despachante(models.Model):
     endereco_completo = models.TextField()
     data_cadastro = models.DateTimeField(auto_now_add=True)
     ativo = models.BooleanField(default=True)
+
+    # [NOVO] Campo de Plano (Padrão: Básico)
+    plano = models.CharField(
+        max_length=20, 
+        choices=PLANOS_CHOICES, 
+        default='BASICO',
+        help_text="Define quais módulos este escritório pode acessar."
+    )
 
     # --- PERSONALIZAÇÃO VISUAL ---
     logo = models.ImageField(
@@ -41,7 +56,7 @@ class Despachante(models.Model):
 
     # --- CONFIGURAÇÕES FINANCEIRAS (VALORES FIXOS EM R$) ---
     
-    # [NOVO] Honorário Padrão para Orçamentos
+    # Honorário Padrão para Orçamentos
     valor_honorario_padrao = models.DecimalField(
         max_digits=10, 
         decimal_places=2, 
@@ -199,7 +214,7 @@ class Veiculo(models.Model):
     )
     tipo = models.CharField(max_length=20, choices=TIPO_VEICULO_CHOICES)
 
-    # --- NOVOS CAMPOS: PROPRIETÁRIO / CONDUTOR (QUANDO DIFERENTE DO CLIENTE) ---
+    # --- CAMPOS: PROPRIETÁRIO / CONDUTOR ---
     proprietario_nome = models.CharField(
         max_length=255, 
         blank=True, 
@@ -218,7 +233,6 @@ class Veiculo(models.Model):
         null=True, 
         verbose_name="Telefone do Proprietário"
     )
-    # ---------------------------------------------------------------------------
 
     class Meta:
         unique_together = ('despachante', 'placa')
@@ -246,7 +260,6 @@ class TipoServico(models.Model):
         help_text="Marque se este serviço paga a taxa menor (Ex: R$ 6,50) em vez da cheia (Ex: R$ 13,00)."
     )
 
-    # NOVO CAMPO: ISENÇÃO
     isenta_taxa_sindego = models.BooleanField(
         default=False,
         verbose_name="Isento de Taxa Sindical?",
@@ -269,7 +282,7 @@ class Atendimento(models.Model):
     STATUS_CHOICES = (
         ('SOLICITADO', 'Solicitado'),
         ('EM_ANALISE', 'Em Análise'),
-        ('PENDENTE', 'Pendente (Com Pendência)'), # <--- NOVO STATUS
+        ('PENDENTE', 'Pendente (Com Pendência)'), 
         ('APROVADO', 'Aprovado/Concluído'), 
         ('CANCELADO', 'Cancelado'),
     )
@@ -310,10 +323,7 @@ class Atendimento(models.Model):
     numero_atendimento = models.CharField(max_length=50, blank=True, null=True)
     
     # --- RASTREIO PÚBLICO (LINK SEGURO) ---
-    # Gera um código único (ex: 550e8400-e29b...) para o cliente acompanhar sem senha
     token_rastreio = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
-
-  
 
     # --- SNAPSHOT: NOME DO SERVIÇO ---
     servico = models.CharField(
@@ -329,7 +339,6 @@ class Atendimento(models.Model):
     # --- PENDÊNCIAS E OBSERVAÇÕES ---
     observacoes_internas = models.TextField(blank=True, null=True)
     
-    # Novo campo para travas do processo
     motivo_pendencia = models.TextField(
         blank=True, 
         null=True, 
@@ -513,8 +522,9 @@ class LogAtividade(models.Model):
     def __str__(self):
         return f"{self.usuario} - {self.acao} - {self.data}"
 
-# Em cadastro/models.py
-
+# ==============================================================================
+# 7. BASE DE CONHECIMENTO (IA)
+# ==============================================================================
 class BaseConhecimento(models.Model):
     CATEGORIAS = [
         ('CRITICA', 'Resolução de Críticas/Erros'),

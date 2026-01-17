@@ -30,6 +30,7 @@ from .models import BaseConhecimento
 from .forms import BaseConhecimentoForm
 from groq import Groq
 from pathlib import Path
+from .decorators import plano_minimo
 
 
 
@@ -1402,6 +1403,7 @@ def is_admin_or_superuser(user):
     return user.is_superuser or (hasattr(user, 'perfilusuario') and user.perfilusuario.tipo_usuario == 'ADMIN')
 
 @login_required
+@plano_minimo('MEDIO')
 @user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def fluxo_caixa(request):
     despachante = request.user.perfilusuario.despachante
@@ -1629,6 +1631,7 @@ def gerar_boleto_agrupado(request, cliente_id):
         return redirect('relatorio_servicos')
     
 @login_required
+@plano_minimo('MEDIO')
 @user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def dashboard_financeiro(request):
     despachante = request.user.perfilusuario.despachante
@@ -1728,6 +1731,7 @@ def dashboard_financeiro(request):
     return render(request, 'cadastro/dashboard_financeiro.html', context)
 
 @login_required
+@plano_minimo('MEDIO')
 def relatorio_inadimplencia(request):
     despachante = request.user.perfilusuario.despachante
     hoje = timezone.now().date()
@@ -1777,6 +1781,7 @@ def relatorio_inadimplencia(request):
 
 
 @login_required
+@plano_minimo('MEDIO')
 @user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def relatorio_contabil(request):
     despachante = request.user.perfilusuario.despachante
@@ -2236,6 +2241,7 @@ def master_editar_usuario(request, id):
 
 
 @login_required
+@plano_minimo('PREMIUM')
 @user_passes_test(is_admin_or_superuser, login_url='/dashboard/')
 def relatorio_auditoria(request):
     try:
@@ -2311,6 +2317,7 @@ def relatorio_auditoria(request):
 # ==============================================================================
 
 @login_required
+@plano_minimo('MEDIO')
 def gerar_cobranca_asaas(request, id):
     despachante = request.user.perfilusuario.despachante
     atendimento = get_object_or_404(Atendimento, id=id, despachante=despachante)
@@ -2483,6 +2490,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
 @login_required
+@plano_minimo('PREMIUM')
 @require_POST
 def chatbot_responder(request):
     try:

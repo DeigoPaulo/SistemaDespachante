@@ -114,7 +114,6 @@ class CustomUserAdmin(UserAdmin):
         if not hasattr(instance, 'perfilusuario'): return "-"
         dias = instance.perfilusuario.get_dias_restantes()
         
-        # CORREÇÃO: Passando argumentos para o format_html
         if dias is None: 
             return format_html('<span style="color:blue;">{}</span>', '♾️ Vitalício')
         
@@ -135,8 +134,13 @@ admin.site.register(User, CustomUserAdmin)
 
 @admin.register(Despachante)
 class DespachanteAdmin(admin.ModelAdmin):
-    list_display = ('nome_fantasia', 'razao_social', 'cnpj', 'get_validade_geral', 'status_financeiro', 'ativo')
+    # [ATUALIZADO] Adicionei 'plano' aqui
+    list_display = ('nome_fantasia', 'razao_social', 'cnpj', 'plano', 'get_validade_geral', 'status_financeiro', 'ativo')
     search_fields = ('nome_fantasia', 'razao_social', 'cnpj', 'codigo_sindego')
+    
+    # [ATUALIZADO] Adicionei 'plano' aqui também
+    list_filter = ('plano', 'ativo', 'dia_vencimento')
+    
     readonly_fields = ('get_validade_detalhada', 'status_financeiro_detalhe')
     actions = ['gerar_cadastro_asaas', 'gerar_fatura_e_renovar_30_dias', 'conceder_cortesia_manual']
 
@@ -147,9 +151,7 @@ class DespachanteAdmin(admin.ModelAdmin):
 
     def status_financeiro_detalhe(self, obj):
         if obj.asaas_customer_id:
-            # CORREÇÃO: Usando placeholder {}
             return format_html('<span style="color:green; font-weight:bold;">CLIENTE INTEGRADO (ID: {})</span>', obj.asaas_customer_id)
-        # CORREÇÃO: Usando placeholder {}
         return format_html('<span style="color:red;">{}</span>', 'NÃO INTEGRADO - Use a ação "Sincronizar" na lista.')
     status_financeiro_detalhe.short_description = "Status da Integração"
 
@@ -159,7 +161,6 @@ class DespachanteAdmin(admin.ModelAdmin):
             dias = admin_user.get_dias_restantes()
             if dias is None: return "Vitalício"
             
-            # CORREÇÃO: Passando argumentos para o format_html
             if dias < 0: 
                 return format_html('<span style="color:red;">{}</span>', '⛔ Vencido')
             
@@ -173,7 +174,6 @@ class DespachanteAdmin(admin.ModelAdmin):
             data_fmt = admin_user.data_expiracao.strftime('%d/%m/%Y')
             dias = admin_user.get_dias_restantes()
             if dias < 0:
-                # CORREÇÃO: Passando argumentos para o format_html
                 return format_html('<strong style="color:red; font-size:14px;">VENCIDO em {} (há {} dias). Sistema Bloqueado.</strong>', data_fmt, abs(dias))
             return format_html('<strong style="color:green; font-size:14px;">Vence em {} (faltam {} dias).</strong>', data_fmt, dias)
         return "Sem dados de validade definidos."
