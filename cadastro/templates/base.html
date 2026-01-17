@@ -196,11 +196,7 @@
                                 <i class="fas fa-shield-alt me-2"></i> Auditoria / Logs
                             </a>
                         </li>
-                        <li>
-                            <a class="dropdown-item text-warning" href="#" onclick="document.querySelector('.chatbot-toggler').click();">
-                                <i class="fas fa-robot me-2"></i> IA DespachaPro
-                            </a>
-                        </li>
+                        
                         {% else %}
                         <li>
                             <a class="dropdown-item text-muted" href="#" onclick="alert('🔒 IA e Auditoria são exclusivos do Plano PREMIUM!')">
@@ -301,12 +297,17 @@
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.mask/1.14.16/jquery.mask.min.js"></script>
-<script src="{% static 'js/custom.js' %}"></script>
+
+{% block scripts_globais %}
+    <script src="{% static 'js/custom.js' %}"></script>
+{% endblock %}
 
 {% block extra_js %}{% endblock %}
 
-{% if user.is_authenticated and user.perfilusuario.despachante.plano == 'PREMIUM' or user.is_superuser %}
-    {% include 'includes/chatbot_ia.html' %}
+{% if user.is_authenticated %}
+    {% if user.is_superuser or user.perfilusuario.despachante.plano == 'PREMIUM' %}
+        {% include 'includes/chatbot_ia.html' %}
+    {% endif %}
 {% endif %}
 
 </body>

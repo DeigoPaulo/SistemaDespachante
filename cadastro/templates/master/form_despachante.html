@@ -17,7 +17,7 @@
                         </a>
 
                         {% if form.instance.pk %}
-                            <button type="button" class="btn btn-sm btn-danger border-white" onclick="alert('Funcionalidade de desativar empresa em desenvolvimento!');">
+                            <button type="button" class="btn btn-sm btn-danger border-white" style="opacity: 0.8; cursor: not-allowed;" title="Use o botão 'Ativo' no formulário abaixo">
                                 <i class="fas fa-ban"></i> Desativar
                             </button>
                         {% endif %}
@@ -94,6 +94,37 @@
                             </div>
                         </div>
 
+                        <h6 class="text-uppercase text-primary fw-bold mb-3 border-bottom pb-2 mt-5">
+                            <i class="fas fa-layer-group me-1"></i> Plano e Acesso (SaaS)
+                        </h6>
+
+                        <div class="row g-3 bg-white p-3 rounded border mb-4 shadow-sm align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-dark">Plano de Assinatura</label>
+                                {{ form.plano }}
+                                <div class="form-text text-primary" style="font-size: 0.75rem;">
+                                    Define quais módulos o cliente acessa.
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label class="form-label fw-bold text-dark">Validade da Assinatura</label>
+                                {{ form.data_validade_sistema }}
+                                <div class="form-text text-muted" style="font-size: 0.75rem;">
+                                    Se vazio, o acesso é <strong>Vitalício</strong>.
+                                </div>
+                            </div>
+                            
+                            <div class="col-md-4 d-flex justify-content-center pb-2">
+                                <div class="form-check form-switch ps-0">
+                                    <label class="form-check-label fw-bold me-3" for="{{ form.ativo.id_for_label }}" style="font-size: 1.1rem;">
+                                        Escritório Ativo?
+                                    </label>
+                                    {{ form.ativo }}
+                                </div>
+                            </div>
+                        </div>
+
                         <h6 class="text-uppercase text-success fw-bold mb-3 border-bottom pb-2 mt-5">
                             <i class="fas fa-file-invoice-dollar me-1"></i> Configuração Financeira (Asaas)
                         </h6>
@@ -102,7 +133,7 @@
                             <div class="col-md-4">
                                 <label class="form-label fw-bold text-dark">Dia do Vencimento</label>
                                 {{ form.dia_vencimento }}
-                                <div class="form-text">Dia que o boleto vence todo mês.</div>
+                                <div class="form-text">Dia que o boleto vence.</div>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label fw-bold text-dark">Valor Mensal (R$)</label>
@@ -114,7 +145,7 @@
                             <div class="col-md-4">
                                 <label class="form-label fw-bold text-dark">E-mail para Fatura</label>
                                 {{ form.email_fatura }}
-                                <div class="form-text">Onde o boleto será enviado.</div>
+                                <div class="form-text">Destino do boleto.</div>
                             </div>
                         </div>
 

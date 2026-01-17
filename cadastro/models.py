@@ -55,8 +55,6 @@ class Despachante(models.Model):
     )
 
     # --- CONFIGURAÇÕES FINANCEIRAS (VALORES FIXOS EM R$) ---
-    
-    # Honorário Padrão para Orçamentos
     valor_honorario_padrao = models.DecimalField(
         max_digits=10, 
         decimal_places=2, 
@@ -93,6 +91,14 @@ class Despachante(models.Model):
         verbose_name="Dia de Vencimento Preferencial"
     )
 
+    # [ATUALIZAÇÃO CRÍTICA] Validade da Empresa (Não mais do usuário)
+    data_validade_sistema = models.DateField(
+        null=True, 
+        blank=True, 
+        verbose_name="Validade da Assinatura",
+        help_text="Se vazio, o acesso é vitalício/ilimitado."
+    )
+
     # ID do Despachante no SEU Asaas (Para você cobrar a mensalidade dele)
     asaas_customer_id = models.CharField(
         max_length=50, blank=True, null=True,
@@ -113,6 +119,13 @@ class Despachante(models.Model):
     def __str__(self):
         return self.nome_fantasia
 
+    def get_dias_restantes(self):
+        """Retorna quantos dias faltam para vencer (ou None se vitalício)"""
+        if not self.data_validade_sistema:
+            return None
+        hoje = timezone.now().date()
+        return (self.data_validade_sistema - hoje).days
+
 
 # ==============================================================================
 # 2. USUÁRIOS E PERMISSÕES
@@ -120,7 +133,8 @@ class Despachante(models.Model):
 class PerfilUsuario(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     despachante = models.ForeignKey(
-        'Despachante', on_delete=models.CASCADE, related_name='funcionarios'
+        'Despachante', on_delete=models.CASCADE, related_name='funcionarios',
+        null=True, blank=True
     )
 
     pode_fazer_upload = models.BooleanField(default=False)
@@ -134,11 +148,8 @@ class PerfilUsuario(models.Model):
         max_length=10, choices=TIPO_CHOICES, default='OPERAR'
     )
 
-    data_expiracao = models.DateField(
-        null=True,
-        blank=True,
-        help_text="Data limite para acesso ao sistema. Deixe em branco para acesso vitalício."
-    )
+    # [LIMPEZA] Campo data_expiracao removido pois agora é controlado pelo Despachante
+    # data_expiracao = models.DateField(...) -> DEPRECATED
 
     ultimo_session_key = models.CharField(max_length=40, null=True, blank=True)
 
@@ -146,10 +157,10 @@ class PerfilUsuario(models.Model):
         return f"{self.user.username} - {self.despachante.nome_fantasia}"
 
     def get_dias_restantes(self):
-        if not self.data_expiracao:
-            return None
-        hoje = timezone.now().date()
-        return (self.data_expiracao - hoje).days
+        """Atalho: Pega a validade direto do Despachante"""
+        if self.despachante:
+            return self.despachante.get_dias_restantes()
+        return None
 
 
 # ==============================================================================
@@ -385,27 +396,23 @@ class Atendimento(models.Model):
             models.Index(fields=['despachante', 'status_financeiro']),
             models.Index(fields=['tipo_servico']),
             models.Index(fields=['veiculo']),
-            models.Index(fields=['token_rastreio']), # Índice para a busca pública ser rápida
+            models.Index(fields=['token_rastreio']), 
         ]
 
     def __str__(self):
         return f"{self.numero_atendimento or 'S/N'} - {self.cliente}"
 
     def save(self, *args, **kwargs):
-        # Se selecionou um Tipo de Serviço do catálogo...
         if self.tipo_servico:
-            # 1. Copia o nome se estiver vazio
             if not self.servico:
                 self.servico = self.tipo_servico.nome
             
-            # 2. Se os valores forem 0, puxa do catálogo
             if self.pk is None or self.valor_honorarios == 0:
                 self.valor_honorarios = self.tipo_servico.honorarios
             
             if self.pk is None or self.valor_taxas_detran == 0:
                 self.valor_taxas_detran = self.tipo_servico.valor_base
             
-            # 3. Calcula a Taxa Sindego
             if self.custo_taxa_sindego == 0:
                 if self.tipo_servico.isenta_taxa_sindego:
                     self.custo_taxa_sindego = 0.00
@@ -435,13 +442,11 @@ class Orcamento(models.Model):
         ('CANCELADO', 'Cancelado/Recusado'),
     )
 
-    # --- CAMPOS DE RELACIONAMENTO E IDENTIFICAÇÃO ---
     despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
     cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True)
     veiculo = models.ForeignKey(Veiculo, on_delete=models.SET_NULL, null=True, blank=True)
     nome_cliente_avulso = models.CharField(max_length=200, blank=True, null=True)
 
-    # --- DATAS E CONTROLE ---
     data_criacao = models.DateTimeField(auto_now_add=True)
     validade = models.DateField(null=True, blank=True)
     observacoes = models.TextField(blank=True, null=True)
@@ -452,7 +457,6 @@ class Orcamento(models.Model):
         default='PENDENTE'
     )
 
-    # --- FINANCEIRO (VALORES GLOBAIS) ---
     valor_honorarios = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Honorários Totais")
     valor_taxas = models.DecimalField(max_digits=10, decimal_places=2, default=0.00, verbose_name="Soma das Taxas")
     desconto = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
@@ -469,7 +473,6 @@ class Orcamento(models.Model):
 
     @property
     def nome_cliente_display(self):
-        """Retorna o nome do cliente (seja do banco ou avulso)"""
         if self.cliente:
             return self.cliente.nome
         return self.nome_cliente_avulso or "Cliente Desconhecido"
@@ -479,12 +482,8 @@ class ItemOrcamento(models.Model):
     orcamento = models.ForeignKey(Orcamento, related_name='itens', on_delete=models.CASCADE)
     servico_nome = models.CharField(max_length=200)
     
-    # [5] AQUI FICA APENAS A TAXA DO DETRAN DESTE ITEM
-    # Ex: Licenciamento (R$ 150,00)
     valor = models.DecimalField(max_digits=10, decimal_places=2, verbose_name="Valor da Taxa")
 
-    # Removemos valor_honorario e valor_taxa daqui para não duplicar informação.
-    
     def __str__(self):
         return f"{self.servico_nome} - R$ {self.valor}"
 
@@ -537,7 +536,6 @@ class BaseConhecimento(models.Model):
     conteudo = models.TextField(help_text="A resposta exata e técnica que a IA deve basear-se.")
     categoria = models.CharField(max_length=20, choices=CATEGORIAS, default='GERAL')
     
-    # Palavras-chave ajudam a IA a achar esse texto mais rápido
     palavras_chave = models.CharField(max_length=255, blank=True, help_text="Ex: chassi, remarcação, vistoria, erro 404")
     
     ativo = models.BooleanField(default=True)

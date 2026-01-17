@@ -170,7 +170,8 @@ class DespachanteForm(forms.ModelForm):
     class Meta:
         model = Despachante
         fields = '__all__'
-        exclude = ['asaas_customer_id', 'data_cadastro', 'ativo']
+        # [ATUALIZADO] Removi 'ativo' daqui para ele aparecer no formulário
+        exclude = ['asaas_customer_id', 'data_cadastro'] 
         widgets = {
             'nome_fantasia': forms.TextInput(attrs={'class': 'form-control'}),
             'razao_social': forms.TextInput(attrs={'class': 'form-control'}),
@@ -190,9 +191,13 @@ class DespachanteForm(forms.ModelForm):
             # --- NOVOS CAMPOS (TAXA SINDICAL) ---
             'valor_taxa_sindego_padrao': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
             'valor_taxa_sindego_reduzida': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01'}),
+
+            # [NOVO] Configuração do Plano e Ativo
+            'plano': forms.Select(attrs={'class': 'form-select'}),
+            'ativo': forms.CheckboxInput(attrs={'class': 'form-check-input', 'style': 'width: 2.5em; height: 1.25em;'}), # Estilo Switch
         }
 
-    # --- CORREÇÃO IMPORTANTE: Lógica para remover a logo ---
+    # --- Lógica para remover a logo (Mantida) ---
     def clean(self):
         cleaned_data = super().clean()
         

@@ -228,9 +228,38 @@
             </tbody>
         </table>
     </div>
-</div>
 
-{% include 'includes/chatbot_ia.html' %}
+    {% if fila_processos.has_other_pages %}
+    <div class="card-footer bg-white py-3 border-top">
+        <nav aria-label="Navegação">
+            <ul class="pagination justify-content-center mb-0">
+                {% if fila_processos.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ fila_processos.previous_page_number }}{% if termo_busca %}&busca={{ termo_busca }}{% endif %}{% if data_filtro %}&data_filtro={{ data_filtro }}{% endif %}">Anterior</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Anterior</span></li>
+                {% endif %}
+
+                <li class="page-item active">
+                    <span class="page-link bg-primary border-primary">
+                        Página {{ fila_processos.number }} de {{ fila_processos.paginator.num_pages }}
+                    </span>
+                </li>
+
+                {% if fila_processos.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ fila_processos.next_page_number }}{% if termo_busca %}&busca={{ termo_busca }}{% endif %}{% if data_filtro %}&data_filtro={{ data_filtro }}{% endif %}">Próximo</a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled"><span class="page-link">Próximo</span></li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+
+</div>
 
 {% endblock %}
 

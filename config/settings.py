@@ -58,6 +58,9 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
+    # [CORREÇÃO CRÍTICA] O Bloqueio só funciona se esta linha existir!
+    'config.middleware.BloqueioSaaSMiddleware', 
 ]
 
 ROOT_URLCONF = 'config.urls'

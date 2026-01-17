@@ -17,16 +17,14 @@
     </div>
 
     <div id="chat-messages" class="p-3 bg-light">
-        <div class="msg-bot">
-            Olá! Sou sua IA especialista em procedimentos do Detran. 
-            <br><br>
-            Como posso ajudar você hoje com dúvidas operacionais?
         </div>
-    </div>
 
     <div class="chat-footer p-2 bg-white border-top">
         <form id="chat-form" onsubmit="enviarMensagem(event)" class="d-flex gap-2">
-            <input type="text" id="user-input" class="form-control border-0 bg-light" placeholder="Digite sua dúvida..." autocomplete="off">
+            <input type="text" id="user-input" class="form-control border-0 bg-light no-uppercase" 
+                   placeholder="Digite sua dúvida..." autocomplete="off"
+                   style="text-transform: none !important;">
+            
             <button type="submit" class="btn btn-primary rounded-circle" style="width: 40px; height: 40px;">
                 <i class="fas fa-paper-plane"></i>
             </button>
@@ -35,7 +33,11 @@
 </div>
 
 <style>
-    /* Estilos do Botão Flutuante */
+    /* Força visualmente minúsculas */
+    input.no-uppercase {
+        text-transform: none !important;
+    }
+
     #chatbot-trigger {
         position: fixed;
         bottom: 30px;
@@ -54,7 +56,6 @@
     }
     #chatbot-trigger:hover { transform: scale(1.1); }
 
-    /* Estilos da Janela */
     #chatbot-window {
         position: fixed;
         bottom: 100px;
@@ -68,11 +69,9 @@
         display: flex;
         flex-direction: column;
         border: 1px solid rgba(0,0,0,0.1);
-        /* Animação de entrada */
         animation: slideUp 0.3s ease-out;
     }
 
-    /* Área de rolagem das mensagens */
     #chat-messages {
         flex-grow: 1;
         overflow-y: auto;
@@ -81,7 +80,6 @@
         gap: 10px;
     }
 
-    /* Balões de Mensagem */
     .msg-bot, .msg-user {
         max-width: 80%;
         padding: 10px 15px;
@@ -101,7 +99,7 @@
 
     .msg-user {
         align-self: flex-end;
-        background-color: #0d6efd; /* Cor Primária */
+        background-color: #0d6efd;
         color: white;
         border-bottom-right-radius: 2px;
     }
@@ -113,13 +111,40 @@
 </style>
 
 <script>
+    // --- CONFIGURAÇÃO DO HISTÓRICO ---
+    const STORAGE_KEY = 'chat_historico_v1';
+    const TIME_KEY = 'chat_ultima_msg';
+    const EXPIRACAO_MS = 24 * 60 * 60 * 1000; // 24 horas em milissegundos
+
+    document.addEventListener("DOMContentLoaded", function() {
+        // 1. BLOQUEIO DE MAIÚSCULAS (USANDO FASE DE CAPTURA)
+        const inputChat = document.getElementById('user-input');
+        if (inputChat) {
+            ['input', 'keyup', 'keydown', 'keypress', 'change', 'paste'].forEach(evt => {
+                // O 'true' no final ativa o Capture Phase (intercepta antes do global)
+                inputChat.addEventListener(evt, function(e) {
+                    e.stopPropagation();
+                    e.stopImmediatePropagation();
+                }, true);
+            });
+        }
+
+        // 2. CARREGAR HISTÓRICO
+        carregarHistorico();
+    });
+
     function toggleChat() {
         const chatWindow = document.getElementById('chatbot-window');
         chatWindow.classList.toggle('d-none');
         
-        // Foca no input quando abre
         if (!chatWindow.classList.contains('d-none')) {
-            document.getElementById('user-input').focus();
+            setTimeout(() => {
+                const input = document.getElementById('user-input');
+                input.focus();
+                // Rola para o final ao abrir
+                const area = document.getElementById('chat-messages');
+                area.scrollTop = area.scrollHeight;
+            }, 100);
         }
     }
 
@@ -129,15 +154,13 @@
         const texto = input.value.trim();
         if (!texto) return;
 
-        // 1. Adiciona a mensagem do usuário na tela
+        // Adiciona e Salva User
         adicionarSalao(texto, 'user');
+        salvarMensagem(texto, 'user');
+        
         input.value = '';
-
-        // 2. Mostra "Digitando..." (Placeholder visual)
         const idDigitando = mostrarDigitando();
 
-        // 3. Simulação de envio para o Backend (Vamos conectar no próximo passo)
-        // Aqui usaremos AJAX/Fetch para falar com o Python
         fetch('/api/chatbot-responder/', {
             method: 'POST',
             headers: {
@@ -149,12 +172,16 @@
         .then(response => response.json())
         .then(data => {
             removerDigitando(idDigitando);
+            // Adiciona e Salva Bot
             adicionarSalao(data.resposta, 'bot');
+            salvarMensagem(data.resposta, 'bot');
         })
         .catch(error => {
             removerDigitando(idDigitando);
-            adicionarSalao("Desculpe, tive um erro de conexão. Tente novamente.", 'bot');
-            console.error('Erro:', error);
+            const erroMsg = "Erro de conexão. Tente novamente.";
+            adicionarSalao(erroMsg, 'bot');
+            // Não salvamos mensagens de erro para não poluir o histórico
+            console.error(error);
         });
     }
 
@@ -162,9 +189,48 @@
         const area = document.getElementById('chat-messages');
         const div = document.createElement('div');
         div.className = tipo === 'user' ? 'msg-user' : 'msg-bot';
-        div.innerHTML = texto.replace(/\n/g, '<br>'); // Quebra de linha
+        div.innerHTML = texto.replace(/\n/g, '<br>');
         area.appendChild(div);
-        area.scrollTop = area.scrollHeight; // Rola para o final
+        area.scrollTop = area.scrollHeight;
+    }
+
+    // --- FUNÇÕES DE PERSISTÊNCIA (LOCALSTORAGE) ---
+
+    function salvarMensagem(texto, tipo) {
+        // Recupera o histórico atual
+        let historico = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        
+        // Adiciona nova mensagem
+        historico.push({ texto: texto, tipo: tipo });
+        
+        // Salva no navegador
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(historico));
+        localStorage.setItem(TIME_KEY, Date.now()); // Atualiza data da última msg
+    }
+
+    function carregarHistorico() {
+        const area = document.getElementById('chat-messages');
+        const ultimaMsg = localStorage.getItem(TIME_KEY);
+        const agora = Date.now();
+
+        // Verifica validade (24h)
+        if (ultimaMsg && (agora - ultimaMsg > EXPIRACAO_MS)) {
+            // Se venceu, limpa tudo
+            localStorage.removeItem(STORAGE_KEY);
+            localStorage.removeItem(TIME_KEY);
+        }
+
+        let historico = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+        // Se histórico estiver vazio, mostra mensagem de boas-vindas padrão
+        if (historico.length === 0) {
+            adicionarSalao("Olá! Sou sua IA especialista em procedimentos do Detran. <br><br>Como posso ajudar você hoje?", 'bot');
+        } else {
+            // Se tiver histórico, reconstrói as mensagens
+            historico.forEach(msg => {
+                adicionarSalao(msg.texto, msg.tipo);
+            });
+        }
     }
 
     function mostrarDigitando() {
@@ -173,7 +239,7 @@
         const div = document.createElement('div');
         div.id = id;
         div.className = 'msg-bot text-muted fst-italic';
-        div.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i> Analisando base de dados...';
+        div.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i> Analisando...';
         area.appendChild(div);
         area.scrollTop = area.scrollHeight;
         return id;

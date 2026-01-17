@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atenção Necessária - DespachaPro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background-color: #f3f4f6;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .card-bloqueio {
+            border: none;
+            border-radius: 16px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+            max-width: 500px;
+            width: 90%;
+        }
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            background-color: #fff3cd; /* Fundo amarelo suave */
+            color: #ffc107; /* Ícone amarelo/laranja */
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        .btn-custom {
+            border-radius: 50px;
+            padding: 10px 30px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
+        }
+    </style>
+</head>
+<body class="d-flex align-items-center justify-content-center" style="height: 100vh;">
+
+    <div class="card card-bloqueio bg-white p-5 text-center animate__animated animate__fadeIn">
+        
+        <div class="icon-circle">
+            <i class="fas fa-history fa-3x"></i> 
+        </div>
+
+        <h3 class="fw-bold text-dark mb-3">Acesso em Pausa</h3>
+
+        <p class="text-muted mb-4">
+            Olá! O acesso da empresa <strong>{{ empresa }}</strong> precisa de uma pequena atenção administrativa para continuar.
+        </p>
+
+        {% if motivo %}
+        <div class="alert alert-light border border-secondary-subtle text-secondary small py-2 mb-4 d-inline-block">
+            <i class="fas fa-info-circle me-1"></i> Motivo: {{ motivo }}
+        </div>
+        {% endif %}
+
+        <p class="small text-muted mb-4">
+            Não se preocupe, seus dados estão seguros. <br>
+            Entre em contato com o administrador da sua conta.
+        </p>
+
+        <div class="d-grid gap-2 col-8 mx-auto">
+            <a href="{% url 'logout' %}" class="btn btn-outline-secondary btn-custom">
+                <i class="fas fa-arrow-left me-2"></i> Voltar ao Login
+            </a>
+            
+            {% if request.user.perfilusuario.tipo_usuario == 'ADMIN' %}
+            <a href="https://wa.me/5562999999999" target="_blank" class="btn btn-success btn-custom border-0 text-white mt-2">
+                <i class="fab fa-whatsapp me-2"></i> Falar com Suporte
+            </a>
+            {% endif %}
+        </div>
+        
+        <div class="mt-4 border-top pt-3">
+            <small class="text-muted" style="font-size: 0.7rem;">
+                Sistema DespachaPro &copy; {% now "Y" %}
+            </small>
+        </div>
+    </div>
+
+</body>
+</html>

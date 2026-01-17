@@ -57,6 +57,16 @@ def is_admin_or_superuser(user):
         
     return False
 
+from django.contrib.auth import authenticate, login
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
+from django.contrib import messages
+from django.db.models import Q
+from django.utils import timezone
+from django.core.paginator import Paginator
+from .models import Atendimento, PerfilUsuario, Veiculo, Cliente
+from .asaas import gerar_boleto_asaas
+
 # ==============================================================================
 # 1. LOGIN E AUTENTICAÇÃO
 # ==============================================================================
@@ -69,6 +79,7 @@ def minha_view_de_login(request):
         
         username_para_autenticar = login_input
 
+        # Lógica para logar com E-mail
         if '@' in login_input:
             try:
                 user_obj = User.objects.get(email=login_input)
@@ -79,17 +90,10 @@ def minha_view_de_login(request):
         user = authenticate(request, username=username_para_autenticar, password=password_form)
 
         if user is not None:
-            # ⛔ BLOQUEIO FINANCEIRO
-            try:
-                perfil_check = user.perfilusuario
-                if perfil_check.data_expiracao and perfil_check.data_expiracao < timezone.now().date():
-                    data_venc = perfil_check.data_expiracao.strftime('%d/%m/%Y')
-                    messages.error(request, f"🔒 Acesso Bloqueado: Sua assinatura venceu em {data_venc}.")
-                    contexto['erro_login'] = True
-                    return render(request, 'login.html', context=contexto)
-            except AttributeError:
-                pass
-
+            # [CORREÇÃO 1] REMOVIDO O BLOQUEIO FINANCEIRO DAQUI.
+            # Motivo: Deixamos o usuário entrar para que o Middleware (middleware.py)
+            # decida se ele vai para o Dashboard ou para a tela de Bloqueio/Pagamento.
+            
             login(request, user)
 
             if not request.session.session_key:
@@ -97,18 +101,22 @@ def minha_view_de_login(request):
 
             nova_chave = request.session.session_key
 
-            # Single Session
-            perfil, created = PerfilUsuario.objects.get_or_create(user=user)
-            chave_antiga = perfil.ultimo_session_key
+            # Single Session (Derruba login anterior)
+            try:
+                perfil, created = PerfilUsuario.objects.get_or_create(user=user)
+                chave_antiga = perfil.ultimo_session_key
 
-            if chave_antiga and chave_antiga != nova_chave:
-                try:
-                    Session.objects.get(session_key=chave_antiga).delete()
-                except Session.DoesNotExist:
-                    pass
+                if chave_antiga and chave_antiga != nova_chave:
+                    try:
+                        from django.contrib.sessions.models import Session
+                        Session.objects.get(session_key=chave_antiga).delete()
+                    except Session.DoesNotExist:
+                        pass
 
-            perfil.ultimo_session_key = nova_chave
-            perfil.save()
+                perfil.ultimo_session_key = nova_chave
+                perfil.save()
+            except:
+                pass # Se for superuser sem perfil, ignora
 
             return redirect('dashboard')
         
@@ -120,6 +128,10 @@ def minha_view_de_login(request):
 
 @login_required
 def pagar_mensalidade(request):
+    """
+    Rota que gera o link do Asaas e redireciona o cliente para pagar.
+    O Middleware permite o acesso a essa rota mesmo se estiver bloqueado.
+    """
     try:
         despachante = request.user.perfilusuario.despachante
     except AttributeError:
@@ -129,6 +141,7 @@ def pagar_mensalidade(request):
     resultado = gerar_boleto_asaas(despachante)
 
     if resultado['sucesso']:
+        # Redireciona direto para o checkout do Asaas
         return redirect(resultado['link_fatura'])
     else:
         messages.error(request, f"Erro ao gerar fatura: {resultado.get('erro')}")
@@ -141,23 +154,38 @@ def pagar_mensalidade(request):
 def dashboard(request):
     try:
         perfil = request.user.perfilusuario
-    except PerfilUsuario.DoesNotExist:
+    except:
         return render(request, 'erro_perfil.html') 
     
     despachante = perfil.despachante
     
+    # [CORREÇÃO 2] LÓGICA DO AVISO FINANCEIRO NO TOPO
+    aviso_assinatura = None
+    cor_aviso = 'warning'
+    
+    # Verifica quantos dias faltam
+    dias = perfil.get_dias_restantes()
+    
+    # Se dias for None (Vitalício), não mostra nada.
+    if dias is not None:
+        if dias < 0:
+            # Se o middleware deixar chegar aqui, é porque a empresa está Ativa
+            # mas a data expirou (talvez você dê uma carência de dias antes de desativar a empresa)
+            aviso_assinatura = f"Sua assinatura venceu há {abs(dias)} dias. Regularize agora."
+            cor_aviso = 'danger'
+        elif dias <= 5:
+            aviso_assinatura = f"Sua assinatura vence em {dias} dias. Evite o bloqueio do sistema."
+            cor_aviso = 'warning'
+
+    # --- FILTROS E CONTAGENS ---
     data_filtro = request.GET.get('data_filtro')
     termo_busca = request.GET.get('busca')
-
     status_finalizados = ['APROVADO', 'CANCELADO', 'CONCLUIDO', 'ENTREGUE']
-
     hoje = timezone.now().date()
     
     total_abertos = Atendimento.objects.filter(
         despachante=despachante
-    ).exclude(
-        status__in=status_finalizados
-    ).count()
+    ).exclude(status__in=status_finalizados).count()
 
     total_mes = Atendimento.objects.filter(
         despachante=despachante, 
@@ -165,9 +193,9 @@ def dashboard(request):
         data_solicitacao__year=hoje.year
     ).count()
 
-    # Otimização: select_related para evitar query N+1
+    # Query Principal
     fila_processos = Atendimento.objects.select_related(
-        'cliente', 'veiculo', 'responsavel', 'tipo_servico'
+        'cliente', 'veiculo', 'responsavel'
     ).filter(
         despachante=despachante
     ).exclude(
@@ -185,39 +213,35 @@ def dashboard(request):
             Q(servico__icontains=termo_busca)
         )
     
-    # Paginação para evitar travamento (50 itens por página)
+    # Paginação
     paginator = Paginator(fila_processos, 50)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
+    page_obj = paginator.get_page(request.GET.get('page'))
 
-    # Lógica de Cores (Frontend Logic)
+    # Lógica de Cores da Tabela
     for processo in page_obj:
         if processo.data_entrega:
             dias_restantes = (processo.data_entrega - hoje).days
             processo.dias_na_fila = dias_restantes
-            
-            if dias_restantes < 0:
-                processo.alerta_cor = 'danger'   # Atrasado
-            elif dias_restantes <= 2:
-                processo.alerta_cor = 'warning'  # Perto do prazo
-            else:
-                processo.alerta_cor = 'success'  # No prazo
+            if dias_restantes < 0: processo.alerta_cor = 'danger'
+            elif dias_restantes <= 2: processo.alerta_cor = 'warning'
+            else: processo.alerta_cor = 'success'
         else:
             dias_corridos = (hoje - processo.data_solicitacao).days
-            if dias_corridos >= 30:
-                processo.alerta_cor = 'danger'
-            elif dias_corridos >= 15:
-                processo.alerta_cor = 'warning'
-            else:
-                processo.alerta_cor = 'success'
+            if dias_corridos >= 30: processo.alerta_cor = 'danger'
+            elif dias_corridos >= 15: processo.alerta_cor = 'warning'
+            else: processo.alerta_cor = 'success'
 
     context = {
-        'fila_processos': page_obj, # Passa o objeto paginado
+        'fila_processos': page_obj,
         'total_abertos': total_abertos, 
         'total_mes': total_mes,
         'perfil': perfil,
         'data_filtro': data_filtro,
         'termo_busca': termo_busca,
+        
+        # Passando as variáveis do aviso para o HTML
+        'aviso_assinatura': aviso_assinatura,
+        'cor_aviso': cor_aviso,
     }
     
     return render(request, 'dashboard.html', context)
@@ -2062,11 +2086,13 @@ def financeiro_master(request):
     total_inadimplentes = 0
     
     for d in despachantes:
-        admin_user = d.funcionarios.filter(tipo_usuario='ADMIN').first()
-        dias_restantes = admin_user.get_dias_restantes() if admin_user else 0
+        # [ATUALIZADO] Pega a validade direto da Empresa (Model Despachante)
+        dias_restantes = d.get_dias_restantes()
+        
         status_cor = 'success'
         status_texto = 'Em Dia'
         
+        # Lógica de Cores e Status
         if dias_restantes is None:
             status_texto = 'Vitalício'
             status_cor = 'primary'
@@ -2078,10 +2104,19 @@ def financeiro_master(request):
             status_texto = f'Vence logo ({dias_restantes} dias)'
             status_cor = 'warning'
             
+        # Busca dados do Admin apenas para exibir contato (Visual)
+        admin_user = d.funcionarios.filter(tipo_usuario='ADMIN').first()
+        nome_admin = 'Sem Admin'
+        email_admin = ''
+        
+        if admin_user and admin_user.user:
+            nome_admin = admin_user.user.first_name or admin_user.user.username
+            email_admin = admin_user.user.email
+
         lista_financeira.append({
             'obj': d,
-            'admin_nome': admin_user.user.first_name if (admin_user and admin_user.user.first_name) else 'Sem Nome',
-            'email_admin': admin_user.user.email if admin_user else '',
+            'admin_nome': nome_admin,
+            'email_admin': email_admin,
             'validade': dias_restantes,
             'status_html': status_texto,
             'cor': status_cor,
@@ -2102,30 +2137,93 @@ def financeiro_master(request):
 @user_passes_test(is_master)
 def acao_cobrar_cliente(request, despachante_id):
     despachante = get_object_or_404(Despachante, id=despachante_id)
+    
+    # Gera o boleto no Asaas (não altera datas aqui, apenas cobra)
     resultado = gerar_boleto_asaas(despachante)
+    
     if resultado['sucesso']:
         messages.success(request, f"Cobrança gerada! Link: {resultado['link_fatura']}")
     else:
         messages.error(request, f"Erro ao cobrar: {resultado.get('erro')}")
+        
     return redirect('financeiro_master')
 
 @login_required
 @user_passes_test(is_master)
 def acao_liberar_acesso(request, despachante_id):
-    despachante = get_object_or_404(Despachante, id=despachante_id)
-    funcionarios = PerfilUsuario.objects.filter(despachante=despachante)
+    # [ATUALIZADO] Liberação manual (Cortesia ou Pagamento por fora)
+    d = get_object_or_404(Despachante, id=despachante_id)
     hoje = timezone.now().date()
-    count = 0
-    for perfil in funcionarios:
-        if not perfil.data_expiracao or perfil.data_expiracao < hoje:
-            perfil.data_expiracao = hoje + timedelta(days=20)
-        else:
-            perfil.data_expiracao = perfil.data_expiracao + timedelta(days=20)
-        perfil.save()
-        count += 1
-    messages.success(request, f"Acesso liberado por +20 dias para {count} usuários.")
+    
+    # Lógica Inteligente:
+    # Se já venceu -> Começa a contar 20 dias a partir de HOJE
+    # Se não venceu -> Adiciona +20 dias ao prazo que ele já tem
+    if not d.data_validade_sistema or d.data_validade_sistema < hoje:
+        d.data_validade_sistema = hoje + timedelta(days=20)
+    else:
+        d.data_validade_sistema += timedelta(days=20)
+    
+    # Garante o desbloqueio
+    d.ativo = True
+    d.save()
+    
+    # OBS: Não precisa mais fazer loop nos usuários. 
+    # O Middleware agora verifica o 'd.ativo' e 'd.data_validade_sistema'
+    
+    messages.success(request, f"Acesso liberado por +20 dias para {d.nome_fantasia}.")
     return redirect('financeiro_master')
 
+def bloqueio_financeiro_admin(request):
+    """Tela que o Admin vê quando está bloqueado"""
+    if not request.user.is_authenticated:
+        return redirect('login')
+        
+    try:
+        despachante = request.user.perfilusuario.despachante
+    except:
+        return redirect('logout')
+
+    # --- LÓGICA DE SUPORTE DINÂMICO ---
+    # Busca o primeiro superusuário do sistema
+    super_admin = User.objects.filter(is_superuser=True).first()
+    
+    telefone_suporte = "5500000000000" # Fallback se não achar nada
+    
+    if super_admin and hasattr(super_admin, 'perfilusuario') and super_admin.perfilusuario.despachante:
+        # Pega o telefone do escritório do Master
+        raw_phone = super_admin.perfilusuario.despachante.telefone
+        # Limpa tudo que não for número
+        nums = re.sub(r'[^0-9]', '', raw_phone)
+        # Adiciona o 55 do Brasil se não tiver
+        telefone_suporte = f"55{nums}"
+
+    context = {
+        'empresa': despachante.nome_fantasia,
+        'dias_vencido': abs(despachante.get_dias_restantes() or 0),
+        'telefone_suporte': telefone_suporte, # Passamos para o template
+    }
+    return render(request, 'financeiro/bloqueio_admin.html', context)
+
+# ATUALIZE A VIEW PAGAR_MENSALIDADE (Ela agora só processa)
+@login_required
+def pagar_mensalidade(request):
+    """Ação que busca o link e redireciona (chamada pelo botão)"""
+    try:
+        despachante = request.user.perfilusuario.despachante
+    except AttributeError:
+        messages.error(request, "Usuário sem perfil.")
+        return redirect('login')
+
+    # A função agora é inteligente: recupera o antigo ou cria novo
+    resultado = gerar_boleto_asaas(despachante)
+
+    if resultado['sucesso']:
+        return redirect(resultado['link_fatura'])
+    else:
+        # Se der erro (ex: API fora do ar), volta pra tela de bloqueio com aviso
+        messages.error(request, f"Erro ao gerar fatura: {resultado.get('erro')}")
+        return redirect('bloqueio_financeiro_admin')
+    
 @login_required
 @user_passes_test(is_master)
 def master_listar_despachantes(request):
@@ -2156,8 +2254,28 @@ def master_editar_despachante(request, id=None):
 @login_required
 @user_passes_test(is_master)
 def master_listar_usuarios(request):
-    usuarios = User.objects.filter(perfilusuario__isnull=False).select_related('perfilusuario__despachante')
-    return render(request, 'master/lista_usuarios.html', {'usuarios': usuarios})
+    # 1. Busca todos os usuários ordenados
+    usuarios_list = User.objects.all().select_related('perfilusuario__despachante').order_by('username')
+
+    # 2. Filtro de Busca (Nome, Email ou Despachante)
+    busca = request.GET.get('busca')
+    if busca:
+        usuarios_list = usuarios_list.filter(
+            Q(username__icontains=busca) | 
+            Q(first_name__icontains=busca) |
+            Q(email__icontains=busca) |
+            Q(perfilusuario__despachante__nome_fantasia__icontains=busca)
+        )
+
+    # 3. Paginação: 20 usuários por página
+    paginator = Paginator(usuarios_list, 20) 
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'master/listar_usuarios.html', {
+        'page_obj': page_obj,
+        'busca': busca
+    })
 
 @login_required
 @user_passes_test(is_master)

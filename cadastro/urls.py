@@ -1,6 +1,7 @@
 from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views 
+from .webhook import webhook_asaas
 
 urlpatterns = [
     # ==========================================================================
@@ -29,6 +30,8 @@ urlpatterns = [
     # Configurações e Utilitários de Impressão
     path('configuracoes/', views.configuracoes_despachante, name='configuracoes_despachante'),
     path('recibo/<int:id>/', views.emitir_recibo, name='emitir_recibo'),
+
+    path('api/webhook/asaas/', webhook_asaas, name='webhook_asaas'),
 
     # ==========================================================================
     # 3. CADASTROS DE BASE (Clientes, Veículos, Serviços)
@@ -95,6 +98,8 @@ urlpatterns = [
     path('financeiro/master/', views.financeiro_master, name='financeiro_master'),
     path('financeiro/cobrar/<int:despachante_id>/', views.acao_cobrar_cliente, name='acao_cobrar_cliente'),
     path('financeiro/liberar/<int:despachante_id>/', views.acao_liberar_acesso, name='acao_liberar_acesso'),
+    path('financeiro/bloqueado/', views.bloqueio_financeiro_admin, name='bloqueio_financeiro_admin'),
+    path('financeiro/pagar/', views.pagar_mensalidade, name='pagar_mensalidade'),
 
     # Gestão de Despachantes (Empresas)
     path('master/despachantes/', views.master_listar_despachantes, name='master_listar_despachantes'),
