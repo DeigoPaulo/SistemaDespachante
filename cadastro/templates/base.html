@@ -266,6 +266,14 @@
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end shadow">
                         <li>
+                            <a class="dropdown-item" href="{% url 'password_change' %}">
+                                <i class="fas fa-key me-2 text-muted"></i> Alterar Senha
+                            </a>
+                        </li>
+                        
+                        <li><hr class="dropdown-divider"></li>
+
+                        <li>
                             <form action="{% url 'logout' %}" method="post">
                                 {% csrf_token %}
                                 <button type="submit" class="dropdown-item text-danger">

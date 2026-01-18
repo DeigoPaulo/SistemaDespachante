@@ -1,15 +1,15 @@
+import uuid
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.validators import FileExtensionValidator
-import uuid
 
 # ==============================================================================
 # 1. CADASTRO DO ESCRITÓRIO (SaaS)
 # ==============================================================================
 
 class Despachante(models.Model):
-    # --- PLANOS DE ASSINATURA (NOVO) ---
+    # --- PLANOS DE ASSINATURA ---
     PLANOS_CHOICES = (
         ('BASICO', 'Básico (Cadastros + Orçamentos)'),
         ('MEDIO', 'Médio (Financeiro + Boletos)'),
@@ -26,7 +26,7 @@ class Despachante(models.Model):
     data_cadastro = models.DateTimeField(auto_now_add=True)
     ativo = models.BooleanField(default=True)
 
-    # [NOVO] Campo de Plano (Padrão: Básico)
+    # Campo de Plano (Padrão: Básico)
     plano = models.CharField(
         max_length=20, 
         choices=PLANOS_CHOICES, 
@@ -91,7 +91,7 @@ class Despachante(models.Model):
         verbose_name="Dia de Vencimento Preferencial"
     )
 
-    # [ATUALIZAÇÃO CRÍTICA] Validade da Empresa (Não mais do usuário)
+    # Validade da Empresa
     data_validade_sistema = models.DateField(
         null=True, 
         blank=True, 
@@ -130,6 +130,7 @@ class Despachante(models.Model):
 # ==============================================================================
 # 2. USUÁRIOS E PERMISSÕES
 # ==============================================================================
+
 class PerfilUsuario(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     despachante = models.ForeignKey(
@@ -148,13 +149,14 @@ class PerfilUsuario(models.Model):
         max_length=10, choices=TIPO_CHOICES, default='OPERAR'
     )
 
-    # [LIMPEZA] Campo data_expiracao removido pois agora é controlado pelo Despachante
-    # data_expiracao = models.DateField(...) -> DEPRECATED
+    # Nova flag para troca de senha no primeiro acesso
+    precisa_mudar_senha = models.BooleanField(default=True, verbose_name="Forçar troca de senha")
 
     ultimo_session_key = models.CharField(max_length=40, null=True, blank=True)
 
     def __str__(self):
-        return f"{self.user.username} - {self.despachante.nome_fantasia}"
+        nome_despachante = self.despachante.nome_fantasia if self.despachante else "Sem Despachante"
+        return f"{self.user.username} - {nome_despachante}"
 
     def get_dias_restantes(self):
         """Atalho: Pega a validade direto do Despachante"""
@@ -166,6 +168,7 @@ class PerfilUsuario(models.Model):
 # ==============================================================================
 # 3. CADASTROS DE BASE (CLIENTE, VEÍCULO, SERVIÇO)
 # ==============================================================================
+
 class Cliente(models.Model):
     despachante = models.ForeignKey(Despachante, on_delete=models.CASCADE)
     nome = models.CharField(max_length=255, db_index=True)
@@ -286,9 +289,11 @@ class TipoServico(models.Model):
     def valor_total(self):
         return self.valor_base + self.honorarios
 
+
 # ==============================================================================
 # 4. OPERACIONAL (ATENDIMENTOS)
 # ==============================================================================
+
 class Atendimento(models.Model):
     STATUS_CHOICES = (
         ('SOLICITADO', 'Solicitado'),
@@ -404,15 +409,19 @@ class Atendimento(models.Model):
 
     def save(self, *args, **kwargs):
         if self.tipo_servico:
+            # Preenche o nome do serviço se estiver vazio
             if not self.servico:
                 self.servico = self.tipo_servico.nome
             
+            # Preenche honorários se estiver vazio
             if self.pk is None or self.valor_honorarios == 0:
                 self.valor_honorarios = self.tipo_servico.honorarios
             
+            # Preenche valor base se estiver vazio
             if self.pk is None or self.valor_taxas_detran == 0:
                 self.valor_taxas_detran = self.tipo_servico.valor_base
             
+            # Calcula taxa sindical se ainda for 0
             if self.custo_taxa_sindego == 0:
                 if self.tipo_servico.isenta_taxa_sindego:
                     self.custo_taxa_sindego = 0.00
@@ -431,10 +440,12 @@ class Atendimento(models.Model):
     def lucro_liquido_real(self):
         custos = self.custo_impostos + self.custo_taxa_bancaria + self.custo_taxa_sindego
         return self.valor_honorarios - custos
-    
+
+
 # ==============================================================================
 # 5. COMERCIAL (ORÇAMENTOS)
 # ==============================================================================
+
 class Orcamento(models.Model):
     STATUS_ORCAMENTO = (
         ('PENDENTE', 'Pendente'),
@@ -491,6 +502,7 @@ class ItemOrcamento(models.Model):
 # ==============================================================================
 # 6. LOGS E AUDITORIA
 # ==============================================================================
+
 class LogAtividade(models.Model):
     ACAO_CHOICES = [
         ('CRIACAO', 'Criação'),
@@ -521,9 +533,11 @@ class LogAtividade(models.Model):
     def __str__(self):
         return f"{self.usuario} - {self.acao} - {self.data}"
 
+
 # ==============================================================================
 # 7. BASE DE CONHECIMENTO (IA)
 # ==============================================================================
+
 class BaseConhecimento(models.Model):
     CATEGORIAS = [
         ('CRITICA', 'Resolução de Críticas/Erros'),

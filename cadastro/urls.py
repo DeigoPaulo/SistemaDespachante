@@ -2,6 +2,7 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views 
 from .webhook import webhook_asaas
+from .views import CustomPasswordChangeView
 
 urlpatterns = [
     # ==========================================================================
@@ -15,6 +16,8 @@ urlpatterns = [
     path('recuperar-senha/enviado/', auth_views.PasswordResetDoneView.as_view(template_name='registration/password_reset_done.html'), name='password_reset_done'),
     path('recuperar-senha/confirmar/<uidb64>/<token>/', auth_views.PasswordResetConfirmView.as_view(template_name='registration/password_reset_confirm.html'), name='password_reset_confirm'),
     path('recuperar-senha/concluido/', auth_views.PasswordResetCompleteView.as_view(template_name='registration/password_reset_complete.html'), name='password_reset_complete'),
+    path('alterar-senha/', CustomPasswordChangeView.as_view(), name='password_change'),
+    path('alterar-senha/concluido/', lambda r: redirect('dashboard'), name='password_change_done'), # Truque simples
     # ==========================================================================
     # 2. DASHBOARD E OPERACIONAL
     # ==========================================================================

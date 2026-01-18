@@ -17,13 +17,18 @@ class BloqueioSaaSMiddleware:
             perfil = request.user.perfilusuario
             
             # --- LISTA DE URLS PERMITIDAS (Whitelist) ---
-            # Estas páginas NUNCA podem ser bloqueadas, senão gera loop infinito.
+            # Estas páginas NUNCA podem ser bloqueadas pelo Financeiro.
             rotas_livres = [
                 reverse('logout'), 
                 reverse('admin:index'), 
                 reverse('pagar_mensalidade'),         # Ação de gerar boleto (Botão)
-                reverse('bloqueio_financeiro_admin'), # [NOVO] Tela de aviso antes de cobrar
+                reverse('bloqueio_financeiro_admin'), # Tela de aviso antes de cobrar
                 '/api/webhook/',                      # O Asaas precisa conseguir avisar o pagamento
+                
+                # [ATUALIZAÇÃO] Permitir telas de troca de senha
+                # Isso evita conflito com o ForcarTrocaSenhaMiddleware
+                reverse('password_change'),
+                reverse('password_change_done'),
             ]
             
             # Se a URL atual começa com alguma das livres, libera
@@ -47,15 +52,13 @@ class BloqueioSaaSMiddleware:
                 
                 # Se for o DONO (Admin)
                 if perfil.tipo_usuario == 'ADMIN':
-                    # [MUDANÇA CRÍTICA]
-                    # Em vez de mandar pagar direto (gerando boleto), 
-                    # manda para a tela de aviso. O boleto só gera se ele clicar no botão lá.
+                    # Redireciona para a tela de aviso/cobrança
                     if request.path != reverse('bloqueio_financeiro_admin'):
                         return redirect('bloqueio_financeiro_admin')
                     
                     return self.get_response(request)
                 
-                # Se for FUNCIONÁRIO, mostra tela de bloqueio com aviso
+                # Se for FUNCIONÁRIO, mostra tela de bloqueio com aviso simples
                 else:
                     return render(request, 'financeiro/bloqueio_suspenso.html', {
                         'empresa': despachante.nome_fantasia,

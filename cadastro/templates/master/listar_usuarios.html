@@ -6,55 +6,72 @@
 <div class="container-fluid px-4">
     
     <div class="row align-items-center mb-4 mt-4">
-        <div class="col-md-6">
+        <div class="col-md-5">
             <h3 class="fw-bold text-dark"><i class="fas fa-users-cog me-2"></i> Gerenciar Usuários</h3>
+            <p class="text-muted mb-0">Controle de acesso e permissões.</p>
         </div>
-        <div class="col-md-6 text-md-end">
-            <form method="get" class="d-flex justify-content-md-end gap-2">
-                <input type="text" name="busca" class="form-control" placeholder="Buscar nome, login ou empresa..." value="{{ busca|default:'' }}" style="max-width: 300px;">
-                <button type="submit" class="btn btn-dark"><i class="fas fa-search"></i></button>
-                {% if busca %}
-                    <a href="{% url 'master_listar_usuarios' %}" class="btn btn-outline-secondary" title="Limpar"><i class="fas fa-times"></i></a>
-                {% endif %}
-                <a href="{% url 'master_criar_usuario' %}" class="btn btn-success shadow-sm text-nowrap">
-                    <i class="fas fa-plus"></i> Novo Usuário
+        
+        <div class="col-md-7">
+            <div class="d-flex justify-content-md-end gap-2">
+                <form method="get" class="d-flex gap-2 w-100" style="max-width: 400px;">
+                    <div class="input-group shadow-sm">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" name="busca" class="form-control border-start-0 ps-0" 
+                               placeholder="Pesquisar nome, login ou empresa..." value="{{ busca|default:'' }}">
+                        <button type="submit" class="btn btn-dark">Buscar</button>
+                    </div>
+                    {% if busca %}
+                        <a href="{% url 'master_listar_usuarios' %}" class="btn btn-outline-secondary" title="Limpar Filtro">
+                            <i class="fas fa-times"></i>
+                        </a>
+                    {% endif %}
+                </form>
+
+                <a href="{% url 'master_criar_usuario' %}" class="btn btn-success shadow-sm text-nowrap d-flex align-items-center">
+                    <i class="fas fa-plus me-2"></i> Novo
                 </a>
-            </form>
+            </div>
         </div>
     </div>
 
     <div class="card border-0 shadow-sm">
         <div class="card-body p-0">
-            
-            <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
-                <table class="table table-hover table-striped align-middle mb-0">
-                    <thead class="bg-dark text-white sticky-top" style="z-index: 10;">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped align-middle mb-0 w-100">
+                    <thead class="bg-dark text-white">
                         <tr>
-                            <th class="py-3 ps-3">Usuário (Login)</th>
+                            <th class="py-3 ps-4">Login (Usuário)</th>
                             <th class="py-3">Nome Completo</th>
                             <th class="py-3">E-mail</th>
                             <th class="py-3">Empresa (Despachante)</th>
-                            <th class="py-3">Perfil</th>
+                            <th class="py-3 text-center">Perfil</th>
                             <th class="py-3 text-center">Status</th>
-                            <th class="py-3 text-end pe-3">Ações</th>
+                            <th class="py-3 text-end pe-4">Ações</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for usuario in page_obj %}
                         <tr>
-                            <td class="ps-3 fw-bold text-primary">{{ usuario.username }}</td>
+                            <td class="ps-4 fw-bold text-primary">
+                                <div class="d-flex align-items-center">
+                                    <div class="bg-light rounded-circle p-2 me-2 d-flex justify-content-center align-items-center" style="width: 35px; height: 35px;">
+                                        <i class="fas fa-user text-secondary"></i>
+                                    </div>
+                                    {{ usuario.username }}
+                                </div>
+                            </td>
                             <td>{{ usuario.get_full_name|default:"--" }}</td>
                             <td>{{ usuario.email|default:"--" }}</td>
                             <td>
                                 {% if usuario.is_superuser %}
-                                    <span class="text-success fw-bold">SISTEMA (MASTER)</span>
+                                    <span class="badge bg-dark text-warning border border-warning">SISTEMA (MASTER)</span>
                                 {% elif usuario.perfilusuario and usuario.perfilusuario.despachante %}
-                                    {{ usuario.perfilusuario.despachante.nome_fantasia }}
+                                    <span class="fw-bold text-dark">{{ usuario.perfilusuario.despachante.nome_fantasia }}</span>
                                 {% else %}
-                                    <span class="text-muted fst-italic">Sem vínculo</span>
+                                    <span class="text-muted fst-italic small">Sem vínculo</span>
                                 {% endif %}
                             </td>
-                            <td>
+                            <td class="text-center">
                                 {% if usuario.is_superuser %}
                                     <span class="badge bg-warning text-dark"><i class="fas fa-crown"></i> Master</span>
                                 {% elif usuario.perfilusuario %}
@@ -69,68 +86,64 @@
                             </td>
                             <td class="text-center">
                                 {% if usuario.is_active %}
-                                    <span class="badge bg-success"><i class="fas fa-check"></i> Ativo</span>
+                                    <span class="badge bg-success bg-opacity-10 text-success border border-success rounded-pill px-3">Ativo</span>
                                 {% else %}
-                                    <span class="badge bg-danger"><i class="fas fa-ban"></i> Inativo</span>
+                                    <span class="badge bg-danger bg-opacity-10 text-danger border border-danger rounded-pill px-3">Inativo</span>
                                 {% endif %}
                             </td>
-                            <td class="text-end pe-3">
-                                <a href="{% url 'master_editar_usuario' usuario.id %}" class="btn btn-sm btn-outline-primary" title="Editar">
-                                    <i class="fas fa-edit"></i>
+                            <td class="text-end pe-4">
+                                <a href="{% url 'master_editar_usuario' usuario.id %}" class="btn btn-sm btn-outline-primary shadow-sm" title="Editar Usuário">
+                                    <i class="fas fa-pen"></i>
                                 </a>
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="7" class="text-center py-5 text-muted">
-                                <i class="fas fa-user-slash fa-3x mb-3 opacity-50"></i><br>
-                                Nenhum usuário encontrado com esses dados.
+                            <td colspan="7" class="text-center py-5">
+                                <div class="text-muted opacity-50">
+                                    <i class="fas fa-search fa-3x mb-3"></i>
+                                    <h5>Nenhum usuário encontrado.</h5>
+                                    {% if busca %}
+                                    <p>Tente buscar por outro termo ou limpe o filtro.</p>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
-
         </div>
-        
+
         {% if page_obj.has_other_pages %}
         <div class="card-footer bg-white py-3 border-top">
-            <nav aria-label="Navegação">
+            <nav aria-label="Navegação de página">
                 <ul class="pagination justify-content-center mb-0">
                     
                     {% if page_obj.has_previous %}
                         <li class="page-item">
-                            <a class="page-link" href="?page=1{% if busca %}&busca={{ busca }}{% endif %}" aria-label="Primeira">
-                                <span aria-hidden="true">&laquo;&laquo;</span>
-                            </a>
+                            <a class="page-link" href="?page=1{% if busca %}&busca={{ busca }}{% endif %}">&laquo;&laquo;</a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if busca %}&busca={{ busca }}{% endif %}">
-                                <span aria-hidden="true">&laquo;</span>
-                            </a>
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if busca %}&busca={{ busca }}{% endif %}">&laquo;</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">&laquo;&laquo;</span></li>
                         <li class="page-item disabled"><span class="page-link">&laquo;</span></li>
                     {% endif %}
 
-                    <li class="page-item active" aria-current="page">
-                        <span class="page-link">
+                    <li class="page-item disabled">
+                        <span class="page-link text-dark fw-bold border-0 bg-transparent">
                             Página {{ page_obj.number }} de {{ page_obj.paginator.num_pages }}
                         </span>
                     </li>
 
                     {% if page_obj.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if busca %}&busca={{ busca }}{% endif %}">
-                                <span aria-hidden="true">&raquo;</span>
-                            </a>
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if busca %}&busca={{ busca }}{% endif %}">&raquo;</a>
                         </li>
                         <li class="page-item">
-                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if busca %}&busca={{ busca }}{% endif %}" aria-label="Última">
-                                <span aria-hidden="true">&raquo;&raquo;</span>
-                            </a>
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if busca %}&busca={{ busca }}{% endif %}">&raquo;&raquo;</a>
                         </li>
                     {% else %}
                         <li class="page-item disabled"><span class="page-link">&raquo;</span></li>
@@ -143,12 +156,4 @@
 
     </div>
 </div>
-
-<style>
-    thead.sticky-top th {
-        background-color: #212529 !important; /* Garante fundo preto */
-        color: white;
-        box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4);
-    }
-</style>
 {% endblock %}

@@ -31,6 +31,8 @@ from .forms import BaseConhecimentoForm
 from groq import Groq
 from pathlib import Path
 from .decorators import plano_minimo
+from django.contrib.auth.views import PasswordChangeView
+from django.urls import reverse_lazy
 
 
 
@@ -40,6 +42,24 @@ from .models import Atendimento, Cliente, Veiculo, TipoServico, PerfilUsuario, D
 from .forms import AtendimentoForm, ClienteForm, VeiculoForm, DespachanteForm, UsuarioMasterForm, UsuarioMasterEditForm, CompressaoPDFForm
 from .asaas import gerar_boleto_asaas
 from .utils import comprimir_pdf_memoria, registrar_log
+
+# --- VIEW PERSONALIZADA DE TROCA DE SENHA ---
+class CustomPasswordChangeView(PasswordChangeView):
+    template_name = 'registration/password_change_form.html'
+    success_url = reverse_lazy('dashboard') # Vai para o dashboard ao terminar
+
+    def form_valid(self, form):
+        # Quando a senha for trocada com sucesso:
+        response = super().form_valid(form)
+        
+        # Desliga a "bandeira" no perfil
+        if hasattr(self.request.user, 'perfilusuario'):
+            perfil = self.request.user.perfilusuario
+            perfil.precisa_mudar_senha = False
+            perfil.save()
+            
+        messages.success(self.request, "Sua senha foi alterada com sucesso!")
+        return response
 
 # --- FUNÇÃO DE SEGURANÇA ---
 def is_admin_or_superuser(user):
@@ -2254,10 +2274,10 @@ def master_editar_despachante(request, id=None):
 @login_required
 @user_passes_test(is_master)
 def master_listar_usuarios(request):
-    # 1. Busca todos os usuários ordenados
+    # 1. Busca Base
     usuarios_list = User.objects.all().select_related('perfilusuario__despachante').order_by('username')
 
-    # 2. Filtro de Busca (Nome, Email ou Despachante)
+    # 2. Filtro de Busca (Processado no Servidor)
     busca = request.GET.get('busca')
     if busca:
         usuarios_list = usuarios_list.filter(
@@ -2267,7 +2287,7 @@ def master_listar_usuarios(request):
             Q(perfilusuario__despachante__nome_fantasia__icontains=busca)
         )
 
-    # 3. Paginação: 20 usuários por página
+    # 3. Paginação: O servidor corta em fatias de 20
     paginator = Paginator(usuarios_list, 20) 
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
